@@ -1,0 +1,7 @@
+.git
+.claude
+wrangler.jsonc
+.assetsignore
+gsc_automate.py
+submit_sitemap_gsc.py
+submit_sitemap_only.py
