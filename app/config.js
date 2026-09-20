@@ -6,6 +6,11 @@
     window.AETHYRO_LOADERR = "supabase library failed to load (vendor/supabase.js)";
     return;
   }
+  // Exposed for direct fetch() calls to edge functions that stream their
+  // response body (e.g. /chat) — supabase.functions.invoke() buffers the
+  // whole response, so streaming callers need the raw URL + anon key instead.
+  window.AETHYRO_FN_URL = SUPABASE_URL + "/functions/v1";
+  window.AETHYRO_ANON_KEY = SUPABASE_ANON;
   window.AETHYRO = {
     supabase: window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON),
     PLANS: {

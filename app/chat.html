@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>Chat — Aethyro Cloud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="./style.css"/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+<style>
+  .chat-wrap{max-width:860px;margin:0 auto;padding:1.25rem 1.25rem 0;height:100vh;display:flex;flex-direction:column}
+  .chat-top{display:flex;align-items:center;gap:.75rem;padding:.75rem 0;border-bottom:1px solid var(--b1);flex-wrap:wrap}
+  .chat-top .brand{margin:0;font-size:1.15rem}
+  .balance-pill{margin-left:auto;display:flex;align-items:center;gap:.5rem;padding:.35rem .75rem;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);border-radius:100px;font-family:var(--mono);font-size:.78rem;color:var(--cyan)}
+  .top-link{font-size:.82rem;color:var(--t2);text-decoration:none;padding:.4rem .7rem;border-radius:8px}
+  .top-link:hover{color:var(--text);background:rgba(255,255,255,.05);text-decoration:none}
+  .cloud-note{font-size:.68rem;color:var(--t3);font-family:var(--mono);text-align:center;padding:.5rem 0;border-bottom:1px solid var(--b1)}
+  .msgs{flex:1;overflow-y:auto;padding:1.5rem 0;display:flex;flex-direction:column;gap:1rem}
+  .msg-row{display:flex;flex-direction:column;max-width:85%}
+  .msg-row.user{align-self:flex-end;align-items:flex-end}
+  .msg-row.assistant{align-self:flex-start;align-items:flex-start}
+  .msg-who{font-family:var(--mono);font-size:.62rem;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}
+  .msg-bubble{padding:.75rem 1rem;border-radius:14px;font-size:.92rem;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+  .msg-row.user .msg-bubble{background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);color:var(--text)}
+  .msg-row.assistant .msg-bubble{background:var(--s2);border:1px solid var(--b1);color:var(--text)}
+  .msg-bubble.error{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25);color:#fca5a5}
+  .cursor{display:inline-block;width:7px;height:14px;background:var(--orange);vertical-align:middle;margin-left:2px;animation:blink .9s step-end infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  .empty-state{margin:auto;text-align:center;color:var(--t3);padding:2rem}
+  .empty-state h2{font-size:1.3rem;color:var(--text);margin-bottom:.5rem}
+  .empty-state p{font-size:.88rem;max-width:420px;margin:0 auto}
+  .composer{display:flex;gap:.6rem;padding:1rem 0 1.25rem;border-top:1px solid var(--b1)}
+  .composer textarea{flex:1;resize:none;padding:.8rem 1rem;background:rgba(0,0,0,.4);border:1px solid var(--b2);border-radius:12px;color:var(--text);font-family:var(--font);font-size:.92rem;outline:none;max-height:160px}
+  .composer textarea:focus{border-color:var(--orange)}
+  .composer button{padding:0 1.4rem;border:none;border-radius:12px;background:var(--orange);color:#fff;font-weight:700;font-size:.9rem;cursor:pointer;transition:background .2s}
+  .composer button:hover{background:var(--orange2)}
+  .composer button:disabled{opacity:.5;cursor:wait}
+  .low-balance{margin:0 0 1rem;padding:.85rem 1rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;font-size:.85rem;color:#fcd34d;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+  .low-balance a{color:var(--orange)}
+  .credit-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:50;padding:1rem}
+  .credit-modal-backdrop.show{display:flex}
+  .credit-modal{background:var(--s2);border:1px solid var(--b2);border-radius:16px;padding:1.75rem;max-width:460px;width:100%}
+  .credit-modal h3{font-size:1.1rem;margin-bottom:.3rem}
+  .credit-modal p{color:var(--t2);font-size:.85rem;margin-bottom:1.25rem}
+  .pack-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem}
+  .pack-btn{background:rgba(0,0,0,.3);border:1px solid var(--b2);border-radius:10px;padding:.9rem .6rem;text-align:center;cursor:pointer;transition:all .15s;font-family:var(--font);color:var(--text)}
+  .pack-btn:hover{border-color:var(--orange);background:rgba(255,77,0,.06)}
+  .pack-btn .amt{font-weight:800;font-size:1.1rem;font-family:var(--mono)}
+  .pack-btn .cr{font-size:.68rem;color:var(--t3);margin-top:.2rem}
+  .credit-modal-close{margin-top:1.25rem;text-align:center;font-size:.8rem;color:var(--t3);cursor:pointer}
+  @media(max-width:600px){.pack-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="chat-wrap">
+  <div class="chat-top">
+    <a href="/" class="brand" style="margin:0"><span class="dot"></span> Aethyro</a>
+    <a href="/app/dashboard.html" class="top-link">Dashboard</a>
+    <span class="balance-pill">● <span id="balanceVal">—</span> credits</span>
+    <button class="top-link" id="buyBtn" style="background:none;border:1px solid var(--b2);cursor:pointer">Buy more</button>
+  </div>
+  <div class="cloud-note">// Aethyro Cloud — runs on our servers, billed per message. Not the local/private product.</div>
+
+  <div class="msgs" id="msgs">
+    <div class="empty-state" id="emptyState">
+      <h2>Ask Aethyro anything.</h2>
+      <p>Code, research, writing, strategy — one assistant. New accounts start with 200 free credits (~$2).</p>
+    </div>
+  </div>
+
+  <div class="low-balance" id="lowBalance" style="display:none">
+    ⚠ Low balance (<span id="lowBalanceVal">0</span> credits left). <a href="#" id="lowBalanceBuy">Buy more credits →</a>
+  </div>
+
+  <form class="composer" id="composer">
+    <textarea id="input" placeholder="Message Aethyro…" rows="1" required></textarea>
+    <button type="submit" id="sendBtn">Send</button>
+  </form>
+</div>
+
+<div class="credit-modal-backdrop" id="creditModal">
+  <div class="credit-modal">
+    <h3>Buy credits</h3>
+    <p>1 credit ≈ $0.01 of usage. A typical exchange costs a few credits.</p>
+    <div class="pack-grid">
+      <div class="pack-btn" data-pack="starter"><div class="amt">$10</div><div class="cr">1,000 credits</div></div>
+      <div class="pack-btn" data-pack="plus"><div class="amt">$25</div><div class="cr">2,600 credits</div></div>
+      <div class="pack-btn" data-pack="pro"><div class="amt">$50</div><div class="cr">5,500 credits</div></div>
+    </div>
+    <div class="credit-modal-close" id="creditModalClose">Cancel</div>
+  </div>
+</div>
+
+<script src="./vendor/supabase.js"></script>
+<script src="./config.js"></script>
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  if(!window.AETHYRO){ location.replace('./login.html'); return; }
+  var supabase=window.AETHYRO.supabase;
+  var session=null, history=[], busy=false;
+
+  (async function init(){
+    var s=await supabase.auth.getSession();
+    session=s.data && s.data.session;
+    if(!session){ location.replace('./login.html?next=chat'); return; }
+    refreshBalance();
+  })();
+
+  async function refreshBalance(){
+    try{
+      var r=await supabase.rpc('get_credit_balance');
+      if(r.error) throw r.error;
+      setBalance(r.data);
+    }catch(e){ $('balanceVal').textContent='?'; }
+  }
+
+  function setBalance(n){
+    $('balanceVal').textContent=n;
+    var low=$('lowBalance');
+    if(n<10){ low.style.display='flex'; $('lowBalanceVal').textContent=n; }
+    else { low.style.display='none'; }
+  }
+
+  function addMessage(role, text){
+    $('emptyState').style.display='none';
+    var row=document.createElement('div');
+    row.className='msg-row '+role;
+    var who=document.createElement('div');
+    who.className='msg-who';
+    who.textContent=role==='user' ? 'You' : 'Aethyro';
+    var bubble=document.createElement('div');
+    bubble.className='msg-bubble';
+    bubble.textContent=text||'';
+    row.appendChild(who); row.appendChild(bubble);
+    $('msgs').appendChild(row);
+    $('msgs').scrollTop=$('msgs').scrollHeight;
+    return bubble;
+  }
+
+  var USAGE_MARK='\u0000';
+
+  async function send(message){
+    if(busy) return;
+    busy=true;
+    $('sendBtn').disabled=true;
+    addMessage('user', message);
+    history.push({role:'user', content: message});
+
+    var bubble=addMessage('assistant','');
+    var cursor=document.createElement('span'); cursor.className='cursor'; bubble.appendChild(cursor);
+
+    try{
+      var resp=await fetch(window.AETHYRO_FN_URL+'/chat', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization':'Bearer '+session.access_token,
+          'apikey': window.AETHYRO_ANON_KEY
+        },
+        body: JSON.stringify({ message: message, history: history.slice(0,-1) })
+      });
+
+      if(resp.status===402){
+        bubble.classList.add('error');
+        bubble.textContent="You're out of credits. Buy more to keep chatting.";
+        var data=await resp.json().catch(function(){return {};});
+        if(typeof data.balance==='number') setBalance(data.balance);
+        openCreditModal();
+        return;
+      }
+      if(!resp.ok || !resp.body){
+        bubble.classList.add('error');
+        bubble.textContent='Something went wrong. Please try again.';
+        return;
+      }
+
+      var reader=resp.body.getReader();
+      var decoder=new TextDecoder();
+      var full='';
+      var raw='';
+      while(true){
+        var chunk=await reader.read();
+        if(chunk.done) break;
+        raw+=decoder.decode(chunk.value, {stream:true});
+        var markIdx=raw.indexOf(USAGE_MARK);
+        var visible = markIdx===-1 ? raw : raw.slice(0,markIdx);
+        full=visible;
+        bubble.textContent=visible;
+        bubble.appendChild(cursor);
+        $('msgs').scrollTop=$('msgs').scrollHeight;
+        if(markIdx!==-1) break;
+      }
+      // drain any remaining bytes to read the trailing usage frame
+      while(true){
+        var c2=await reader.read();
+        if(c2.done) break;
+        raw+=decoder.decode(c2.value, {stream:true});
+      }
+      cursor.remove();
+      var markIdx2=raw.indexOf(USAGE_MARK);
+      if(markIdx2!==-1){
+        try{
+          var meta=JSON.parse(raw.slice(markIdx2+1));
+          if(typeof meta.balance==='number') setBalance(meta.balance);
+          if(meta.error){ bubble.classList.add('error'); if(!full) bubble.textContent=meta.error; }
+        }catch(e){}
+      }
+      if(full) history.push({role:'assistant', content: full});
+      if(!full && !bubble.classList.contains('error')){ bubble.textContent='(no response)'; }
+    }catch(err){
+      bubble.classList.add('error');
+      bubble.textContent='Connection error. Please try again.';
+    }finally{
+      busy=false;
+      $('sendBtn').disabled=false;
+    }
+  }
+
+  $('composer').addEventListener('submit', function(e){
+    e.preventDefault();
+    var input=$('input');
+    var text=input.value.trim();
+    if(!text) return;
+    input.value='';
+    input.style.height='auto';
+    send(text);
+  });
+  $('input').addEventListener('input', function(){
+    this.style.height='auto';
+    this.style.height=Math.min(this.scrollHeight,160)+'px';
+  });
+  $('input').addEventListener('keydown', function(e){
+    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); $('composer').requestSubmit(); }
+  });
+
+  function openCreditModal(){ $('creditModal').classList.add('show'); }
+  function closeCreditModal(){ $('creditModal').classList.remove('show'); }
+  $('buyBtn').addEventListener('click', openCreditModal);
+  $('lowBalanceBuy').addEventListener('click', function(e){ e.preventDefault(); openCreditModal(); });
+  $('creditModalClose').addEventListener('click', closeCreditModal);
+  $('creditModal').addEventListener('click', function(e){ if(e.target===this) closeCreditModal(); });
+
+  document.querySelectorAll('.pack-btn').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      var pack=btn.getAttribute('data-pack');
+      btn.textContent='Loading…';
+      try{
+        var r=await supabase.functions.invoke('buy-credits', { body:{ pack: pack } });
+        if(r.error) throw r.error;
+        if(r.data && r.data.url){ location.href=r.data.url; return; }
+        throw new Error('no checkout url');
+      }catch(e){
+        alert('Checkout error: '+((e&&e.message)||e));
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
