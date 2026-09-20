@@ -959,11 +959,9 @@ Add seats only at the team tier.</div>
     function track(name, params){ if (typeof gtag !== 'undefined') gtag('event', name, params || {}); }
 
     // ── Cloudflare Turnstile ──
-    // TEST KEY (always passes, invisible) — replace with a real site key once
-    // one exists (Cloudflare dashboard → Turnstile → Add site). Verification
-    // itself is skipped server-side (fail-open) until TURNSTILE_SECRET_KEY is
-    // set as a Supabase secret, so this works either way in the meantime.
-    var TURNSTILE_SITE_KEY = "1x00000000000000000000BB";
+    // Verification is skipped server-side (fail-open) until TURNSTILE_SECRET_KEY
+    // is set as a Supabase secret — see app/chat.html for the same pattern.
+    var TURNSTILE_SITE_KEY = "0x4AAAAAAE-DbNg5b5LjP-2J";
     var tsWidgetId = null;
     var tsResolve = null;
     window.onTryTurnstileLoad = function(){
