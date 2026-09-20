@@ -11,8 +11,6 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
-<!-- Cloudflare Turnstile — bot-gates anonymous trial messages below -->
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onChatTurnstileLoad&render=explicit" async defer></script>
 <style>
   .chat-wrap{max-width:860px;margin:0 auto;padding:1.25rem 1.25rem 0;height:100vh;display:flex;flex-direction:column}
   .chat-top{display:flex;align-items:center;gap:.75rem;padding:.75rem 0;border-bottom:1px solid var(--b1);flex-wrap:wrap}
@@ -91,7 +89,6 @@
     <textarea id="input" placeholder="Message Aethyro…" rows="1" required></textarea>
     <button type="submit" id="sendBtn">Send</button>
   </form>
-  <div id="chatTurnstile"></div>
 </div>
 
 <div class="credit-modal-backdrop" id="creditModal">
@@ -118,43 +115,6 @@
   var TRIAL_URL = window.AETHYRO_FN_URL + '/trial-chat';
 
   function track(name, params){ if(typeof gtag!=='undefined') gtag('event', name, params||{}); }
-
-  // ── Cloudflare Turnstile ──
-  // Invisible widget type runs its challenge automatically in the background
-  // as soon as render() is called — there's no execute()-on-demand for
-  // Invisible widgets (that's only for Managed/Non-Interactive types). So:
-  // let it auto-run, cache whatever token the callback hands us, consume it
-  // on send, then reset() to start the next one generating in the background.
-  var TURNSTILE_SITE_KEY = "0x4AAAAAAE-IMvfcEwtWl6p5";
-  var tsWidgetId = null;
-  var tsToken = '';
-  var tsWaiters = [];
-  window.onChatTurnstileLoad = function(){
-    var el = $('chatTurnstile');
-    if (typeof turnstile === 'undefined' || !el) return;
-    try {
-      tsWidgetId = turnstile.render(el, {
-        sitekey: TURNSTILE_SITE_KEY,
-        callback: function(token){
-          tsToken = token;
-          var waiters = tsWaiters; tsWaiters = [];
-          waiters.forEach(function(r){ r(token); });
-        },
-        'error-callback': function(){ tsToken = ''; }
-      });
-    } catch (e) { tsWidgetId = null; }
-  };
-  function getTurnstileToken(){
-    return new Promise(function(resolve){
-      if (tsWidgetId === null || typeof turnstile === 'undefined') { resolve(''); return; }
-      if (tsToken) { resolve(tsToken); return; }
-      tsWaiters.push(resolve);
-      setTimeout(function(){
-        var idx = tsWaiters.indexOf(resolve);
-        if (idx !== -1) { tsWaiters.splice(idx, 1); resolve(''); }
-      }, 6000);
-    });
-  }
 
   (async function init(){
     var s=await supabase.auth.getSession();
@@ -242,16 +202,11 @@
             },
             body: JSON.stringify({ message: message, history: history.slice(0,-1) })
           })
-        : await (async function(){
-            var turnstileToken = await getTurnstileToken();
-            var r = await fetch(TRIAL_URL, {
-              method:'POST',
-              headers:{ 'Content-Type':'application/json', 'apikey': window.AETHYRO_ANON_KEY },
-              body: JSON.stringify({ message: message, turnstileToken: turnstileToken })
-            });
-            if (tsWidgetId !== null && typeof turnstile !== 'undefined') { tsToken = ''; try { turnstile.reset(tsWidgetId); } catch (e) {} }
-            return r;
-          })();
+        : await fetch(TRIAL_URL, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'apikey': window.AETHYRO_ANON_KEY },
+            body: JSON.stringify({ message: message })
+          });
 
       if(resp.status===402){
         bubble.classList.add('error');
