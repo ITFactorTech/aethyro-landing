@@ -466,6 +466,22 @@
     </div>
     <div style="margin-top:.65rem;font-size:.72rem;color:var(--t3);font-family:var(--mono)">// 14-day free trial on the local app · or try Aethyro Cloud free in your browser, no install</div>
 
+    <!-- Live inline try-box — Aethyro Cloud, clearly separate from the local product above -->
+    <div style="margin-top:1.25rem;background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:1rem 1.1rem;max-width:520px">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.65rem">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);flex-shrink:0"></span>
+        <span style="font-family:var(--mono);font-size:.66rem;color:var(--t2);text-transform:uppercase;letter-spacing:.08em">Try Aethyro Cloud right now — no signup</span>
+      </div>
+      <div id="tryOutput" style="display:none;font-size:.85rem;color:var(--text);line-height:1.6;white-space:pre-wrap;background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.15);border-radius:9px;padding:.7rem .85rem;margin-bottom:.65rem;max-height:220px;overflow-y:auto"></div>
+      <div id="tryCta" style="display:none;margin-bottom:.65rem"></div>
+      <form id="tryForm" style="display:flex;gap:.5rem" autocomplete="off">
+        <input id="tryInput" type="text" placeholder="Ask anything — code, research, a quick plan…" maxlength="500" autocomplete="off"
+          style="flex:1;min-width:0;background:rgba(0,0,0,.35);border:1px solid var(--b2);border-radius:8px;padding:.6rem .8rem;color:var(--text);font-family:var(--font);font-size:.85rem;outline:none"/>
+        <button type="submit" id="trySend" class="btn btn-sm btn-orange" style="flex-shrink:0">Send →</button>
+      </form>
+      <div style="margin-top:.5rem;font-size:.66rem;color:var(--t3);font-family:var(--mono)">3 free messages/day · runs in Aethyro Cloud on our servers, not on your device</div>
+    </div>
+
     <div class="hero-meta" style="margin-top:1.5rem">
       <div class="meta-stat"><strong>100<span style="color:var(--orange);font-size:1rem">%</span></strong><span>Runs locally</span></div>
       <div class="meta-stat"><strong>$0</strong><span>API costs ever</span></div>
@@ -924,6 +940,82 @@ Add seats only at the team tier.</div>
       }
     });
   });
+
+  // ── homepage inline try-box (real Aethyro Cloud, no signup) ──
+  (function(){
+    var SUPABASE_URL = "https://uzmdqbtflcpikjdrggqc.supabase.co";
+    var ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6bWRxYnRmbGNwaWtqZHJnZ3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODQxOTgsImV4cCI6MjA5MTI2MDE5OH0.BwNVBJCbw9SG-ge7PfmoIW8q_33k-ZQlqpDHa2HrvHI";
+    var USAGE_MARK = "\u0000";
+    var form = document.getElementById('tryForm');
+    var input = document.getElementById('tryInput');
+    var output = document.getElementById('tryOutput');
+    var cta = document.getElementById('tryCta');
+    var sendBtn = document.getElementById('trySend');
+    if (!form) return;
+
+    function showCta(label) {
+      cta.style.display = 'block';
+      cta.innerHTML = '<a href="/app/chat.html" class="btn btn-sm btn-orange" style="width:100%;justify-content:center">' + label + '</a>';
+    }
+
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var message = input.value.trim();
+      if (!message) return;
+
+      sendBtn.disabled = true; sendBtn.textContent = '…';
+      input.disabled = true;
+      output.style.display = 'block';
+      output.textContent = '';
+      cta.style.display = 'none';
+
+      fetch(SUPABASE_URL + '/functions/v1/trial-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON },
+        body: JSON.stringify({ message: message })
+      }).then(function(resp){
+        if (resp.status === 429) {
+          output.textContent = "You've used today's free preview.";
+          showCta('Sign up for 200 free credits to keep chatting →');
+          throw null;
+        }
+        if (!resp.ok || !resp.body) {
+          output.textContent = 'Something went wrong — try again in a moment.';
+          throw null;
+        }
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder();
+        var buf = '';
+        function pump(){
+          return reader.read().then(function(r){
+            if (r.value) {
+              buf += decoder.decode(r.value, { stream: true });
+              var markIdx = buf.indexOf(USAGE_MARK);
+              output.textContent = markIdx === -1 ? buf : buf.slice(0, markIdx);
+            }
+            if (!r.done) return pump();
+            var markIdx2 = buf.indexOf(USAGE_MARK);
+            var meta = { remaining: null, error: null };
+            if (markIdx2 !== -1) {
+              try { meta = JSON.parse(buf.slice(markIdx2 + 1)); } catch(err) {}
+            }
+            if (meta.error) {
+              output.textContent = "That one hit an error — try a shorter question, or sign up to keep going.";
+            }
+            showCta(meta.remaining === 0
+              ? "That was your last free preview today — sign up for 200 free credits →"
+              : 'Like that? Sign up free for 200 credits →');
+          });
+        }
+        return pump();
+      }).catch(function(err){
+        if (err) output.textContent = "Couldn't reach Aethyro Cloud — try again in a moment.";
+      }).finally(function(){
+        sendBtn.disabled = false; sendBtn.textContent = 'Send →';
+        input.disabled = false;
+      });
+    });
+  })();
 
   // ── try-it scripted demo ──
   (function(){
