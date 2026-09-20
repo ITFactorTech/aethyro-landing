@@ -41,6 +41,9 @@
   .composer button:disabled{opacity:.5;cursor:wait}
   .low-balance{margin:0 0 1rem;padding:.85rem 1rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;font-size:.85rem;color:#fcd34d;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
   .low-balance a{color:var(--orange)}
+  .trial-badge{background:rgba(255,77,0,.08);border-color:rgba(255,77,0,.22);color:var(--orange2)}
+  .signup-link{background:var(--orange);color:#fff;font-weight:700}
+  .signup-link:hover{background:var(--orange2);color:#fff}
   .credit-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:50;padding:1rem}
   .credit-modal-backdrop.show{display:flex}
   .credit-modal{background:var(--s2);border:1px solid var(--b2);border-radius:16px;padding:1.75rem;max-width:460px;width:100%}
@@ -59,11 +62,13 @@
 <div class="chat-wrap">
   <div class="chat-top">
     <a href="/" class="brand" style="margin:0"><span class="dot"></span> Aethyro</a>
-    <a href="/app/dashboard.html" class="top-link">Dashboard</a>
-    <span class="balance-pill">● <span id="balanceVal">—</span> credits</span>
+    <a href="/app/dashboard.html" class="top-link" id="dashboardLink">Dashboard</a>
+    <span class="balance-pill" id="balancePill">● <span id="balanceVal">—</span> credits</span>
+    <span class="balance-pill trial-badge" id="trialBadge" style="display:none">● Free preview</span>
     <button class="top-link" id="buyBtn" style="background:none;border:1px solid var(--b2);cursor:pointer">Buy more</button>
+    <a href="./signup.html?next=chat" class="top-link signup-link" id="signupLink" style="display:none">Sign up free →</a>
   </div>
-  <div class="cloud-note">// Aethyro Cloud — runs on our servers, billed per message. Not the local/private product.</div>
+  <div class="cloud-note" id="cloudNote">// Aethyro Cloud — runs on our servers, billed per message. Not the local/private product.</div>
 
   <div class="msgs" id="msgs">
     <div class="empty-state" id="emptyState">
@@ -74,6 +79,10 @@
 
   <div class="low-balance" id="lowBalance" style="display:none">
     ⚠ Low balance (<span id="lowBalanceVal">0</span> credits left). <a href="#" id="lowBalanceBuy">Buy more credits →</a>
+  </div>
+
+  <div class="low-balance" id="trialLimitBar" style="display:none">
+    🔒 That's today's 3 free preview messages. <a href="./signup.html?next=chat">Sign up free for 200 credits →</a>
   </div>
 
   <form class="composer" id="composer">
@@ -102,14 +111,33 @@
   var $=function(id){return document.getElementById(id);};
   if(!window.AETHYRO){ location.replace('./login.html'); return; }
   var supabase=window.AETHYRO.supabase;
-  var session=null, history=[], busy=false;
+  var session=null, history=[], busy=false, trialLocked=false;
+  var TRIAL_URL = window.AETHYRO_FN_URL + '/trial-chat';
 
   (async function init(){
     var s=await supabase.auth.getSession();
     session=s.data && s.data.session;
-    if(!session){ location.replace('./login.html?next=chat'); return; }
+    if(!session){ enterAnonymousMode(); return; }
     refreshBalance();
   })();
+
+  function enterAnonymousMode(){
+    $('dashboardLink').style.display='none';
+    $('balancePill').style.display='none';
+    $('buyBtn').style.display='none';
+    $('trialBadge').style.display='inline-flex';
+    $('signupLink').style.display='inline-flex';
+    $('cloudNote').textContent='// Aethyro Cloud — runs on our servers. Free preview, no signup required.';
+    $('emptyState').innerHTML='<h2>Try Aethyro Cloud free.</h2><p>3 free messages a day, no signup. Each reply starts fresh (no memory of earlier messages) — <a href="./signup.html?next=chat" style="color:var(--orange)">sign up for 200 free credits</a> to keep a full conversation going.</p>';
+  }
+
+  function lockForSignup(){
+    trialLocked=true;
+    $('trialLimitBar').style.display='flex';
+    $('input').disabled=true;
+    $('input').placeholder='Sign up to keep chatting →';
+    $('sendBtn').disabled=true;
+  }
 
   async function refreshBalance(){
     try{
@@ -145,25 +173,31 @@
   var USAGE_MARK='\u0000';
 
   async function send(message){
-    if(busy) return;
+    if(busy || trialLocked) return;
     busy=true;
     $('sendBtn').disabled=true;
     addMessage('user', message);
-    history.push({role:'user', content: message});
+    if(session) history.push({role:'user', content: message});
 
     var bubble=addMessage('assistant','');
     var cursor=document.createElement('span'); cursor.className='cursor'; bubble.appendChild(cursor);
 
     try{
-      var resp=await fetch(window.AETHYRO_FN_URL+'/chat', {
-        method:'POST',
-        headers:{
-          'Content-Type':'application/json',
-          'Authorization':'Bearer '+session.access_token,
-          'apikey': window.AETHYRO_ANON_KEY
-        },
-        body: JSON.stringify({ message: message, history: history.slice(0,-1) })
-      });
+      var resp = session
+        ? await fetch(window.AETHYRO_FN_URL+'/chat', {
+            method:'POST',
+            headers:{
+              'Content-Type':'application/json',
+              'Authorization':'Bearer '+session.access_token,
+              'apikey': window.AETHYRO_ANON_KEY
+            },
+            body: JSON.stringify({ message: message, history: history.slice(0,-1) })
+          })
+        : await fetch(TRIAL_URL, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'apikey': window.AETHYRO_ANON_KEY },
+            body: JSON.stringify({ message: message })
+          });
 
       if(resp.status===402){
         bubble.classList.add('error');
@@ -171,6 +205,13 @@
         var data=await resp.json().catch(function(){return {};});
         if(typeof data.balance==='number') setBalance(data.balance);
         openCreditModal();
+        return;
+      }
+      if(resp.status===429){
+        cursor.remove();
+        bubble.classList.add('error');
+        bubble.textContent="That's today's free preview limit.";
+        lockForSignup();
         return;
       }
       if(!resp.ok || !resp.body){
@@ -206,18 +247,23 @@
       if(markIdx2!==-1){
         try{
           var meta=JSON.parse(raw.slice(markIdx2+1));
-          if(typeof meta.balance==='number') setBalance(meta.balance);
+          if(session){
+            if(typeof meta.balance==='number') setBalance(meta.balance);
+          } else if(typeof meta.remaining==='number'){
+            if(meta.remaining<=0) lockForSignup();
+            else $('trialBadge').textContent='● '+meta.remaining+' free left today';
+          }
           if(meta.error){ bubble.classList.add('error'); if(!full) bubble.textContent=meta.error; }
         }catch(e){}
       }
-      if(full) history.push({role:'assistant', content: full});
+      if(full && session) history.push({role:'assistant', content: full});
       if(!full && !bubble.classList.contains('error')){ bubble.textContent='(no response)'; }
     }catch(err){
       bubble.classList.add('error');
       bubble.textContent='Connection error. Please try again.';
     }finally{
       busy=false;
-      $('sendBtn').disabled=false;
+      $('sendBtn').disabled=trialLocked;
     }
   }
 
