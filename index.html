@@ -13,6 +13,8 @@
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
   <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+  <!-- Cloudflare Turnstile — bot-gates the free trial-chat preview below -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTryTurnstileLoad&render=explicit" async defer></script>
   <meta property="og:type" content="website"/>
   <meta property="og:url" content="https://aethyro.com/"/>
   <meta property="og:title" content="Aethyro | Private AI Assistant — Runs 100% on Your Hardware"/>
@@ -479,6 +481,7 @@
           style="flex:1;min-width:0;background:rgba(0,0,0,.35);border:1px solid var(--b2);border-radius:8px;padding:.6rem .8rem;color:var(--text);font-family:var(--font);font-size:.85rem;outline:none"/>
         <button type="submit" id="trySend" class="btn btn-sm btn-orange" style="flex-shrink:0">Send →</button>
       </form>
+      <div id="tryTurnstile"></div>
       <div style="margin-top:.5rem;font-size:.66rem;color:var(--t3);font-family:var(--mono)">3 free messages/day · runs in Aethyro Cloud on our servers, not on your device</div>
     </div>
 
@@ -955,6 +958,35 @@ Add seats only at the team tier.</div>
 
     function track(name, params){ if (typeof gtag !== 'undefined') gtag('event', name, params || {}); }
 
+    // ── Cloudflare Turnstile ──
+    // TEST KEY (always passes, invisible) — replace with a real site key once
+    // one exists (Cloudflare dashboard → Turnstile → Add site). Verification
+    // itself is skipped server-side (fail-open) until TURNSTILE_SECRET_KEY is
+    // set as a Supabase secret, so this works either way in the meantime.
+    var TURNSTILE_SITE_KEY = "1x00000000000000000000BB";
+    var tsWidgetId = null;
+    var tsResolve = null;
+    window.onTryTurnstileLoad = function(){
+      var el = document.getElementById('tryTurnstile');
+      if (typeof turnstile === 'undefined' || !el) return;
+      try {
+        tsWidgetId = turnstile.render(el, {
+          sitekey: TURNSTILE_SITE_KEY,
+          size: 'invisible',
+          callback: function(token){ if (tsResolve) { var r = tsResolve; tsResolve = null; r(token); } },
+          'error-callback': function(){ if (tsResolve) { var r = tsResolve; tsResolve = null; r(''); } }
+        });
+      } catch (e) { tsWidgetId = null; }
+    };
+    function getTurnstileToken(){
+      return new Promise(function(resolve){
+        if (tsWidgetId === null || typeof turnstile === 'undefined') { resolve(''); return; }
+        tsResolve = resolve;
+        try { turnstile.execute(tsWidgetId); } catch (e) { tsResolve = null; resolve(''); return; }
+        setTimeout(function(){ if (tsResolve) { var r = tsResolve; tsResolve = null; r(''); } }, 6000);
+      });
+    }
+
     function showCta(label) {
       cta.style.display = 'block';
       cta.innerHTML = '<a href="/app/chat.html" class="btn btn-sm btn-orange" style="width:100%;justify-content:center" id="tryCtaLink">' + label + '</a>';
@@ -974,10 +1006,12 @@ Add seats only at the team tier.</div>
       output.textContent = '';
       cta.style.display = 'none';
 
-      fetch(SUPABASE_URL + '/functions/v1/trial-chat', {
+      getTurnstileToken().then(function(turnstileToken){
+      return fetch(SUPABASE_URL + '/functions/v1/trial-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON },
-        body: JSON.stringify({ message: message })
+        body: JSON.stringify({ message: message, turnstileToken: turnstileToken })
+      });
       }).then(function(resp){
         if (resp.status === 429) {
           output.textContent = "You've used today's free preview.";
@@ -1020,6 +1054,7 @@ Add seats only at the team tier.</div>
       }).finally(function(){
         sendBtn.disabled = false; sendBtn.textContent = 'Send →';
         input.disabled = false;
+        if (tsWidgetId !== null && typeof turnstile !== 'undefined') { try { turnstile.reset(tsWidgetId); } catch (e) {} }
       });
     });
   })();
