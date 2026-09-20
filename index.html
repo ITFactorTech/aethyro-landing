@@ -953,9 +953,13 @@ Add seats only at the team tier.</div>
     var sendBtn = document.getElementById('trySend');
     if (!form) return;
 
+    function track(name, params){ if (typeof gtag !== 'undefined') gtag('event', name, params || {}); }
+
     function showCta(label) {
       cta.style.display = 'block';
-      cta.innerHTML = '<a href="/app/chat.html" class="btn btn-sm btn-orange" style="width:100%;justify-content:center">' + label + '</a>';
+      cta.innerHTML = '<a href="/app/chat.html" class="btn btn-sm btn-orange" style="width:100%;justify-content:center" id="tryCtaLink">' + label + '</a>';
+      var link = document.getElementById('tryCtaLink');
+      if (link) link.addEventListener('click', function(){ track('trial_signup_cta_click', { surface: 'homepage' }); });
     }
 
     form.addEventListener('submit', function(e){
@@ -963,6 +967,7 @@ Add seats only at the team tier.</div>
       var message = input.value.trim();
       if (!message) return;
 
+      track('trial_message_sent', { surface: 'homepage' });
       sendBtn.disabled = true; sendBtn.textContent = '…';
       input.disabled = true;
       output.style.display = 'block';
@@ -976,6 +981,7 @@ Add seats only at the team tier.</div>
       }).then(function(resp){
         if (resp.status === 429) {
           output.textContent = "You've used today's free preview.";
+          track('trial_limit_reached', { surface: 'homepage' });
           showCta('Sign up for 200 free credits to keep chatting →');
           throw null;
         }
@@ -1002,6 +1008,7 @@ Add seats only at the team tier.</div>
             if (meta.error) {
               output.textContent = "That one hit an error — try a shorter question, or sign up to keep going.";
             }
+            if (meta.remaining === 0) track('trial_limit_reached', { surface: 'homepage' });
             showCta(meta.remaining === 0
               ? "That was your last free preview today — sign up for 200 free credits →"
               : 'Like that? Sign up free for 200 credits →');

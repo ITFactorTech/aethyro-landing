@@ -49,7 +49,7 @@
     try{
       var r=await supabase.auth.signUp({ email:email, password:password });
       if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Create account & start trial →'; return; }
-      if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'email'}); gtag('event','begin_checkout',{currency:'USD',value:0}); }
+      if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'email', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); gtag('event','begin_checkout',{currency:'USD',value:0}); }
       if(r.data && r.data.session){ location.href=nextUrl; return; }
       show('Account created. Check your email to confirm, then log in.','ok'); btn.textContent='Check your email ✓';
     }catch(err){ show((err&&err.message)||String(err),'err'); btn.disabled=false; btn.textContent='Create account & start trial →'; }
