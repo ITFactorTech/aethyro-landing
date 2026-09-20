@@ -49,7 +49,7 @@
     try{
       var r=await supabase.auth.signInWithPassword({ email:email, password:password });
       if(r.error){ show(r.error.message); btn.disabled=false; btn.textContent='Log in →'; return; }
-      if(typeof gtag!=='undefined'){ gtag('event','login',{method:'email'}); }
+      if(typeof gtag!=='undefined'){ gtag('event','login',{method:'email', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); }
       location.href=nextUrl;
     }catch(err){ show((err&&err.message)||String(err)); btn.disabled=false; btn.textContent='Log in →'; }
   });

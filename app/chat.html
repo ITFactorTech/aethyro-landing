@@ -82,7 +82,7 @@
   </div>
 
   <div class="low-balance" id="trialLimitBar" style="display:none">
-    🔒 That's today's 3 free preview messages. <a href="./signup.html?next=chat">Sign up free for 200 credits →</a>
+    🔒 That's today's 3 free preview messages. <a href="./signup.html?next=chat" id="trialLimitBarLink">Sign up free for 200 credits →</a>
   </div>
 
   <form class="composer" id="composer">
@@ -114,6 +114,8 @@
   var session=null, history=[], busy=false, trialLocked=false;
   var TRIAL_URL = window.AETHYRO_FN_URL + '/trial-chat';
 
+  function track(name, params){ if(typeof gtag!=='undefined') gtag('event', name, params||{}); }
+
   (async function init(){
     var s=await supabase.auth.getSession();
     session=s.data && s.data.session;
@@ -128,11 +130,16 @@
     $('trialBadge').style.display='inline-flex';
     $('signupLink').style.display='inline-flex';
     $('cloudNote').textContent='// Aethyro Cloud — runs on our servers. Free preview, no signup required.';
-    $('emptyState').innerHTML='<h2>Try Aethyro Cloud free.</h2><p>3 free messages a day, no signup. Each reply starts fresh (no memory of earlier messages) — <a href="./signup.html?next=chat" style="color:var(--orange)">sign up for 200 free credits</a> to keep a full conversation going.</p>';
+    $('emptyState').innerHTML='<h2>Try Aethyro Cloud free.</h2><p>3 free messages a day, no signup. Each reply starts fresh (no memory of earlier messages) — <a href="./signup.html?next=chat" id="emptyStateSignupLink" style="color:var(--orange)">sign up for 200 free credits</a> to keep a full conversation going.</p>';
+    $('signupLink').addEventListener('click', function(){ track('trial_signup_cta_click', { surface:'chat_page', location:'topbar' }); });
+    $('trialLimitBarLink').addEventListener('click', function(){ track('trial_signup_cta_click', { surface:'chat_page', location:'limit_bar' }); });
+    var emptyLink=$('emptyStateSignupLink');
+    if(emptyLink) emptyLink.addEventListener('click', function(){ track('trial_signup_cta_click', { surface:'chat_page', location:'empty_state' }); });
   }
 
   function lockForSignup(){
     trialLocked=true;
+    track('trial_limit_reached', { surface:'chat_page' });
     $('trialLimitBar').style.display='flex';
     $('input').disabled=true;
     $('input').placeholder='Sign up to keep chatting →';
@@ -181,6 +188,8 @@
 
     var bubble=addMessage('assistant','');
     var cursor=document.createElement('span'); cursor.className='cursor'; bubble.appendChild(cursor);
+
+    if(!session) track('trial_message_sent', { surface:'chat_page' });
 
     try{
       var resp = session
