@@ -129,7 +129,7 @@
     try {
       tsWidgetId = turnstile.render(el, {
         sitekey: TURNSTILE_SITE_KEY,
-        size: 'invisible',
+        execution: 'execute',
         callback: function(token){ if (tsResolve) { var r = tsResolve; tsResolve = null; r(token); } },
         'error-callback': function(){ if (tsResolve) { var r = tsResolve; tsResolve = null; r(''); } }
       });
