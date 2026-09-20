@@ -959,29 +959,42 @@ Add seats only at the team tier.</div>
     function track(name, params){ if (typeof gtag !== 'undefined') gtag('event', name, params || {}); }
 
     // ── Cloudflare Turnstile ──
-    // Verification is skipped server-side (fail-open) until TURNSTILE_SECRET_KEY
-    // is set as a Supabase secret — see app/chat.html for the same pattern.
+    // This site's widget type is Invisible, which runs its challenge
+    // automatically in the background as soon as render() is called (there's
+    // no execute()-on-demand for Invisible widgets — that's only for
+    // Managed/Non-Interactive types). So: let it auto-run, cache whatever
+    // token the callback hands us, consume it on send, then reset() to start
+    // the next one generating in the background. Verification itself is
+    // skipped server-side (fail-open) until TURNSTILE_SECRET_KEY is set as a
+    // Supabase secret — see app/chat.html for the same pattern.
     var TURNSTILE_SITE_KEY = "0x4AAAAAAE-DbNg5b5LjP-2J";
     var tsWidgetId = null;
-    var tsResolve = null;
+    var tsToken = '';
+    var tsWaiters = [];
     window.onTryTurnstileLoad = function(){
       var el = document.getElementById('tryTurnstile');
       if (typeof turnstile === 'undefined' || !el) return;
       try {
         tsWidgetId = turnstile.render(el, {
           sitekey: TURNSTILE_SITE_KEY,
-          execution: 'execute',
-          callback: function(token){ if (tsResolve) { var r = tsResolve; tsResolve = null; r(token); } },
-          'error-callback': function(){ if (tsResolve) { var r = tsResolve; tsResolve = null; r(''); } }
+          callback: function(token){
+            tsToken = token;
+            var waiters = tsWaiters; tsWaiters = [];
+            waiters.forEach(function(r){ r(token); });
+          },
+          'error-callback': function(){ tsToken = ''; }
         });
       } catch (e) { tsWidgetId = null; }
     };
     function getTurnstileToken(){
       return new Promise(function(resolve){
         if (tsWidgetId === null || typeof turnstile === 'undefined') { resolve(''); return; }
-        tsResolve = resolve;
-        try { turnstile.execute(tsWidgetId); } catch (e) { tsResolve = null; resolve(''); return; }
-        setTimeout(function(){ if (tsResolve) { var r = tsResolve; tsResolve = null; r(''); } }, 6000);
+        if (tsToken) { resolve(tsToken); return; }
+        tsWaiters.push(resolve);
+        setTimeout(function(){
+          var idx = tsWaiters.indexOf(resolve);
+          if (idx !== -1) { tsWaiters.splice(idx, 1); resolve(''); }
+        }, 6000);
       });
     }
 
@@ -1052,7 +1065,7 @@ Add seats only at the team tier.</div>
       }).finally(function(){
         sendBtn.disabled = false; sendBtn.textContent = 'Send →';
         input.disabled = false;
-        if (tsWidgetId !== null && typeof turnstile !== 'undefined') { try { turnstile.reset(tsWidgetId); } catch (e) {} }
+        if (tsWidgetId !== null && typeof turnstile !== 'undefined') { tsToken = ''; try { turnstile.reset(tsWidgetId); } catch (e) {} }
       });
     });
   })();
