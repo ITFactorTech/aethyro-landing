@@ -8,49 +8,180 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="./style.css"/>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
-  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+<style>
+  .credit-display {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin: .35rem 0 .5rem;
+  }
+  .credit-num {
+    font-size: 2.6rem;
+    font-weight: 800;
+    font-family: var(--mono, 'JetBrains Mono', monospace);
+    color: var(--text, #f0f0f0);
+    line-height: 1;
+  }
+  .credit-label {
+    font-size: .78rem;
+    color: var(--muted, #888);
+    font-family: var(--mono, monospace);
+    line-height: 1.4;
+  }
+  .credit-pill {
+    display: inline-block;
+    padding: .2rem .6rem;
+    border-radius: 20px;
+    font-size: .7rem;
+    font-weight: 700;
+    font-family: var(--mono, monospace);
+    background: rgba(255,77,0,.15);
+    color: #ff4d00;
+    border: 1px solid rgba(255,77,0,.25);
+  }
+  .credit-pill.ok {
+    background: rgba(34,197,94,.12);
+    color: #22c55e;
+    border-color: rgba(34,197,94,.25);
+  }
+  .action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .75rem;
+    margin-top: 1rem;
+  }
+  @media (max-width: 480px) { .action-grid { grid-template-columns: 1fr; } }
+  .action-card {
+    background: var(--surface, #141414);
+    border: 1px solid var(--border, #2a2a2a);
+    border-radius: 12px;
+    padding: 1.1rem 1.25rem;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    transition: border-color .15s;
+    cursor: pointer;
+  }
+  .action-card:hover { border-color: rgba(255,77,0,.4); }
+  .action-card.primary { border-color: rgba(255,77,0,.35); background: rgba(255,77,0,.06); }
+  .action-icon { font-size: 1.3rem; }
+  .action-title { font-size: .9rem; font-weight: 700; color: var(--text, #f0f0f0); }
+  .action-desc { font-size: .75rem; color: var(--muted, #888); line-height: 1.4; }
+  .pack-row {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+    margin-top: .75rem;
+  }
+  .pack-btn {
+    display: inline-block;
+    padding: .45rem 1rem;
+    border-radius: 8px;
+    font-size: .8rem;
+    font-weight: 700;
+    text-decoration: none;
+    background: rgba(255,77,0,.1);
+    color: #ff4d00;
+    border: 1px solid rgba(255,77,0,.25);
+    transition: background .15s;
+    cursor: pointer;
+  }
+  .pack-btn:hover { background: rgba(255,77,0,.18); }
+  .history-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .55rem 0;
+    border-bottom: 1px solid var(--border, #2a2a2a);
+    font-size: .82rem;
+  }
+  .history-row:last-child { border-bottom: none; }
+  .history-type { color: var(--muted, #888); font-family: var(--mono, monospace); font-size: .72rem; }
+  .history-amount { font-weight: 700; }
+  .history-amount.credit { color: #22c55e; }
+  .history-amount.debit { color: #ff4d00; }
+</style>
 </head>
 <body>
 <div class="dash-wrap">
   <div class="topbar">
     <a href="/" class="brand" style="margin:0"><span class="dot"></span> Aethyro</a>
-    <a href="/app/community.html" class="btn btn-ghost" style="width:auto;margin:0;padding:.5rem 1rem">Community</a>
-    <a href="https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00" target="_blank" rel="noopener" class="btn" style="width:auto;margin:0;padding:.5rem 1.1rem;background:#ff4d00;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;font-size:.82rem">Upgrade to Pro →</a>
+    <a href="/app/chat.html" class="btn" style="width:auto;margin:0;padding:.5rem 1.1rem;background:#ff4d00;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;font-size:.82rem">New Chat →</a>
     <button class="btn btn-ghost" id="signout" style="width:auto;margin:0;padding:.5rem 1rem">Sign out</button>
   </div>
 
   <div id="loading" class="loading">loading your account…</div>
 
   <div id="content" style="display:none">
-    <h1>Your account</h1>
+    <h1>Dashboard</h1>
     <p class="sub" id="email"></p>
+
+    <!-- CREDITS + QUICK ACTIONS -->
     <div class="grid" style="margin-top:1.5rem">
       <div class="panel">
-        <h2>Plan</h2>
-        <div class="stat" id="planName">—</div>
-        <div style="margin-top:.6rem"><span class="pill" id="statusPill">—</span></div>
-        <button class="btn btn-ghost" id="manageBtn" style="width:auto;margin-top:1rem;padding:.5rem 1rem;display:none">Manage subscription →</button>
+        <h2>Credits</h2>
+        <div class="credit-display">
+          <span class="credit-num" id="creditNum">—</span>
+          <div>
+            <div class="credit-label">available credits</div>
+            <span class="credit-pill ok" id="creditStatus">loading…</span>
+          </div>
+        </div>
+        <p class="muted" style="font-size:.78rem;margin-top:.35rem">Each Aethyro Cloud message costs approximately 1–5 credits depending on length.</p>
+        <div class="pack-row" id="packRow">
+          <!-- populated by JS -->
+        </div>
       </div>
+
       <div class="panel">
-        <h2 id="timeLabel">Trial</h2>
-        <div class="stat"><span id="daysLeft">—</span> <span class="muted" style="font-size:1rem">days left</span></div>
-        <div class="muted" id="renewLine" style="margin-top:.6rem"></div>
+        <h2>Start chatting</h2>
+        <p class="muted" style="font-size:.85rem;margin-bottom:.85rem">Aethyro Cloud runs Claude Opus 5 — the most capable model — right in your browser.</p>
+        <a href="/app/chat.html" class="btn" style="display:inline-flex;align-items:center;gap:.4rem;background:#ff4d00;color:#fff;font-weight:700;padding:.6rem 1.2rem;border-radius:8px;text-decoration:none;font-size:.85rem;width:fit-content">
+          Start new chat &nbsp;→
+        </a>
+        <div style="margin-top:.75rem;font-size:.72rem;color:var(--muted);font-family:var(--mono)">// Claude Opus 5 · streaming · no install</div>
       </div>
     </div>
+
+    <!-- TRIAL / SUBSCRIPTION STATUS -->
     <div class="panel" style="margin-top:1rem">
-      <h2>Upgrade</h2>
-      <p class="muted">Pick a plan to keep access when your trial ends.</p>
-      <div class="plans" id="plans"></div>
+      <h2>Account status</h2>
+      <div class="grid" style="margin-top:.75rem">
+        <div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin-bottom:.35rem">Plan</div>
+          <div class="stat" id="planName" style="font-size:1.4rem">—</div>
+          <span class="pill" id="statusPill" style="margin-top:.4rem;display:inline-block">—</span>
+        </div>
+        <div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin-bottom:.35rem" id="timeLabel">Trial</div>
+          <div class="stat" style="font-size:1.4rem"><span id="daysLeft">—</span> <span class="muted" style="font-size:.9rem">days left</span></div>
+          <div class="muted" id="renewLine" style="margin-top:.35rem;font-size:.8rem"></div>
+        </div>
+      </div>
+      <button class="btn btn-ghost" id="manageBtn" style="width:auto;margin-top:1rem;padding:.5rem 1rem;display:none">Manage billing →</button>
+    </div>
+
+    <!-- CREDIT HISTORY -->
+    <div class="panel" style="margin-top:1rem">
+      <h2>Credit history</h2>
+      <div id="historyList"><p class="muted">No transactions yet — send your first message to get started.</p></div>
+    </div>
+
+    <!-- BUY CREDITS CTA -->
+    <div class="panel" style="margin-top:1rem;border-color:rgba(255,77,0,.2)">
+      <h2>Buy more credits</h2>
+      <p class="muted" style="font-size:.85rem;margin-bottom:.75rem">Credits never expire. Use them whenever you need powerful AI.</p>
+      <div id="buyCreditsList" class="action-grid">
+        <!-- populated by JS -->
+      </div>
       <div class="msg" id="upmsg"></div>
     </div>
-    <div class="panel" style="margin-top:1rem">
-      <h2>Your devices</h2>
-      <div class="devices" id="devices"><p class="muted">No devices activated yet. The local GH05T3 app registers here when you install it.</p></div>
-    </div>
-    <p class="note">// inference runs on your hardware · this dashboard only manages your account, trial, and license</p>
+
+    <p class="note">// Aethyro Cloud · inference runs on our servers · credits consumed per message</p>
   </div>
 </div>
 
@@ -60,14 +191,29 @@
 (function(){
   var $=function(id){return document.getElementById(id);};
   var done=false;
-  function fail(m){ if(done) return; var l=$('loading'); if(l){ l.innerHTML='⚠ '+m+'<br><span style="font-size:.8rem;color:var(--t3)">reload to retry</span>'; l.style.color='#fca5a5'; } }
-  // watchdog: never hang silently
+
+  function fail(m){
+    if(done) return;
+    var l=$('loading');
+    if(l){ l.innerHTML='⚠ '+m+'<br><span style="font-size:.8rem;color:var(--t3)">reload to retry</span>'; l.style.color='#fca5a5'; }
+  }
+
   setTimeout(function(){ if(!done && $('content').style.display==='none') fail('timed out reaching the server (network/firewall?)'); }, 12000);
 
   if(!window.AETHYRO){ fail(window.AETHYRO_LOADERR||'app library failed to load'); return; }
-  var supabase=window.AETHYRO.supabase, PLANS=window.AETHYRO.PLANS;
+  var supabase=window.AETHYRO.supabase;
 
   function daysUntil(ts){ if(!ts) return null; return Math.max(0, Math.ceil((new Date(ts)-Date.now())/86400000)); }
+
+  function fmt(n){ return typeof n === 'number' ? n.toLocaleString() : '—'; }
+
+  // Credit packs — prices match what you sell
+  var CREDIT_PACKS = [
+    { label: '200 credits', price: '$4', credits: 200, stripe: 'https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00' },
+    { label: '600 credits', price: '$10', credits: 600, stripe: 'https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00' },
+    { label: '2 000 credits', price: '$30', credits: 2000, stripe: 'https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00' },
+    { label: '7 000 credits', price: '$90', credits: 7000, stripe: 'https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00' },
+  ];
 
   (async function(){
     try{
@@ -78,64 +224,105 @@
       var user=session.user;
       $('email').textContent=user.email;
 
-      var subRes=await supabase.from('subscriptions').select('*').limit(1);
-      if(subRes.error) throw subRes.error;
-      var sub=subRes.data && subRes.data[0];
-      var licRes=await supabase.from('licenses').select('*').order('issued_at',{ascending:false});
-      var lic=licRes.data||[];
+      // Fetch credit balance, subscription, and ledger in parallel
+      var [balRes, subRes, ledRes] = await Promise.all([
+        supabase.rpc('get_credit_balance'),
+        supabase.from('subscriptions').select('*').limit(1),
+        supabase.from('credit_ledger').select('*').order('created_at',{ascending:false}).limit(20)
+      ]);
 
+      // ── Credits ──
+      var balance = (balRes.data != null) ? Number(balRes.data) : 0;
+      $('creditNum').textContent = fmt(balance);
+      var pill = $('creditStatus');
+      if(balance > 50){ pill.textContent = balance + ' credits · ready'; pill.className = 'credit-pill ok'; }
+      else if(balance > 0){ pill.textContent = balance + ' credits · running low'; pill.className = 'credit-pill'; }
+      else { pill.textContent = 'no credits · top up below'; pill.className = 'credit-pill'; }
+
+      // Pack quick-buy row
+      var packRow = $('packRow');
+      packRow.innerHTML = '';
+      CREDIT_PACKS.slice(0,2).forEach(function(p){
+        var a = document.createElement('a');
+        a.href = p.stripe; a.target = '_blank'; a.rel = 'noopener';
+        a.className = 'pack-btn';
+        a.textContent = p.price + ' · ' + p.label;
+        packRow.appendChild(a);
+      });
+
+      // ── Subscription ──
+      var sub = subRes.data && subRes.data[0];
       if(sub){
-        var planLabel=(PLANS[sub.plan]&&PLANS[sub.plan].label)||(sub.plan==='trial'?'Free trial':sub.plan);
-        $('planName').textContent=planLabel;
-        var pill=$('statusPill'); pill.textContent=sub.status; pill.className='pill '+sub.status;
+        var PLANS = (window.AETHYRO.PLANS) || {};
+        var planLabel = (PLANS[sub.plan]&&PLANS[sub.plan].label) || (sub.plan==='trial'?'Free trial':sub.plan);
+        $('planName').textContent = planLabel;
+        var pill2 = $('statusPill'); pill2.textContent = sub.status; pill2.className = 'pill '+sub.status;
         if(sub.status==='trialing'){
-          $('timeLabel').textContent='Trial';
-          $('daysLeft').textContent=daysUntil(sub.trial_ends_at)!=null?daysUntil(sub.trial_ends_at):'—';
-          $('renewLine').textContent='Trial ends '+(sub.trial_ends_at?new Date(sub.trial_ends_at).toLocaleDateString():'');
+          $('timeLabel').textContent = 'Trial';
+          $('daysLeft').textContent = daysUntil(sub.trial_ends_at) != null ? daysUntil(sub.trial_ends_at) : '—';
+          $('renewLine').textContent = 'Trial ends ' + (sub.trial_ends_at ? new Date(sub.trial_ends_at).toLocaleDateString() : '');
         } else if(sub.status==='active'){
-          $('timeLabel').textContent='Renews in';
-          $('daysLeft').textContent=daysUntil(sub.current_period_end)!=null?daysUntil(sub.current_period_end):'—';
-          $('renewLine').textContent=sub.current_period_end?'Renews '+new Date(sub.current_period_end).toLocaleDateString():'';
+          $('timeLabel').textContent = 'Renews in';
+          $('daysLeft').textContent = daysUntil(sub.current_period_end) != null ? daysUntil(sub.current_period_end) : '—';
+          $('renewLine').textContent = sub.current_period_end ? 'Renews '+new Date(sub.current_period_end).toLocaleDateString() : '';
         } else {
-          $('timeLabel').textContent='Status'; $('daysLeft').textContent='0'; $('renewLine').textContent='Upgrade to restore access.';
+          $('timeLabel').textContent = 'Status'; $('daysLeft').textContent = '0'; $('renewLine').textContent = 'Top up credits to keep access.';
         }
+        $('manageBtn').style.display = 'inline-flex';
+        $('manageBtn').onclick = async function(){
+          $('manageBtn').textContent = 'Opening…';
+          try{
+            var r = await supabase.functions.invoke('customer-portal',{body:{}});
+            if(r.error) throw r.error;
+            if(r.data&&r.data.url){ location.href = r.data.url; return; }
+            throw new Error('no url');
+          }catch(err){
+            $('manageBtn').textContent = 'Manage billing →';
+            var um=$('upmsg'); um.className='msg show err'; um.textContent='Billing error: '+((err&&err.message)||err);
+          }
+        };
       } else {
-        $('planName').textContent='No subscription'; $('renewLine').textContent='';
+        $('planName').textContent = 'Pay-as-you-go';
+        $('statusPill').textContent = 'credits only'; $('statusPill').className = 'pill trialing';
+        $('timeLabel').textContent = '—';
+        $('daysLeft').textContent = '';
+        $('renewLine').textContent = 'No recurring subscription — buy credits below.';
       }
 
-      if(lic.length){
-        $('devices').innerHTML=lic.map(function(l){
-          return '<div class="device"><span>'+(l.device_label||l.device_fingerprint.slice(0,12)+'…')+'</span><span class="muted">'+l.status+' · exp '+new Date(l.expires_at).toLocaleDateString()+'</span></div>';
+      // ── Credit history ──
+      var ledger = ledRes.data || [];
+      if(ledger.length){
+        $('historyList').innerHTML = ledger.map(function(row){
+          var isCredit = row.delta > 0;
+          var d = new Date(row.created_at);
+          var dateStr = d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+          return '<div class="history-row">'
+            +'<div><div style="font-weight:600;font-size:.83rem">'+(row.description||row.type||'transaction')+'</div>'
+            +'<div class="history-type">'+dateStr+'</div></div>'
+            +'<div class="history-amount '+(isCredit?'credit':'debit')+'">'+(isCredit?'+':'')+row.delta+'</div>'
+            +'</div>';
         }).join('');
       }
 
-      var plansEl=$('plans');
-      Object.keys(PLANS).forEach(function(key){
-        var p=PLANS[key], el=document.createElement('div'); el.className='plan';
-        el.innerHTML='<div class="pn">'+p.label+'</div><div class="pp">'+p.price+'</div>';
-        el.onclick=async function(){
-          var um=$('upmsg'); um.className='msg show'; um.style.background='rgba(255,255,255,.05)'; um.textContent='Starting checkout…';
-          try{
-            var r=await supabase.functions.invoke('create-checkout',{ body:{ plan:key } });
-            if(r.error) throw r.error;
-            if(r.data && r.data.url){ location.href=r.data.url; return; }
-            throw new Error('no checkout url');
-          }catch(err){ um.className='msg show err'; um.textContent='Checkout error: '+((err&&err.message)||err); }
-        };
-        plansEl.appendChild(el);
+      // ── Buy credits section ──
+      var buyEl = $('buyCreditsList');
+      buyEl.innerHTML = '';
+      CREDIT_PACKS.forEach(function(p){
+        var card = document.createElement('a');
+        card.href = p.stripe; card.target = '_blank'; card.rel = 'noopener';
+        card.className = 'action-card';
+        card.innerHTML = '<div class="action-icon">⚡</div>'
+          +'<div class="action-title">'+p.price+' — '+p.label+'</div>'
+          +'<div class="action-desc">'+p.credits.toLocaleString()+' credits · never expire</div>';
+        buyEl.appendChild(card);
       });
 
-      $('signout').onclick=async function(){ await supabase.auth.signOut(); location.href='./login.html'; };
+      // ── Sign out ──
+      $('signout').onclick = async function(){ await supabase.auth.signOut(); location.href = './login.html'; };
 
-      $('manageBtn').style.display='inline-flex';
-      $('manageBtn').onclick=async function(){
-        $('manageBtn').textContent='Opening…';
-        try{ var r=await supabase.functions.invoke('customer-portal',{body:{}}); if(r.error) throw r.error; if(r.data&&r.data.url){ location.href=r.data.url; return; } throw new Error('no url'); }
-        catch(err){ var um=$('upmsg'); um.className='msg show err'; um.textContent='Billing: '+((err&&err.message)||err); $('manageBtn').textContent='Manage subscription →'; }
-      };
-      done=true;
-      $('loading').style.display='none';
-      $('content').style.display='block';
+      done = true;
+      $('loading').style.display = 'none';
+      $('content').style.display = 'block';
     }catch(err){ fail((err&&err.message)||String(err)); }
   })();
 })();
