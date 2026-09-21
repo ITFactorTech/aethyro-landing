@@ -9,6 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="./style.css"/>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
 <style>
@@ -90,6 +92,42 @@
   .pack-btn .cr{font-size:.66rem;color:var(--t3);margin-top:.2rem}
   .credit-modal-close{margin-top:1.25rem;text-align:center;font-size:.8rem;color:var(--t3);cursor:pointer}
 
+  /* ── Markdown output ── */
+  .msg-bubble h1,.msg-bubble h2,.msg-bubble h3{font-weight:700;margin:.9rem 0 .35rem;line-height:1.3}
+  .msg-bubble h1{font-size:1.1rem}.msg-bubble h2{font-size:1rem}.msg-bubble h3{font-size:.95rem}
+  .msg-bubble p{margin:.45rem 0}
+  .msg-bubble ul,.msg-bubble ol{padding-left:1.4rem;margin:.45rem 0}
+  .msg-bubble li{margin:.2rem 0}
+  .msg-bubble code{font-family:var(--mono);font-size:.82rem;background:rgba(255,255,255,.08);padding:.1rem .35rem;border-radius:4px}
+  .msg-bubble pre{margin:.6rem 0}
+  .msg-bubble pre code{background:none;padding:0;font-size:.8rem}
+  .msg-bubble blockquote{border-left:3px solid var(--orange);margin:.6rem 0;padding:.4rem .9rem;color:var(--t2)}
+  .msg-bubble table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.83rem}
+  .msg-bubble th,.msg-bubble td{border:1px solid var(--b2);padding:.4rem .65rem;text-align:left}
+  .msg-bubble th{background:rgba(255,255,255,.05);font-weight:600}
+  .msg-bubble strong{color:var(--text);font-weight:700}
+  .msg-bubble a{color:var(--cyan)}
+  .msg-bubble hr{border:none;border-top:1px solid var(--b2);margin:.75rem 0}
+  /* ── Code block wrapper ── */
+  .code-block{background:rgba(0,0,0,.5);border:1px solid var(--b2);border-radius:10px;overflow:hidden;margin:.6rem 0}
+  .code-header{display:flex;align-items:center;justify-content:space-between;padding:.35rem .75rem;background:rgba(255,255,255,.04);border-bottom:1px solid var(--b2)}
+  .code-lang{font-family:var(--mono);font-size:.67rem;color:var(--t3);text-transform:lowercase}
+  .btn-copy-code{background:none;border:1px solid var(--b3);border-radius:5px;color:var(--t2);font-family:var(--mono);font-size:.67rem;cursor:pointer;padding:.2rem .55rem;transition:all .15s}
+  .btn-copy-code:hover{color:var(--text);border-color:var(--orange)}
+  .btn-copy-code.copied{color:var(--green);border-color:var(--green)}
+  .code-block pre{margin:0;padding:.75rem .85rem;overflow-x:auto}
+  .code-block pre code{background:none;padding:0;font-size:.8rem;white-space:pre}
+  /* ── Message copy button ── */
+  .msg-row.assistant{position:relative}
+  .msg-copy-btn{display:none;position:absolute;top:.4rem;right:-2.2rem;background:none;border:1px solid var(--b2);border-radius:6px;color:var(--t3);cursor:pointer;padding:.3rem .4rem;line-height:1;transition:all .15s}
+  .msg-row.assistant:hover .msg-copy-btn{display:flex;align-items:center}
+  .msg-copy-btn:hover{color:var(--text);border-color:var(--orange)}
+  .msg-copy-btn.copied{color:var(--green);border-color:var(--green)}
+  /* ── Toast ── */
+  .toast{position:fixed;top:1.1rem;right:1.25rem;z-index:200;padding:.65rem 1.1rem;border-radius:10px;font-size:.84rem;font-weight:600;opacity:0;pointer-events:none;transform:translateY(-8px);transition:opacity .2s,transform .2s}
+  .toast.show{opacity:1;pointer-events:auto;transform:translateY(0)}
+  .toast.ok{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.35);color:#86efac}
+  .toast.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5}
   /* ── Mobile sidebar toggle ── */
   .sidebar-toggle{display:none;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;padding:.3rem .4rem;border-radius:6px;line-height:1}
   .sidebar-toggle:hover{color:var(--text);background:rgba(255,255,255,.06)}
@@ -161,6 +199,8 @@
 
 <!-- Mobile sidebar overlay -->
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
 
 <!-- Credit modal -->
 <div class="credit-modal-backdrop" id="creditModal">
@@ -183,6 +223,31 @@
 (function(){
   var $=function(id){return document.getElementById(id);};
   if(!window.AETHYRO){ location.replace('./login.html'); return; }
+
+  /* ── Markdown renderer ── */
+  (function setupMarked(){
+    if(!window.marked || !window.DOMPurify) return;
+    var renderer = new marked.Renderer();
+    renderer.code = function(code, lang){
+      var escaped = (typeof code === 'object' && code.text) ? code.text : (code || '');
+      var langStr = (typeof code === 'object' && code.lang) ? code.lang : (lang || '');
+      escaped = escaped.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return '<div class="code-block"><div class="code-header"><span class="code-lang">'+langStr+'</span><button class="btn-copy-code" title="Copy code">Copy</button></div><pre><code>'+escaped+'</code></pre></div>';
+    };
+    marked.use({ renderer: renderer, breaks: true, gfm: true });
+  })();
+
+  function renderMarkdown(text){
+    if(!window.marked || !window.DOMPurify) return text;
+    try{ return DOMPurify.sanitize(marked.parse(text||'')); }catch(e){ return text; }
+  }
+
+  /* ── Toast ── */
+  function showToast(msg, kind){
+    var t=$('toast'); t.textContent=msg; t.className='toast show '+(kind||'ok');
+    clearTimeout(t._tmr);
+    t._tmr=setTimeout(function(){ t.className='toast'; },3500);
+  }
   var supabase=window.AETHYRO.supabase;
   var session=null, history=[], busy=false, trialLocked=false;
   var currentConvId=null;
@@ -231,6 +296,7 @@
       var r=await supabase.rpc('get_credit_balance');
       if(!r.error) setBalance(r.data);
     }catch(e){}
+    /* returns undefined — caller can chain .then() safely */
   }
 
   function setBalance(n){
@@ -370,9 +436,15 @@
   }
 
   /* ── Ensure a conversation row exists ── */
+  function makeTitle(text){
+    var t=text.trim().replace(/^[^a-zA-Z0-9'"(]*/,'');
+    if(t.length<=52) return t||text.slice(0,52);
+    var cut=t.lastIndexOf(' ',52);
+    return (cut>8 ? t.slice(0,cut) : t.slice(0,52))+'…';
+  }
   async function ensureConversation(firstMessage){
     if(currentConvId) return currentConvId;
-    var title=firstMessage.slice(0,60).trim()||(firstMessage.slice(0,60));
+    var title=makeTitle(firstMessage);
     var r=await supabase.from('conversations')
       .insert({user_id:session.user.id, title:title})
       .select('id,title')
@@ -402,12 +474,47 @@
     who.textContent=role==='user'?'You':'Aethyro';
     var bubble=document.createElement('div');
     bubble.className='msg-bubble';
-    bubble.textContent=text||'';
-    row.appendChild(who); row.appendChild(bubble);
+    if(role==='assistant'){
+      if(text) bubble.innerHTML=renderMarkdown(text);
+      // Copy button (updated after streaming via bubble._copyBtn.dataset.raw)
+      var copyBtn=document.createElement('button');
+      copyBtn.className='msg-copy-btn'; copyBtn.title='Copy response';
+      copyBtn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+      copyBtn.dataset.raw=text||'';
+      copyBtn.addEventListener('click',function(){
+        var raw=copyBtn.dataset.raw||bubble.innerText||'';
+        navigator.clipboard.writeText(raw).then(function(){
+          copyBtn.classList.add('copied'); copyBtn.title='Copied!';
+          setTimeout(function(){ copyBtn.classList.remove('copied'); copyBtn.title='Copy response'; },2000);
+        }).catch(function(){
+          var s=window.getSelection(), r=document.createRange();
+          r.selectNodeContents(bubble); s.removeAllRanges(); s.addRange(r);
+          document.execCommand('copy');
+        });
+      });
+      row.appendChild(who); row.appendChild(bubble); row.appendChild(copyBtn);
+      bubble._copyBtn=copyBtn;
+    } else {
+      bubble.textContent=text||'';
+      row.appendChild(who); row.appendChild(bubble);
+    }
     $('msgs').appendChild(row);
     $('msgs').scrollTop=$('msgs').scrollHeight;
     return bubble;
   }
+
+  /* ── Code block copy (event delegation) ── */
+  $('msgs').addEventListener('click',function(e){
+    if(!e.target.classList.contains('btn-copy-code')) return;
+    var cb=e.target.closest('.code-block');
+    if(!cb) return;
+    var code=cb.querySelector('pre code');
+    if(!code) return;
+    navigator.clipboard.writeText(code.textContent||'').then(function(){
+      e.target.textContent='Copied!'; e.target.classList.add('copied');
+      setTimeout(function(){ e.target.textContent='Copy'; e.target.classList.remove('copied'); },2000);
+    });
+  });
 
   /* ── Send ── */
   async function send(message){
@@ -428,17 +535,28 @@
     if(!session) track('trial_message_sent',{surface:'chat_page'});
 
     try{
-      var resp=session
-        ? await fetch(window.AETHYRO_FN_URL+'/chat',{
-            method:'POST',
-            headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
-            body:JSON.stringify({message:message, history:history.slice(0,-1)})
-          })
-        : await fetch(TRIAL_URL,{
-            method:'POST',
-            headers:{'Content-Type':'application/json','apikey':window.AETHYRO_ANON_KEY},
-            body:JSON.stringify({message:message})
-          });
+      /* SSE fetch with up to 2 retries on network error */
+      var resp=null;
+      for(var attempt=0; attempt<3; attempt++){
+        try{
+          resp=session
+            ? await fetch(window.AETHYRO_FN_URL+'/chat',{
+                method:'POST',
+                headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+                body:JSON.stringify({message:message, history:history.slice(0,-1)})
+              })
+            : await fetch(TRIAL_URL,{
+                method:'POST',
+                headers:{'Content-Type':'application/json','apikey':window.AETHYRO_ANON_KEY},
+                body:JSON.stringify({message:message})
+              });
+          break;
+        }catch(netErr){
+          if(attempt===2) throw netErr;
+          bubble.textContent='Reconnecting…'; bubble.appendChild(cursor);
+          await new Promise(function(r){ setTimeout(r, 900*(attempt+1)); });
+        }
+      }
 
       if(resp.status===402){
         bubble.classList.add('error');
@@ -483,6 +601,9 @@
         }catch(e){}
       }
       if(full){
+        /* Render markdown now that streaming is done */
+        bubble.innerHTML=renderMarkdown(full);
+        if(bubble._copyBtn) bubble._copyBtn.dataset.raw=full;
         if(session){
           history.push({role:'assistant',content:full});
           if(convId) await saveMessage(convId,'assistant',full);
@@ -520,15 +641,18 @@
     btn.addEventListener('click',function(){
       var url=btn.getAttribute('data-stripe');
       if(!url) return;
-      window.open(url,'_blank');
+      var prevBal=parseInt($('balanceVal').textContent)||0;
+      window.open(url,'_blank','noopener,noreferrer');
       closeCreditModal();
-      // Refresh balance when the user returns to this tab after checkout
       var refreshed=false;
       function onFocus(){
         if(refreshed) return;
         refreshed=true;
         window.removeEventListener('focus',onFocus);
-        if(session) refreshBalance();
+        if(session) refreshBalance().then(function(){
+          var newBal=parseInt($('balanceVal').textContent)||0;
+          if(newBal>prevBal) showToast('Payment received — '+(newBal-prevBal).toLocaleString()+' credits added!','ok');
+        });
       }
       window.addEventListener('focus',onFocus);
     });

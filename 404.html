@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex"/>
+<title>Page not found — Aethyro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#030303;--s2:#111214;--b1:#1c1c1e;--b2:#2a2a2d;--orange:#ff4d00;--orange2:#ff7a3d;--text:#f0f0f0;--t2:#aaa;--t3:#666;--font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
+.wrap{text-align:center;max-width:480px}
+.code{font-family:var(--mono);font-size:5rem;font-weight:800;letter-spacing:-4px;background:linear-gradient(135deg,var(--orange),var(--orange2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:1.5rem}
+h1{font-size:1.6rem;font-weight:800;margin-bottom:.75rem}
+p{color:var(--t2);font-size:.95rem;line-height:1.6;margin-bottom:2rem}
+.actions{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
+a.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.7rem 1.4rem;border-radius:10px;font-family:var(--font);font-weight:700;font-size:.9rem;text-decoration:none;transition:all .2s}
+.btn-primary{background:var(--orange);color:#fff;box-shadow:0 0 22px rgba(255,77,0,.3)}
+.btn-primary:hover{background:var(--orange2)}
+.btn-ghost{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--b2)}
+.btn-ghost:hover{background:rgba(255,255,255,.09)}
+.brand{display:inline-flex;align-items:center;gap:.4rem;font-size:1.2rem;font-weight:800;color:var(--text);text-decoration:none;margin-bottom:3rem}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--orange);box-shadow:0 0 10px var(--orange)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="brand"><span class="dot"></span> Aethyro</a>
+  <div class="code">404</div>
+  <h1>Page not found</h1>
+  <p>The page you're looking for doesn't exist or has been moved.<br>Try heading back to the dashboard or homepage.</p>
+  <div class="actions">
+    <a href="/app/dashboard.html" class="btn btn-primary">Go to dashboard →</a>
+    <a href="/" class="btn btn-ghost">Back to home</a>
+  </div>
+</div>
+</body>
+</html>
