@@ -17,19 +17,19 @@
 <div class="wrap">
   <a href="/" class="brand"><span class="dot"></span> Aethyro</a>
   <div class="card">
-    <h1>Start your free trial</h1>
-    <p class="sub">14 days, full access, no credit card. Your AI runs on your hardware.</p>
+    <h1>Get 200 free credits</h1>
+    <p class="sub">No credit card required. Powered by Claude Opus 5.</p>
     <form id="form">
-      <label for="email">Work email</label>
-      <input id="email" type="email" required placeholder="you@company.com" autocomplete="email"/>
+      <label for="email">Email</label>
+      <input id="email" type="email" required placeholder="you@example.com" autocomplete="email"/>
       <label for="password">Password</label>
       <input id="password" type="password" required minlength="8" placeholder="at least 8 characters" autocomplete="new-password"/>
-      <button class="btn" id="submit" type="submit">Create account &amp; start trial →</button>
+      <button class="btn" id="submit" type="submit">Create account →</button>
     </form>
     <div class="msg" id="msg"></div>
     <p class="alt">Already have an account? <a href="./login.html" id="loginAlt">Log in</a></p>
   </div>
-  <p class="note">// signup creates a 14-day trial automatically · inference stays 100% local</p>
+  <p class="note">// 200 credits granted on signup · credits never expire · no data sold</p>
 </div>
 <script src="./vendor/supabase.js"></script>
 <script src="./config.js"></script>
@@ -48,10 +48,10 @@
     var password=document.getElementById('password').value;
     try{
       var r=await supabase.auth.signUp({ email:email, password:password });
-      if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Create account & start trial →'; return; }
+      if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Create account →'; return; }
       if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'email', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); gtag('event','begin_checkout',{currency:'USD',value:0}); }
       if(r.data && r.data.session){ location.href=nextUrl; return; }
-      show('Account created. Check your email to confirm, then log in.','ok'); btn.textContent='Check your email ✓';
+      show('Account created — check your email to confirm, then log in to claim your 200 free credits.','ok'); btn.textContent='Check your email ✓';
     }catch(err){ show((err&&err.message)||String(err),'err'); btn.disabled=false; btn.textContent='Create account & start trial →'; }
   });
 })();
