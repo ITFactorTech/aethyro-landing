@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>Email confirmed — Aethyro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="./style.css"/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+<style>
+  .icon{font-size:2.5rem;margin-bottom:1rem}
+  .progress{width:100%;height:3px;background:var(--b2);border-radius:2px;margin-top:1.5rem;overflow:hidden}
+  .progress-bar{height:100%;background:var(--orange);width:0%;transition:width 3s linear}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="brand"><span class="dot"></span> Aethyro</a>
+  <div class="card" style="text-align:center">
+    <div class="icon" id="icon">✓</div>
+    <h1 id="headline">Email confirmed</h1>
+    <p class="sub" id="sub">Your account is ready. 200 free credits have been added. Redirecting you to chat…</p>
+    <div class="progress"><div class="progress-bar" id="bar"></div></div>
+    <div class="msg" id="msg"></div>
+  </div>
+  <p class="note">// 200 credits granted on signup · credits never expire · no data sold</p>
+</div>
+<script src="./vendor/supabase.js"></script>
+<script src="./config.js"></script>
+<script>
+(function(){
+  var msg=document.getElementById('msg');
+  function showErr(t){ msg.textContent=t; msg.className='msg show err'; document.getElementById('icon').textContent='✗'; document.getElementById('headline').textContent='Confirmation failed'; document.getElementById('sub').textContent=''; }
+
+  if(!window.AETHYRO){ showErr(window.AETHYRO_LOADERR||'App failed to load.'); return; }
+  var supabase=window.AETHYRO.supabase;
+
+  var nextParam=new URLSearchParams(location.search).get('next');
+  var nextUrl=nextParam==='chat' ? './chat.html' : './dashboard.html';
+
+  function redirect(){
+    if(typeof gtag!=='undefined') gtag('event','email_confirmed',{method:'email'});
+    location.href=nextUrl;
+  }
+
+  (async function(){
+    // Supabase processes the #access_token fragment automatically on getSession()
+    var r=await supabase.auth.getSession();
+    if(r.data && r.data.session){
+      // Confirmed and signed in — start countdown
+      var bar=document.getElementById('bar');
+      requestAnimationFrame(function(){ bar.style.width='100%'; });
+      setTimeout(redirect, 3100);
+      return;
+    }
+    // No session in hash — might be a PKCE flow or already confirmed
+    // Try exchangeCodeForSession in case Supabase sent a ?code= param
+    var code=new URLSearchParams(location.search).get('code');
+    if(code){
+      var r2=await supabase.auth.exchangeCodeForSession(code);
+      if(!r2.error && r2.data && r2.data.session){
+        var bar=document.getElementById('bar');
+        requestAnimationFrame(function(){ bar.style.width='100%'; });
+        setTimeout(redirect, 3100);
+        return;
+      }
+      showErr(r2.error ? r2.error.message : 'Could not confirm your email. The link may have expired.');
+      return;
+    }
+    // Hash-based flow with no session — token may have expired or already used
+    showErr('This confirmation link has expired or already been used. Please log in or request a new link.');
+  })();
+})();
+</script>
+</body>
+</html>
