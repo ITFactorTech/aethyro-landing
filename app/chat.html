@@ -24,9 +24,13 @@
   .sidebar-new{display:block;width:100%;padding:.55rem .85rem;background:rgba(255,77,0,.1);border:1px solid rgba(255,77,0,.25);border-radius:8px;color:var(--orange);font-weight:700;font-size:.82rem;cursor:pointer;text-align:left;font-family:var(--font);transition:background .15s}
   .sidebar-new:hover{background:rgba(255,77,0,.18)}
   .sidebar-convs{flex:1;overflow-y:auto;padding:.5rem .5rem}
-  .conv-item{padding:.55rem .7rem;border-radius:8px;cursor:pointer;font-size:.82rem;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .12s,color .12s}
+  .conv-item{display:flex;align-items:center;gap:.35rem;padding:.45rem .7rem;border-radius:8px;cursor:pointer;font-size:.82rem;color:var(--t2);transition:background .12s,color .12s;min-width:0}
   .conv-item:hover{background:rgba(255,255,255,.05);color:var(--text)}
   .conv-item.active{background:rgba(255,77,0,.1);color:var(--text)}
+  .conv-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .conv-del{display:none;flex-shrink:0;background:none;border:none;color:var(--t3);cursor:pointer;padding:.1rem .25rem;border-radius:4px;font-size:.85rem;line-height:1}
+  .conv-item:hover .conv-del{display:block}
+  .conv-del:hover{color:#fca5a5}
   .sidebar-foot{padding:.75rem .85rem;border-top:1px solid var(--b1)}
   .sidebar-foot a{font-size:.78rem;color:var(--t3);text-decoration:none;display:block}
   .sidebar-foot a:hover{color:var(--text)}
@@ -216,7 +220,7 @@
   function setBalance(n){
     $('balanceVal').textContent=n;
     $('balanceSm').textContent=n+' credits';
-    if(n<10){ $('lowBalance').style.display='flex'; $('lowBalanceVal').textContent=n; }
+    if(n<=30){ $('lowBalance').style.display='flex'; $('lowBalanceVal').textContent=n; }
     else { $('lowBalance').style.display='none'; }
   }
 
@@ -230,18 +234,28 @@
     renderConvList(r.data);
   }
 
+  function makeConvItem(c){
+    var el=document.createElement('div');
+    el.className='conv-item'+(c.id===currentConvId ? ' active' : '');
+    el.setAttribute('data-id',c.id);
+    var title=document.createElement('span');
+    title.className='conv-title';
+    title.textContent=c.title||'Untitled';
+    title.title=c.title||'Untitled';
+    var del=document.createElement('button');
+    del.className='conv-del';
+    del.title='Delete conversation';
+    del.textContent='×';
+    del.addEventListener('click',function(e){ e.stopPropagation(); deleteConversation(c.id,el); });
+    el.appendChild(title); el.appendChild(del);
+    el.addEventListener('click', function(){ loadConversation(c.id); });
+    return el;
+  }
+
   function renderConvList(convs){
     var list=$('convList');
     list.innerHTML='';
-    convs.forEach(function(c){
-      var el=document.createElement('div');
-      el.className='conv-item'+(c.id===currentConvId ? ' active' : '');
-      el.textContent=c.title||'Untitled';
-      el.title=c.title||'Untitled';
-      el.setAttribute('data-id',c.id);
-      el.addEventListener('click', function(){ loadConversation(c.id); });
-      list.appendChild(el);
-    });
+    convs.forEach(function(c){ list.appendChild(makeConvItem(c)); });
   }
 
   function setActiveConv(id){
@@ -291,6 +305,15 @@
 
   $('newChatBtn').addEventListener('click', startNewChat);
 
+  /* ── Delete a conversation ── */
+  async function deleteConversation(convId, el){
+    if(!confirm('Delete this conversation? This cannot be undone.')) return;
+    var r=await supabase.from('conversations').delete().eq('id',convId);
+    if(r.error){ alert('Could not delete conversation. Please try again.'); return; }
+    el.remove();
+    if(currentConvId===convId) startNewChat();
+  }
+
   /* ── Ensure a conversation row exists ── */
   async function ensureConversation(firstMessage){
     if(currentConvId) return currentConvId;
@@ -304,13 +327,7 @@
     $('chatTitle').textContent=r.data.title;
     // prepend to sidebar list
     var list=$('convList');
-    var el=document.createElement('div');
-    el.className='conv-item active';
-    el.textContent=r.data.title;
-    el.title=r.data.title;
-    el.setAttribute('data-id',r.data.id);
-    el.addEventListener('click',function(){ loadConversation(r.data.id); });
-    list.insertBefore(el,list.firstChild);
+    list.insertBefore(makeConvItem(r.data),list.firstChild);
     return r.data.id;
   }
 
@@ -447,7 +464,18 @@
   document.querySelectorAll('.pack-btn').forEach(function(btn){
     btn.addEventListener('click',function(){
       var url=btn.getAttribute('data-stripe');
-      if(url) location.href=url;
+      if(!url) return;
+      window.open(url,'_blank');
+      closeCreditModal();
+      // Refresh balance when the user returns to this tab after checkout
+      var refreshed=false;
+      function onFocus(){
+        if(refreshed) return;
+        refreshed=true;
+        window.removeEventListener('focus',onFocus);
+        if(session) refreshBalance();
+      }
+      window.addEventListener('focus',onFocus);
     });
   });
 })();
