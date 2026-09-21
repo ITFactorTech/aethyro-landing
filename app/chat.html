@@ -28,9 +28,12 @@
   .conv-item:hover{background:rgba(255,255,255,.05);color:var(--text)}
   .conv-item.active{background:rgba(255,77,0,.1);color:var(--text)}
   .conv-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-  .conv-del{display:none;flex-shrink:0;background:none;border:none;color:var(--t3);cursor:pointer;padding:.1rem .25rem;border-radius:4px;font-size:.85rem;line-height:1}
-  .conv-item:hover .conv-del{display:block}
+  .conv-actions{display:none;flex-shrink:0;align-items:center;gap:.1rem}
+  .conv-item:hover .conv-actions{display:flex}
+  .conv-del,.conv-ren{background:none;border:none;color:var(--t3);cursor:pointer;padding:.1rem .25rem;border-radius:4px;font-size:.85rem;line-height:1}
   .conv-del:hover{color:#fca5a5}
+  .conv-ren:hover{color:var(--text)}
+  .conv-rename-input{flex:1;background:rgba(0,0,0,.5);border:1px solid var(--orange);border-radius:5px;color:var(--text);font-family:var(--font);font-size:.82rem;padding:.15rem .4rem;outline:none;min-width:0}
   .sidebar-foot{padding:.75rem .85rem;border-top:1px solid var(--b1)}
   .sidebar-foot a{font-size:.78rem;color:var(--t3);text-decoration:none;display:block}
   .sidebar-foot a:hover{color:var(--text)}
@@ -87,9 +90,17 @@
   .pack-btn .cr{font-size:.66rem;color:var(--t3);margin-top:.2rem}
   .credit-modal-close{margin-top:1.25rem;text-align:center;font-size:.8rem;color:var(--t3);cursor:pointer}
 
+  /* ── Mobile sidebar toggle ── */
+  .sidebar-toggle{display:none;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;padding:.3rem .4rem;border-radius:6px;line-height:1}
+  .sidebar-toggle:hover{color:var(--text);background:rgba(255,255,255,.06)}
+
   /* ── Responsive ── */
   @media(max-width:640px){
-    .sidebar{display:none}
+    .sidebar{display:none;position:fixed;inset:0 auto 0 0;z-index:40;width:80vw;max-width:280px;box-shadow:4px 0 24px rgba(0,0,0,.5)}
+    .sidebar.mobile-open{display:flex}
+    .sidebar-overlay{display:none;position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.45)}
+    .sidebar-overlay.show{display:block}
+    .sidebar-toggle{display:inline-flex}
     .msgs{padding:1rem .75rem}
     .composer-wrap{padding:0 .75rem}
     .pack-grid{grid-template-columns:1fr 1fr}
@@ -115,6 +126,7 @@
   <!-- Main chat -->
   <div class="chat-main">
     <div class="chat-top">
+      <button class="sidebar-toggle" id="sidebarToggle" style="display:none" title="Open conversations">☰</button>
       <!-- shown in anon mode only -->
       <a href="/" class="brand" id="anonBrand" style="margin:0;display:none"><span class="dot"></span> Aethyro</a>
       <span class="chat-title" id="chatTitle"></span>
@@ -146,6 +158,9 @@
     </div>
   </div>
 </div>
+
+<!-- Mobile sidebar overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <!-- Credit modal -->
 <div class="credit-modal-backdrop" id="creditModal">
@@ -181,6 +196,7 @@
     session=s.data && s.data.session;
     if(!session){ enterAnonymousMode(); return; }
     $('sidebar').classList.remove('hidden');
+    $('sidebarToggle').style.display='';
     $('balancePill').style.display='flex';
     $('buyBtn').style.display='';
     await refreshBalance();
@@ -242,14 +258,41 @@
     title.className='conv-title';
     title.textContent=c.title||'Untitled';
     title.title=c.title||'Untitled';
+    var actions=document.createElement('div');
+    actions.className='conv-actions';
+    var ren=document.createElement('button');
+    ren.className='conv-ren'; ren.title='Rename'; ren.textContent='✎';
+    ren.addEventListener('click',function(e){ e.stopPropagation(); startRename(c,el,title); });
     var del=document.createElement('button');
-    del.className='conv-del';
-    del.title='Delete conversation';
-    del.textContent='×';
+    del.className='conv-del'; del.title='Delete'; del.textContent='×';
     del.addEventListener('click',function(e){ e.stopPropagation(); deleteConversation(c.id,el); });
-    el.appendChild(title); el.appendChild(del);
-    el.addEventListener('click', function(){ loadConversation(c.id); });
+    actions.appendChild(ren); actions.appendChild(del);
+    el.appendChild(title); el.appendChild(actions);
+    el.addEventListener('click', function(){ loadConversation(c.id); closeMobileSidebar(); });
     return el;
+  }
+
+  function startRename(c,el,titleSpan){
+    var input=document.createElement('input');
+    input.className='conv-rename-input';
+    input.value=titleSpan.textContent;
+    el.replaceChild(input,titleSpan);
+    input.focus(); input.select();
+    async function commit(){
+      var newTitle=input.value.trim()||titleSpan.textContent;
+      el.replaceChild(titleSpan,input);
+      if(newTitle===titleSpan.textContent) return;
+      titleSpan.textContent=newTitle;
+      titleSpan.title=newTitle;
+      c.title=newTitle;
+      await supabase.from('conversations').update({title:newTitle}).eq('id',c.id);
+      if(currentConvId===c.id) $('chatTitle').textContent=newTitle;
+    }
+    input.addEventListener('blur',commit);
+    input.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){ e.preventDefault(); input.blur(); }
+      if(e.key==='Escape'){ el.replaceChild(titleSpan,input); }
+    });
   }
 
   function renderConvList(convs){
@@ -303,7 +346,19 @@
     $('input').focus();
   }
 
-  $('newChatBtn').addEventListener('click', startNewChat);
+  $('newChatBtn').addEventListener('click', function(){ startNewChat(); closeMobileSidebar(); });
+
+  /* ── Mobile sidebar ── */
+  function openMobileSidebar(){
+    $('sidebar').classList.add('mobile-open');
+    $('sidebarOverlay').classList.add('show');
+  }
+  function closeMobileSidebar(){
+    $('sidebar').classList.remove('mobile-open');
+    $('sidebarOverlay').classList.remove('show');
+  }
+  $('sidebarToggle').addEventListener('click', openMobileSidebar);
+  $('sidebarOverlay').addEventListener('click', closeMobileSidebar);
 
   /* ── Delete a conversation ── */
   async function deleteConversation(convId, el){
