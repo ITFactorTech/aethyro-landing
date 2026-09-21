@@ -165,6 +165,23 @@
       <button class="btn btn-ghost" id="manageBtn" style="width:auto;margin-top:1rem;padding:.5rem 1rem;display:none">Manage billing →</button>
     </div>
 
+    <!-- USAGE STATS -->
+    <div class="panel" style="margin-top:1rem">
+      <h2>Usage</h2>
+      <div class="grid" style="margin-top:.75rem">
+        <div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);font-weight:700;margin-bottom:.35rem">Conversations</div>
+          <div class="stat" style="font-size:1.8rem" id="convCount">—</div>
+          <div class="muted" style="font-size:.78rem;margin-top:.25rem" id="lastActive">loading…</div>
+        </div>
+        <div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);font-weight:700;margin-bottom:.35rem">Credits used this month</div>
+          <div class="stat" style="font-size:1.8rem" id="creditsUsedMonth">—</div>
+          <div class="muted" style="font-size:.78rem;margin-top:.25rem" id="creditsUsedSub">of total spent</div>
+        </div>
+      </div>
+    </div>
+
     <!-- CREDIT HISTORY -->
     <div class="panel" style="margin-top:1rem">
       <h2>Credit history</h2>
@@ -207,12 +224,12 @@
 
   function fmt(n){ return typeof n === 'number' ? n.toLocaleString() : '—'; }
 
-  // Credit packs — prices match what you sell
+  // Credit packs — correct Stripe Payment Links per pack
   var CREDIT_PACKS = [
-    { label: '200 credits', price: '$4', credits: 200, stripe: 'https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00' },
-    { label: '600 credits', price: '$10', credits: 600, stripe: 'https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00' },
-    { label: '2 000 credits', price: '$30', credits: 2000, stripe: 'https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00' },
-    { label: '7 000 credits', price: '$90', credits: 7000, stripe: 'https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00' },
+    { label: '200 credits', price: '$4',  credits: 200,  stripe: 'https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00' },
+    { label: '600 credits', price: '$10', credits: 600,  stripe: 'https://buy.stripe.com/5kA6oI60H5Nk3ty7ss7bW01' },
+    { label: '2,000 credits', price: '$30', credits: 2000, stripe: 'https://buy.stripe.com/14A28s74L9Ze4xC3cc7bW02' },
+    { label: '7,000 credits', price: '$90', credits: 7000, stripe: 'https://buy.stripe.com/7sI4gA60H9ZedHY8ww7bW03' },
   ];
 
   (async function(){
@@ -224,11 +241,15 @@
       var user=session.user;
       $('email').textContent=user.email;
 
-      // Fetch credit balance, subscription, and ledger in parallel
-      var [balRes, subRes, ledRes] = await Promise.all([
+      // Fetch all data in parallel
+      var now=new Date(), monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString();
+      var [balRes, subRes, ledRes, convRes, lastMsgRes, monthDebitsRes] = await Promise.all([
         supabase.rpc('get_credit_balance'),
         supabase.from('subscriptions').select('*').limit(1),
-        supabase.from('credit_ledger').select('*').order('created_at',{ascending:false}).limit(20)
+        supabase.from('credit_ledger').select('*').order('created_at',{ascending:false}).limit(20),
+        supabase.from('conversations').select('id',{count:'exact',head:true}),
+        supabase.from('messages').select('created_at').order('created_at',{ascending:false}).limit(1),
+        supabase.from('credit_ledger').select('delta').lt('delta',0).gte('created_at',monthStart)
       ]);
 
       // ── Credits ──
@@ -249,6 +270,19 @@
         a.textContent = p.price + ' · ' + p.label;
         packRow.appendChild(a);
       });
+
+      // ── Usage stats ──
+      var convCount = (convRes && convRes.count != null) ? convRes.count : 0;
+      $('convCount').textContent = convCount.toLocaleString();
+      if(lastMsgRes.data && lastMsgRes.data[0]){
+        var lastDate = new Date(lastMsgRes.data[0].created_at);
+        var daysAgo = Math.floor((Date.now()-lastDate)/86400000);
+        $('lastActive').textContent = daysAgo===0 ? 'Last active today' : daysAgo===1 ? 'Last active yesterday' : 'Last active '+daysAgo+' days ago';
+      } else { $('lastActive').textContent = 'No messages yet'; }
+      var monthSpend = (monthDebitsRes.data||[]).reduce(function(s,r){ return s+Math.abs(r.delta); },0);
+      $('creditsUsedMonth').textContent = monthSpend.toLocaleString();
+      var totalSpend = (ledRes.data||[]).filter(function(r){ return r.delta<0; }).reduce(function(s,r){ return s+Math.abs(r.delta); },0);
+      $('creditsUsedSub').textContent = totalSpend.toLocaleString()+' credits total';
 
       // ── Subscription ──
       var sub = subRes.data && subRes.data[0];

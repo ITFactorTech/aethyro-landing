@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>New password — Aethyro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="./style.css"/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="brand"><span class="dot"></span> Aethyro</a>
+  <div class="card" id="card">
+    <div id="loadingState">
+      <h1>Verifying link…</h1>
+      <p class="sub">One moment.</p>
+    </div>
+    <div id="formState" style="display:none">
+      <h1>Choose a new password</h1>
+      <p class="sub">Must be at least 8 characters.</p>
+      <form id="form">
+        <label for="password">New password</label>
+        <input id="password" type="password" required minlength="8" placeholder="at least 8 characters" autocomplete="new-password"/>
+        <label for="password2">Confirm password</label>
+        <input id="password2" type="password" required minlength="8" placeholder="repeat password" autocomplete="new-password"/>
+        <button class="btn" id="submit" type="submit">Set new password →</button>
+      </form>
+      <div class="msg" id="msg"></div>
+    </div>
+    <div id="errorState" style="display:none">
+      <h1>Link expired</h1>
+      <p class="sub">This password reset link has expired or already been used.</p>
+      <a href="./forgot.html" class="btn" style="margin-top:1rem;display:inline-flex;align-items:center;justify-content:center">Request a new link →</a>
+    </div>
+  </div>
+</div>
+<script src="./vendor/supabase.js"></script>
+<script src="./config.js"></script>
+<script>
+(function(){
+  var msg=document.getElementById('msg'), btn=document.getElementById('submit'), form=document.getElementById('form');
+  function show(t,kind){ msg.textContent=t; msg.className='msg show '+(kind||'err'); }
+  if(!window.AETHYRO){ document.getElementById('loadingState').innerHTML='<h1>Error</h1><p class="sub">'+(window.AETHYRO_LOADERR||'App failed to load.')+'</p>'; return; }
+  var supabase=window.AETHYRO.supabase;
+
+  function showForm(){ document.getElementById('loadingState').style.display='none'; document.getElementById('formState').style.display=''; }
+  function showError(){ document.getElementById('loadingState').style.display='none'; document.getElementById('errorState').style.display=''; }
+
+  (async function(){
+    // Supabase sends password reset links as hash-fragment tokens (type=recovery)
+    // getSession() picks them up automatically
+    var r=await supabase.auth.getSession();
+    if(r.data && r.data.session){
+      showForm(); return;
+    }
+    // Also try PKCE code exchange
+    var code=new URLSearchParams(location.search).get('code');
+    if(code){
+      var r2=await supabase.auth.exchangeCodeForSession(code);
+      if(!r2.error && r2.data && r2.data.session){ showForm(); return; }
+    }
+    showError();
+  })();
+
+  if(form) form.addEventListener('submit', async function(e){
+    e.preventDefault();
+    var pw=document.getElementById('password').value;
+    var pw2=document.getElementById('password2').value;
+    if(pw!==pw2){ show('Passwords do not match.','err'); return; }
+    btn.disabled=true; btn.textContent='Saving…'; msg.className='msg';
+    try{
+      var r=await supabase.auth.updateUser({ password: pw });
+      if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Set new password →'; return; }
+      show('Password updated! Redirecting…','ok');
+      btn.textContent='Done ✓';
+      setTimeout(function(){ location.href='./dashboard.html'; }, 1800);
+    }catch(err){ show((err&&err.message)||String(err),'err'); btn.disabled=false; btn.textContent='Set new password →'; }
+  });
+})();
+</script>
+</body>
+</html>
