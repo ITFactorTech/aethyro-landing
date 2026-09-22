@@ -11,95 +11,398 @@
 <meta property="og:description" content="Local-AI news, benchmarks, and build guides for people running AI on their own hardware. Free weekly issues."/>
 <meta property="og:url" content="https://aethyro.com/app/newsletter.html"/>
 <meta property="og:type" content="website"/>
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="./style.css"/>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <style>
-  .nl-wrap{max-width:720px;margin:0 auto;padding:2.5rem 1.25rem}
-  .nl-sub{background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:1.4rem;margin:1.5rem 0 2rem}
-  .nl-sub .row{display:flex;gap:.6rem}.nl-sub input{flex:1}
-  .issue{display:block;background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:1.3rem 1.5rem;margin-bottom:.7rem;text-decoration:none;color:inherit;transition:border-color .15s}
-  .issue:hover{border-color:var(--b2)}
-  .issue .it{font-weight:700;color:var(--text);font-size:1.02rem}
-  .issue .is{color:var(--t2);font-size:.85rem;margin-top:.3rem;line-height:1.5}
-  .issue .im{font-family:var(--mono);font-size:.64rem;color:var(--t3);margin-top:.5rem;display:flex;gap:.7rem;align-items:center}
+  .nl-wrap{max-width:740px;margin:0 auto;padding:2.5rem 1.25rem}
+
+  /* ── Hero ── */
+  .nl-hero{text-align:center;padding:2rem 0 1.5rem}
+  .nl-hero h1{font-size:2rem;margin:0 0 .5rem;line-height:1.2}
+  .nl-hero p{color:var(--t2);font-size:.95rem;max-width:480px;margin:.5rem auto 0}
+
+  /* ── Subscribe box ── */
+  .nl-sub{background:var(--s2);border:1px solid var(--b2);border-radius:16px;padding:1.5rem 1.75rem;margin:1.75rem 0 2.25rem}
+  .nl-sub-title{font-weight:700;font-size:1rem;margin-bottom:.8rem}
+  .nl-sub .row{display:flex;gap:.6rem;flex-wrap:wrap}
+  .nl-sub input{flex:1;min-width:200px}
+  .nl-meta{font-size:.78rem;color:var(--t3);margin-top:.65rem}
+  .nl-meta a{color:var(--t2)}
+
+  /* ── Issue list ── */
+  .issues-grid{display:flex;flex-direction:column;gap:.65rem}
+  .issue{display:block;background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:1.3rem 1.5rem;text-decoration:none;color:inherit;transition:border-color .15s,background .15s;cursor:pointer}
+  .issue:hover{border-color:rgba(255,255,255,.18);background:var(--s3)}
+  .issue-header{display:flex;align-items:flex-start;gap:.75rem}
+  .issue-num{font-family:var(--mono);font-size:.68rem;color:var(--t3);padding:.2rem .5rem;border:1px solid var(--b2);border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:.15rem}
+  .issue-body-wrap{flex:1;min-width:0}
+  .issue .it{font-weight:700;color:var(--text);font-size:1.02rem;line-height:1.35}
+  .issue .is{color:var(--t2);font-size:.85rem;margin-top:.35rem;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .issue-meta{font-family:var(--mono);font-size:.64rem;color:var(--t3);margin-top:.6rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
   .lock{color:#fcd34d;border:1px solid rgba(245,158,11,.3);background:rgba(245,158,11,.08);border-radius:5px;padding:.1rem .4rem;text-transform:uppercase;letter-spacing:.05em}
-  .issue-body{background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:2rem;white-space:pre-wrap;color:var(--text);line-height:1.75;font-size:.95rem}
-  .gate{background:rgba(245,158,11,.06);border:1px dashed rgba(245,158,11,.3);border-radius:14px;padding:2rem;text-align:center}
+  .free-tag{color:var(--cyan);border:1px solid rgba(0,212,255,.2);background:rgba(0,212,255,.06);border-radius:5px;padding:.1rem .4rem;text-transform:uppercase;letter-spacing:.05em}
+  .read-time{color:var(--t3)}
+
+  /* ── Issue view ── */
+  .issue-view-header{margin-bottom:1.75rem}
+  .issue-view-header h1{font-size:1.6rem;margin:.5rem 0 .4rem;line-height:1.3}
+  .issue-view-meta{font-family:var(--mono);font-size:.72rem;color:var(--t3);display:flex;gap:.85rem;align-items:center;flex-wrap:wrap}
+  .issue-content{font-size:.96rem;line-height:1.8;color:var(--text)}
+  .issue-content h1,.issue-content h2,.issue-content h3{font-weight:700;margin:1.4rem 0 .5rem;line-height:1.3}
+  .issue-content h1{font-size:1.3rem}.issue-content h2{font-size:1.12rem}.issue-content h3{font-size:1rem}
+  .issue-content p{margin:.6rem 0}
+  .issue-content ul,.issue-content ol{padding-left:1.5rem;margin:.6rem 0}
+  .issue-content li{margin:.3rem 0}
+  .issue-content blockquote{border-left:3px solid var(--orange);margin:.75rem 0;padding:.5rem 1rem;color:var(--t2);background:rgba(255,77,0,.04);border-radius:0 8px 8px 0}
+  .issue-content code{font-family:var(--mono);font-size:.83rem;background:rgba(255,255,255,.08);padding:.1rem .35rem;border-radius:4px}
+  .issue-content pre{background:rgba(0,0,0,.5);border:1px solid var(--b2);border-radius:10px;padding:.85rem 1rem;margin:.75rem 0;overflow-x:auto}
+  .issue-content pre code{background:none;padding:0;font-size:.8rem}
+  .issue-content a{color:var(--cyan)}
+  .issue-content hr{border:none;border-top:1px solid var(--b2);margin:1.5rem 0}
+  .issue-content table{border-collapse:collapse;width:100%;margin:.75rem 0;font-size:.85rem}
+  .issue-content th,.issue-content td{border:1px solid var(--b2);padding:.4rem .7rem;text-align:left}
+  .issue-content th{background:rgba(255,255,255,.05);font-weight:600}
+
+  /* ── Reactions ── */
+  .reactions{display:flex;gap:.5rem;flex-wrap:wrap;margin:2rem 0 1rem}
+  .react-btn{display:flex;align-items:center;gap:.4rem;padding:.45rem .85rem;border:1px solid var(--b2);border-radius:100px;background:transparent;color:var(--t2);font-family:var(--font);font-size:.83rem;cursor:pointer;transition:all .18s;user-select:none}
+  .react-btn:hover{border-color:rgba(255,255,255,.28);color:var(--text);background:rgba(255,255,255,.05)}
+  .react-btn.reacted{border-color:var(--orange);background:rgba(255,77,0,.1);color:var(--text)}
+  .react-btn .emoji{font-size:1rem;line-height:1}
+  .react-btn .count{font-family:var(--mono);font-size:.74rem;min-width:1ch}
+  .react-label{font-size:.72rem;color:var(--t3);align-self:center;margin-left:.15rem}
+
+  /* ── Share / actions bar ── */
+  .issue-actions{display:flex;gap:.6rem;align-items:center;padding:1rem 0;border-top:1px solid var(--b1);border-bottom:1px solid var(--b1);margin:1.5rem 0}
+  .act-btn{display:flex;align-items:center;gap:.4rem;padding:.4rem .85rem;border:1px solid var(--b2);border-radius:8px;background:transparent;color:var(--t2);font-family:var(--font);font-size:.82rem;cursor:pointer;transition:all .15s}
+  .act-btn:hover{border-color:rgba(255,255,255,.22);color:var(--text)}
+  .act-btn.copied{border-color:var(--green);color:var(--green)}
+  .back-link{font-size:.82rem;color:var(--t2);text-decoration:none;display:inline-flex;align-items:center;gap:.35rem;margin-bottom:1.25rem;transition:color .12s}
+  .back-link:hover{color:var(--text)}
+
+  /* ── Gate ── */
+  .gate{background:rgba(245,158,11,.06);border:1px dashed rgba(245,158,11,.3);border-radius:14px;padding:2rem;text-align:center;margin-top:1.25rem}
+  .gate h3{font-size:1.1rem;margin:0 0 .5rem}
+  .gate p{color:var(--t2);font-size:.87rem;margin:.4rem 0 1.1rem}
+
+  /* ── Skeleton loader ── */
+  .skel{background:linear-gradient(90deg,var(--b1) 25%,var(--b2) 50%,var(--b1) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:8px;height:1rem}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .skel-card{background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:1.3rem 1.5rem;margin-bottom:.65rem}
+  .skel-title{width:65%;height:1.1rem;margin-bottom:.7rem}
+  .skel-line{width:90%;height:.75rem;margin-bottom:.4rem}
+  .skel-line.short{width:40%}
+
+  @media(max-width:600px){
+    .nl-hero h1{font-size:1.5rem}
+    .nl-sub{padding:1.1rem}
+    .issue{padding:1rem 1.1rem}
+    .issue-view-header h1{font-size:1.3rem}
+  }
 </style>
 </head>
 <body>
 <div class="nl-wrap">
   <div class="topbar">
     <a href="/" class="brand" style="margin:0"><span class="dot"></span> Aethyro</a>
-    <a href="/app/login.html" class="btn btn-ghost" style="width:auto;margin:0;padding:.5rem 1rem">Log in</a>
+    <a href="/app/login.html" class="btn btn-ghost" id="authLink" style="width:auto;margin:0;padding:.5rem 1rem">Log in</a>
   </div>
-  <div id="loading" class="loading">loading…</div>
-  <div id="view" style="display:none"></div>
+
+  <div id="view"></div>
 </div>
 
 <script src="./vendor/supabase.js"></script>
 <script src="./config.js"></script>
 <script>
 (function(){
-  var $=function(id){return document.getElementById(id);};
-  function fail(m){var l=$('loading');if(l){l.innerHTML='⚠ '+m;l.style.color='#fca5a5';}}
-  setTimeout(function(){ if($('view').style.display==='none') fail('timed out — reload'); },12000);
-  if(!window.AETHYRO){ fail(window.AETHYRO_LOADERR||'failed to load'); return; }
-  var sb=window.AETHYRO.supabase, view=$('view');
-  var esc=function(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;};
-  var when=function(t){return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});};
-  function show(){ $('loading').style.display='none'; view.style.display='block'; }
+  var sb = window.AETHYRO && window.AETHYRO.supabase;
 
-  (async function(){
-    try{
-      var slug=new URLSearchParams(location.search).get('i');
-      if(slug) await openIssue(slug); else await listIssues();
-      show();
-    }catch(e){ fail((e&&e.message)||String(e)); }
-  })();
-
-  async function listIssues(){
-    var r=await sb.rpc('newsletter_index'); if(r.error) throw r.error;
-    var html='<h1>The Aethyro Dispatch</h1><p class="sub">Local-AI news, benchmarks, and build guides — for people running AI on their own hardware.</p>';
-    html+='<div class="nl-sub"><div style="font-weight:700;margin-bottom:.5rem">Get it free, every week</div>'
-      +'<div class="row"><input id="nlEmail" type="email" placeholder="you@email.com"/><button class="btn" id="nlJoin" style="width:auto;margin:0">Subscribe</button></div>'
-      +'<div class="msg" id="nlMsg"></div>'
-      +'<p class="note" style="margin-top:.6rem">Free issues are public. Subscriber issues (deep benchmarks, build guides) are included with any <a href="/app/signup.html">trial or plan</a>.</p></div>';
-    (r.data||[]).forEach(function(it){
-      html+='<a class="issue" href="?i='+encodeURIComponent(it.slug)+'"><div class="it">'+esc(it.title)+'</div><div class="is">'+esc(it.summary||'')+'</div>'
-        +'<div class="im"><span>'+when(it.published_at)+'</span>'+(it.is_premium?'<span class="lock">subscriber</span>':'<span>free</span>')+'</div></a>';
-    });
-    view.innerHTML=html;
-    $('nlJoin').onclick=async function(){
-      var em=$('nlEmail').value.trim(), m=$('nlMsg');
-      if(!em||em.indexOf('@')<1){ m.className='msg show err'; m.textContent='Enter a valid email.'; return; }
-      var ins=await sb.from('newsletter_signups').insert({email:em});
-      if(ins.error && ins.error.code!=='23505'){ m.className='msg show err'; m.textContent=ins.error.message; return; }
-      m.className='msg show ok'; m.textContent='✓ Subscribed — welcome to the Dispatch.'; $('nlEmail').value='';
-    };
+  /* ── helpers ── */
+  function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
+  function when(t){ return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }
+  function readTime(body){
+    if(!body) return null;
+    var words=body.trim().split(/\s+/).length;
+    var mins=Math.max(1,Math.round(words/200));
+    return mins+' min read';
+  }
+  function renderMd(text){
+    if(!text) return '';
+    if(!window.marked||!window.DOMPurify) return '<pre style="white-space:pre-wrap">'+esc(text)+'</pre>';
+    try{ return DOMPurify.sanitize(marked.parse(text)); }catch(e){ return '<pre style="white-space:pre-wrap">'+esc(text)+'</pre>'; }
   }
 
-  async function openIssue(slug){
-    var idx=await sb.rpc('newsletter_index'); var meta=(idx.data||[]).filter(function(x){return x.slug===slug;})[0];
-    var r=await sb.from('newsletter_issues').select('title,body,is_premium,published_at').eq('slug',slug).maybeSingle();
-    var html='<a href="/app/newsletter.html" style="font-size:.8rem">← all issues</a>';
-    if(r.data){
-      html+='<h1 style="margin-top:.7rem">'+esc(r.data.title)+'</h1><p class="sub">'+when(r.data.published_at)+(r.data.is_premium?' · subscriber issue':' · free')+'</p>';
-      html+='<div class="issue-body">'+esc(r.data.body)+'</div>';
-    } else if(meta){
-      html+='<h1 style="margin-top:.7rem">'+esc(meta.title)+'</h1><p class="sub">'+when(meta.published_at)+' · subscriber issue</p>';
-      html+='<div class="issue-body" style="opacity:.7">'+esc(meta.summary||'')+'</div>';
-      html+='<div class="gate" style="margin-top:1rem"><div style="font-weight:700;font-size:1.05rem">🔒 Subscriber issue</div><p class="muted" style="margin:.6rem 0 1rem">Included with any Aethyro trial or plan. Start a 14-day free trial — no card — to read it.</p><a href="/app/signup.html" class="btn btn-orange" style="width:auto">Start free trial →</a></div>';
+  /* ── localStorage reaction state ── */
+  var REACT_KEY = 'nl_reactions';
+  function getMyReactions(){
+    try{ return JSON.parse(localStorage.getItem(REACT_KEY)||'{}'); }catch(e){ return {}; }
+  }
+  function markReacted(slug, emoji){
+    try{
+      var s=getMyReactions(); if(!s[slug]) s[slug]={};
+      s[slug][emoji]=true; localStorage.setItem(REACT_KEY,JSON.stringify(s));
+    }catch(e){}
+  }
+  function hasReacted(slug, emoji){ var s=getMyReactions(); return !!(s[slug]&&s[slug][emoji]); }
+
+  /* ── auth state for header ── */
+  (async function checkAuth(){
+    if(!sb) return;
+    var s=await sb.auth.getSession();
+    if(s.data&&s.data.session){
+      var link=document.getElementById('authLink');
+      if(link){ link.textContent='Dashboard'; link.href='/app/dashboard.html'; }
+    }
+  })();
+
+  /* ── main router ── */
+  var view=document.getElementById('view');
+  var slug=new URLSearchParams(location.search).get('i');
+  showSkeleton(slug?1:3);
+  if(!sb){ view.innerHTML='<p style="color:#fca5a5;padding:2rem 0">⚠ Configuration error — reload the page.</p>'; }
+  else if(slug){ openIssue(slug); }
+  else{ listIssues(); }
+
+  /* ── skeleton loader ── */
+  function showSkeleton(n){
+    var html='';
+    if(n===1){
+      html='<div style="margin-bottom:1rem"><div class="skel" style="width:5rem;height:.7rem"></div></div>'
+           +'<div class="skel skel-title" style="width:70%;height:1.5rem;margin-bottom:.5rem"></div>'
+           +'<div class="skel" style="width:30%;height:.65rem;margin-bottom:1.5rem"></div>'
+           +'<div class="skel skel-line"></div><div class="skel skel-line" style="margin-top:.5rem"></div><div class="skel skel-line short" style="margin-top:.5rem"></div>';
     } else {
-      html+='<p class="muted" style="margin-top:1rem">Issue not found.</p>';
+      for(var i=0;i<n;i++){
+        html+='<div class="skel-card"><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line short"></div></div>';
+      }
     }
     view.innerHTML=html;
   }
+
+  /* ══════════════════════════════════════════
+     ISSUE LIST
+  ══════════════════════════════════════════ */
+  async function listIssues(){
+    var r=await sb.rpc('newsletter_index');
+    if(r.error){ view.innerHTML='<p style="color:#fca5a5">Could not load issues — try refreshing.</p>'; return; }
+    var issues=r.data||[];
+
+    var html='<div class="nl-hero">'
+      +'<h1>The Aethyro Dispatch</h1>'
+      +'<p>Local-AI news, benchmarks, and build guides — for people running AI on their own hardware.</p>'
+      +'</div>';
+
+    html+='<div class="nl-sub">'
+      +'<div class="nl-sub-title">Get it free, every week</div>'
+      +'<div class="row"><input id="nlEmail" type="email" placeholder="you@email.com" autocomplete="email"/>'
+      +'<button class="btn" id="nlJoin" style="width:auto;margin:0">Subscribe →</button></div>'
+      +'<div class="msg" id="nlMsg" style="margin-top:.55rem"></div>'
+      +'<p class="nl-meta">Free issues are public. Deep-dive subscriber issues are included with any <a href="/app/signup.html">Aethyro plan</a>.</p>'
+      +'</div>';
+
+    if(issues.length===0){
+      html+='<p class="muted" style="text-align:center;padding:2rem 0">First issue coming soon — subscribe to be notified.</p>';
+    } else {
+      html+='<div class="issues-grid">';
+      issues.forEach(function(it, i){
+        var n=issues.length-i;
+        var rt=it.body ? readTime(it.body) : null;
+        html+='<a class="issue" href="?i='+encodeURIComponent(it.slug)+'">'
+          +'<div class="issue-header">'
+          +'<span class="issue-num">#'+n+'</span>'
+          +'<div class="issue-body-wrap">'
+          +'<div class="it">'+esc(it.title)+'</div>'
+          +(it.summary?'<div class="is">'+esc(it.summary)+'</div>':'')
+          +'<div class="issue-meta">'
+          +'<span>'+when(it.published_at)+'</span>'
+          +(it.is_premium?'<span class="lock">subscriber</span>':'<span class="free-tag">free</span>')
+          +(rt?'<span class="read-time">'+rt+'</span>':'')
+          +'</div>'
+          +'</div></div>'
+          +'</a>';
+      });
+      html+='</div>';
+    }
+
+    view.innerHTML=html;
+
+    var joinBtn=document.getElementById('nlJoin');
+    var nlMsg=document.getElementById('nlMsg');
+    joinBtn.addEventListener('click', async function(){
+      var em=document.getElementById('nlEmail').value.trim();
+      if(!em||em.indexOf('@')<1){ nlMsg.className='msg show err'; nlMsg.textContent='Enter a valid email.'; return; }
+      joinBtn.disabled=true; joinBtn.textContent='Subscribing…';
+      var ins=await sb.from('newsletter_signups').insert({email:em});
+      if(ins.error&&ins.error.code!=='23505'){
+        nlMsg.className='msg show err'; nlMsg.textContent=ins.error.message;
+        joinBtn.disabled=false; joinBtn.textContent='Subscribe →'; return;
+      }
+      nlMsg.className='msg show ok'; nlMsg.textContent='✓ Subscribed — welcome to the Dispatch.';
+      document.getElementById('nlEmail').value='';
+      joinBtn.textContent='Subscribed ✓';
+    });
+  }
+
+  /* ══════════════════════════════════════════
+     ISSUE VIEW
+  ══════════════════════════════════════════ */
+  async function openIssue(slug){
+    /* fetch issue data + reaction counts in parallel */
+    var [issueR, reactR] = await Promise.all([
+      sb.from('newsletter_issues').select('title,body,is_premium,published_at').eq('slug',slug).maybeSingle(),
+      sb.from('newsletter_reactions').select('emoji,count').eq('issue_slug',slug)
+    ]);
+
+    var data=issueR.data;
+    var reactMap={};
+    (reactR.data||[]).forEach(function(r){ reactMap[r.emoji]=r.count; });
+
+    var html='<a class="back-link" href="/app/newsletter.html">← All issues</a>';
+
+    if(data){
+      var rt=readTime(data.body);
+      html+='<div class="issue-view-header">'
+        +'<div class="issue-view-meta">'
+        +when(data.published_at)
+        +(data.is_premium?' · <span class="lock" style="font-family:var(--font)">subscriber</span>':' · <span class="free-tag" style="font-family:var(--font)">free</span>')
+        +(rt?' · '+rt:'')
+        +'</div>'
+        +'<h1>'+esc(data.title)+'</h1>'
+        +'</div>';
+
+      /* actions bar */
+      html+=buildActionsBar(slug);
+
+      /* body */
+      html+='<div class="issue-content">'+renderMd(data.body)+'</div>';
+
+      /* reactions */
+      html+=buildReactions(slug, reactMap);
+
+      /* bottom subscribe nudge for free issues */
+      if(!data.is_premium){
+        html+='<div class="nl-sub" style="margin-top:2rem">'
+          +'<div class="nl-sub-title">Enjoying the Dispatch?</div>'
+          +'<div class="row"><input id="nlEmail2" type="email" placeholder="you@email.com" autocomplete="email"/>'
+          +'<button class="btn" id="nlJoin2" style="width:auto;margin:0">Subscribe free →</button></div>'
+          +'<div class="msg" id="nlMsg2" style="margin-top:.55rem"></div>'
+          +'</div>';
+      }
+
+    } else {
+      /* premium gate — issue exists in index but body not visible */
+      var idx=await sb.rpc('newsletter_index');
+      var meta=(idx.data||[]).filter(function(x){ return x.slug===slug; })[0];
+      if(meta){
+        var rt2=null; /* no body to estimate */
+        html+='<div class="issue-view-header">'
+          +'<div class="issue-view-meta">'+when(meta.published_at)+' · <span class="lock" style="font-family:var(--font)">subscriber</span></div>'
+          +'<h1>'+esc(meta.title)+'</h1>'
+          +'</div>';
+        if(meta.summary) html+='<p style="color:var(--t2);font-size:.95rem;margin-bottom:1.5rem">'+esc(meta.summary)+'</p>';
+        html+='<div class="gate">'
+          +'<h3>🔒 Subscriber issue</h3>'
+          +'<p>Included with any Aethyro plan. Start a 14-day free trial — no card required — to read the full issue.</p>'
+          +'<a href="/app/signup.html" class="btn btn-orange" style="width:auto">Start free trial →</a>'
+          +'</div>';
+      } else {
+        html+='<p class="muted" style="margin-top:1rem">Issue not found.</p>';
+      }
+    }
+
+    view.innerHTML=html;
+
+    /* wire share button */
+    var shareBtn=document.getElementById('shareBtn');
+    if(shareBtn){
+      shareBtn.addEventListener('click', function(){
+        var url=location.href;
+        if(navigator.share){
+          navigator.share({title:document.title,url:url}).catch(function(){});
+        } else {
+          navigator.clipboard.writeText(url).then(function(){
+            shareBtn.classList.add('copied'); shareBtn.textContent='✓ Copied';
+            setTimeout(function(){ shareBtn.classList.remove('copied'); shareBtn.textContent='Share'; },2200);
+          });
+        }
+      });
+    }
+
+    /* wire reaction buttons */
+    document.querySelectorAll('.react-btn').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        if(btn.dataset.busy==='1') return;
+        var emoji=btn.dataset.emoji;
+        if(hasReacted(slug,emoji)) return; /* already voted */
+        btn.dataset.busy='1';
+        markReacted(slug,emoji);
+        btn.classList.add('reacted');
+        var countEl=btn.querySelector('.count');
+        var cur=parseInt(countEl.textContent)||0;
+        countEl.textContent=cur+1; /* optimistic */
+        try{
+          var r=await sb.rpc('add_newsletter_reaction',{p_slug:slug,p_emoji:emoji});
+          if(!r.error&&typeof r.data==='number') countEl.textContent=r.data;
+        }catch(e){}
+        btn.dataset.busy='0';
+      });
+    });
+
+    /* wire bottom subscribe */
+    var j2=document.getElementById('nlJoin2');
+    var m2=document.getElementById('nlMsg2');
+    if(j2&&m2){
+      j2.addEventListener('click', async function(){
+        var em=document.getElementById('nlEmail2').value.trim();
+        if(!em||em.indexOf('@')<1){ m2.className='msg show err'; m2.textContent='Enter a valid email.'; return; }
+        j2.disabled=true; j2.textContent='Subscribing…';
+        var ins=await sb.from('newsletter_signups').insert({email:em});
+        if(ins.error&&ins.error.code!=='23505'){
+          m2.className='msg show err'; m2.textContent=ins.error.message;
+          j2.disabled=false; j2.textContent='Subscribe free →'; return;
+        }
+        m2.className='msg show ok'; m2.textContent='✓ Subscribed — welcome to the Dispatch.';
+        document.getElementById('nlEmail2').value='';
+        j2.textContent='Subscribed ✓';
+      });
+    }
+  }
+
+  /* ── Build actions bar HTML ── */
+  function buildActionsBar(slug){
+    return '<div class="issue-actions">'
+      +'<button class="act-btn" id="shareBtn">Share</button>'
+      +'<a href="/app/chat.html" class="act-btn" style="text-decoration:none">💬 Discuss with Aethyro</a>'
+      +'</div>';
+  }
+
+  /* ── Build reactions HTML ── */
+  var EMOJIS=[
+    {e:'🔥', label:'Insightful'},
+    {e:'🧠', label:'Deep dive'},
+    {e:'💡', label:'Useful'}
+  ];
+  function buildReactions(slug, reactMap){
+    var html='<div class="reactions">';
+    EMOJIS.forEach(function(em){
+      var count=reactMap[em.e]||0;
+      var reacted=hasReacted(slug,em.e);
+      html+='<button class="react-btn'+(reacted?' reacted':'')+'" data-emoji="'+em.e+'">'
+        +'<span class="emoji">'+em.e+'</span>'
+        +'<span class="count">'+count+'</span>'
+        +'</button>';
+    });
+    html+='<span class="react-label">React to this issue</span>';
+    html+='</div>';
+    return html;
+  }
+
 })();
 </script>
 </body>
