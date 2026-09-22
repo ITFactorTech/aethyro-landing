@@ -608,6 +608,15 @@
           history.push({role:'assistant',content:full});
           if(convId) await saveMessage(convId,'assistant',full);
         }
+        /* Auto-title: server generates a smart title on the first exchange */
+        if(session && convId && meta && meta.title){
+          var aiTitle=meta.title;
+          supabase.from('conversations').update({title:aiTitle}).eq('id',convId);
+          var sidebarTitle=document.querySelector('.conv-item.active .conv-title');
+          if(sidebarTitle) sidebarTitle.textContent=aiTitle;
+          if(sidebarTitle) sidebarTitle.title=aiTitle;
+          $('chatTitle').textContent=aiTitle;
+        }
       } else if(!bubble.classList.contains('error')){
         bubble.textContent='(no response)';
       }
