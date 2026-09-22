@@ -63,7 +63,8 @@
   supabase.auth.getSession().then(function(r){ if(r.data && r.data.session) location.href=nextUrl; });
 
   document.getElementById('githubBtn').addEventListener('click', async function(){
-    var r=await supabase.auth.signInWithOAuth({provider:'github',options:{redirectTo:window.location.origin+nextUrl}});
+    var redirectTo=window.location.origin+(nextParam==='chat' ? '/app/chat.html' : '/app/dashboard.html');
+    var r=await supabase.auth.signInWithOAuth({provider:'github',options:{redirectTo:redirectTo}});
     if(r.error) show(r.error.message);
   });
 
