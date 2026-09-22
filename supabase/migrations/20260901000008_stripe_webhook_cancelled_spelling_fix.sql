@@ -1,0 +1,11 @@
+-- Documents the critical bug fix in stripe-webhook edge function (v29):
+-- Stripe sends both "cancelled" (2 L) and "canceled" (1 L) for cancellations.
+-- The DB check constraint uses "canceled" (1 L), causing silent failures.
+-- Fixed via statusMap in the edge function; no DB changes required here.
+-- This file is a no-op migration that records the fix for audit purposes.
+
+-- Edge function change: supabase/functions/stripe-webhook/index.ts v29
+-- Added statusMap:
+--   cancelled -> canceled   (Stripe alternate spelling)
+--   incomplete_expired -> expired
+--   unpaid -> past_due
