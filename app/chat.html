@@ -128,6 +128,12 @@
   .toast.show{opacity:1;pointer-events:auto;transform:translateY(0)}
   .toast.ok{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.35);color:#86efac}
   .toast.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5}
+  /* ── Depleted state ── */
+  .depleted-bar{margin:.5rem 0;padding:.75rem 1rem;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:12px;font-size:.83rem;color:#fca5a5;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+  .depleted-bar a{color:#f87171;font-weight:700;text-decoration:none}
+  .depleted-bar a:hover{color:#fca5a5;text-decoration:underline}
+  .ooc-buy-btn{display:inline-block;margin-top:.55rem;background:var(--orange);color:#fff;border:none;border-radius:8px;padding:.45rem 1.1rem;font-weight:700;font-size:.82rem;cursor:pointer;font-family:var(--font);transition:background .15s}
+  .ooc-buy-btn:hover{background:var(--orange2)}
   /* ── Mobile sidebar toggle ── */
   .sidebar-toggle{display:none;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;padding:.3rem .4rem;border-radius:6px;line-height:1}
   .sidebar-toggle:hover{color:var(--text);background:rgba(255,255,255,.06)}
@@ -189,6 +195,9 @@
       <div class="low-balance" id="trialLimitBar" style="display:none">
         🔒 That's today's 3 free preview messages. <a href="./signup.html?next=chat" id="trialLimitBarLink">Sign up free for 200 credits →</a>
       </div>
+      <div class="depleted-bar" id="depletedBar" style="display:none">
+        🔴 No credits left. <a href="#" id="depletedBuy">Buy credits →</a>
+      </div>
       <form class="composer" id="composer">
         <textarea id="input" placeholder="Message Aethyro…" rows="1" required></textarea>
         <button type="submit" id="sendBtn">Send</button>
@@ -249,7 +258,7 @@
     t._tmr=setTimeout(function(){ t.className='toast'; },3500);
   }
   var supabase=window.AETHYRO.supabase;
-  var session=null, history=[], busy=false, trialLocked=false;
+  var session=null, history=[], busy=false, trialLocked=false, depleted=false;
   var currentConvId=null;
   var TRIAL_URL=window.AETHYRO_FN_URL+'/trial-chat';
   var USAGE_MARK='\u0000';
@@ -290,6 +299,23 @@
     $('sendBtn').disabled=true;
   }
 
+  function lockForDepleted(){
+    depleted=true;
+    $('depletedBar').style.display='flex';
+    $('lowBalance').style.display='none';
+    $('input').disabled=true;
+    $('input').placeholder='Out of credits — buy more to continue';
+    $('sendBtn').disabled=true;
+  }
+
+  function unlockDepleted(){
+    depleted=false;
+    $('depletedBar').style.display='none';
+    $('input').disabled=false;
+    $('input').placeholder='Message Aethyro…';
+    $('sendBtn').disabled=false;
+  }
+
   /* ── Balance ── */
   async function refreshBalance(){
     try{
@@ -302,7 +328,9 @@
   function setBalance(n){
     $('balanceVal').textContent=n;
     $('balanceSm').textContent=n+' credits';
-    if(n<=30){ $('lowBalance').style.display='flex'; $('lowBalanceVal').textContent=n; }
+    if(n<=0 && !depleted){ lockForDepleted(); }
+    else if(n>0 && depleted){ unlockDepleted(); }
+    if(n>0 && n<=30){ $('lowBalance').style.display='flex'; $('lowBalanceVal').textContent=n; }
     else { $('lowBalance').style.display='none'; }
   }
 
@@ -559,11 +587,21 @@
       }
 
       if(resp.status===402){
+        cursor.remove();
         bubble.classList.add('error');
-        bubble.textContent="You're out of credits. Buy more to keep chatting.";
+        bubble.innerHTML='';
+        var oocMsg=document.createTextNode("You’re out of credits.");
+        var oocBtn=document.createElement('button');
+        oocBtn.className='ooc-buy-btn';
+        oocBtn.textContent='Buy credits';
+        oocBtn.addEventListener('click', openCreditModal);
+        bubble.appendChild(oocMsg);
+        bubble.appendChild(document.createElement('br'));
+        bubble.appendChild(oocBtn);
         var d=await resp.json().catch(function(){return{};});
         if(typeof d.balance==='number') setBalance(d.balance);
-        openCreditModal(); return;
+        else lockForDepleted();
+        return;
       }
       if(resp.status===429){
         cursor.remove(); bubble.classList.add('error');
@@ -624,7 +662,7 @@
       bubble.classList.add('error');
       bubble.textContent='Connection error. Please try again.';
     }finally{
-      busy=false; $('sendBtn').disabled=trialLocked;
+      busy=false; $('sendBtn').disabled=trialLocked||depleted;
     }
   }
 
@@ -643,6 +681,7 @@
   function closeCreditModal(){ $('creditModal').classList.remove('show'); }
   $('buyBtn').addEventListener('click',openCreditModal);
   $('lowBalanceBuy').addEventListener('click',function(e){ e.preventDefault(); openCreditModal(); });
+  $('depletedBuy').addEventListener('click',function(e){ e.preventDefault(); openCreditModal(); });
   $('creditModalClose').addEventListener('click',closeCreditModal);
   $('creditModal').addEventListener('click',function(e){ if(e.target===this) closeCreditModal(); });
 
@@ -661,6 +700,7 @@
         if(session) refreshBalance().then(function(){
           var newBal=parseInt($('balanceVal').textContent)||0;
           if(newBal>prevBal) showToast('Payment received — '+(newBal-prevBal).toLocaleString()+' credits added!','ok');
+          if(depleted && newBal>0) unlockDepleted();
         });
       }
       window.addEventListener('focus',onFocus);
