@@ -12,15 +12,12 @@
   <meta property="og:url" content="https://aethyro.com/pricing.html"/>
   <meta property="og:type" content="website"/>
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "PriceSpecification",
-    "name": "Aethyro Pricing",
-    "description": "Fixed monthly pricing for private local AI software",
-    "url": "https://aethyro.com/pricing.html"
-  }
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Aethyro","url":"https://aethyro.com","applicationCategory":"ProductivityApplication","operatingSystem":"Windows, macOS, Linux","offers":[{"@type":"Offer","name":"Personal","price":"29.00","priceCurrency":"USD","billingIncrement":"P1M","description":"Private local AI for individuals and families"},{"@type":"Offer","name":"Research","price":"199.00","priceCurrency":"USD","billingIncrement":"P1M","description":"For researchers and educators"},{"@type":"Offer","name":"Developer","price":"299.00","priceCurrency":"USD","billingIncrement":"P1M","description":"For developers and agencies"},{"@type":"Offer","name":"Professional","price":"499.00","priceCurrency":"USD","billingIncrement":"P1M","description":"For legal, medical, CPA, and realty professionals"}]}
   </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+  <link rel="apple-touch-icon" href="/favicon.svg"/>
+  <meta name="theme-color" content="#030303"/>
+  <link rel="manifest" href="/manifest.json"/>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
   <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -98,12 +95,12 @@
   </style>
 </head>
 <body>
-<nav>
+<nav aria-label="Main navigation">
   <div class="nav-inner">
-    <a href="/" class="nav-logo"><span class="nav-dot"></span> Aethyro</a>
+    <a href="/" class="nav-logo" aria-label="Aethyro home"><span class="nav-dot"></span> Aethyro</a>
     <div style="display:flex;align-items:center;gap:.5rem">
       <a href="/app/login.html" class="nav-link">Log in</a>
-      <a href="https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00" target="_blank" rel="noopener" class="nav-cta">Start Free Trial</a>
+      <a href="https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00" target="_blank" rel="noopener" class="nav-cta" onclick="gtag('event','begin_checkout',{plan:'personal',value:29,currency:'USD',surface:'nav'})">Start Free Trial</a>
     </div>
   </div>
 </nav>
@@ -132,7 +129,7 @@
         <li><span class="ck">✓</span>Basic marketplace access</li>
         <li><span class="ck">✓</span>Email support</li>
       </ul>
-      <a href="https://buy.stripe.com/bJecN660H2B83tk8Td7bW02" target="_blank" rel="noopener" class="plan-cta cta-ghost">Start Free Trial →</a>
+      <a href="https://buy.stripe.com/bJecN660H2B83tk8Td7bW02" target="_blank" rel="noopener" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'personal',value:29,currency:'USD'})">Start Free Trial →</a>
     </div>
 
     <!-- Research -->
@@ -150,7 +147,7 @@
         <li><span class="ck">✓</span>Full marketplace access</li>
         <li><span class="ck">✓</span>Priority support</li>
       </ul>
-      <a href="https://buy.stripe.com/28E9AUbl1ejQbZQc5p7bW03" target="_blank" rel="noopener" class="plan-cta cta-ghost">Start Free Trial →</a>
+      <a href="https://buy.stripe.com/28E9AUbl1ejQbZQc5p7bW03" target="_blank" rel="noopener" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'research',value:199,currency:'USD'})">Start Free Trial →</a>
     </div>
 
     <!-- Dev -->
@@ -168,7 +165,7 @@
         <li><span class="ck">✓</span>Unlimited device licenses</li>
         <li><span class="ck">✓</span>Slack-wired notifications</li>
       </ul>
-      <a href="https://buy.stripe.com/dRmcN61Kra3A7JAglF7bW04" target="_blank" rel="noopener" class="plan-cta cta-orange">Start Free Trial →</a>
+      <a href="https://buy.stripe.com/dRmcN61Kra3A7JAglF7bW04" target="_blank" rel="noopener" class="plan-cta cta-orange" onclick="gtag('event','begin_checkout',{plan:'developer',value:299,currency:'USD'})">Start Free Trial →</a>
     </div>
 
     <!-- CPA -->
@@ -187,7 +184,7 @@
         <li><span class="ck">✓</span>Dedicated setup call</li>
         <li><span class="ck">✓</span>SLA + priority Slack support</li>
       </ul>
-      <a href="https://buy.stripe.com/8x2fZiagX4Jg9RI3yT7bW05" target="_blank" rel="noopener" class="plan-cta cta-ghost">Start Free Trial →</a>
+      <a href="https://buy.stripe.com/8x2fZiagX4Jg9RI3yT7bW05" target="_blank" rel="noopener" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'professional',value:499,currency:'USD'})">Start Free Trial →</a>
     </div>
 
   </div>
