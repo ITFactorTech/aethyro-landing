@@ -375,6 +375,46 @@
     .footer-bottom p{font-size:.76rem;color:var(--t3);font-family:var(--mono)}
     .footer-bottom a{color:var(--orange);text-decoration:none}
 
+    /* ── SCROLL PROGRESS BAR ── */
+    #scroll-bar{
+      position:fixed;top:0;left:0;height:2px;width:0%;z-index:9999;
+      background:linear-gradient(90deg,var(--orange),var(--cyan));
+      transition:width .05s linear;pointer-events:none;
+    }
+
+    /* ── STICKY BOTTOM CTA ── */
+    #sticky-cta{
+      position:fixed;bottom:0;left:0;right:0;z-index:300;
+      background:rgba(10,10,10,.96);backdrop-filter:blur(20px);
+      border-top:1px solid var(--b2);
+      padding:.85rem 1.5rem;
+      display:flex;align-items:center;justify-content:space-between;gap:1rem;
+      transform:translateY(100%);transition:transform .3s ease;
+      box-shadow:0 -8px 40px rgba(0,0,0,.4);
+    }
+    #sticky-cta.visible{transform:translateY(0)}
+    .sticky-cta-left{display:flex;align-items:center;gap:.75rem;flex:1;min-width:0}
+    .sticky-cta-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse-dot 2s infinite;flex-shrink:0}
+    .sticky-cta-text{font-size:.8rem;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sticky-cta-text strong{color:var(--text)}
+    .sticky-cta-right{display:flex;align-items:center;gap:.75rem;flex-shrink:0}
+    .sticky-cta-btn{
+      padding:.55rem 1.25rem;font-size:.82rem;font-weight:700;
+      background:var(--orange);color:#fff;border-radius:8px;text-decoration:none;
+      box-shadow:0 0 18px rgba(255,77,0,.35);transition:background .15s,box-shadow .15s;
+      white-space:nowrap;
+    }
+    .sticky-cta-btn:hover{background:var(--orange2);box-shadow:0 0 28px rgba(255,77,0,.5)}
+    .sticky-cta-dismiss{
+      background:none;border:none;cursor:pointer;color:var(--t3);
+      font-size:1.1rem;line-height:1;padding:.25rem;transition:color .15s;flex-shrink:0;
+    }
+    .sticky-cta-dismiss:hover{color:var(--t2)}
+    @media(max-width:520px){
+      .sticky-cta-text{display:none}
+      #sticky-cta{padding:.7rem 1rem}
+    }
+
     /* ── HOW IT WORKS STEPS ── */
     .steps-row{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:3rem;position:relative}
     .steps-row::before{content:'';position:absolute;top:2.2rem;left:calc(16.66% + 1rem);right:calc(16.66% + 1rem);height:1px;background:linear-gradient(90deg,transparent,var(--b2) 20%,var(--b2) 80%,transparent);z-index:0}
@@ -495,6 +535,19 @@
 
 <!-- skip-to-content for keyboard/screen-reader users -->
 <a href="#main-content" style="position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;background:var(--bg);color:var(--text);padding:.5rem 1rem;border-radius:6px;font-size:.85rem;text-decoration:none" onfocus="this.style.left='1rem';this.style.width='auto';this.style.height='auto'" onblur="this.style.left='-999px';this.style.width='1px';this.style.height='1px'">Skip to main content</a>
+
+<div id="scroll-bar" aria-hidden="true"></div>
+
+<div id="sticky-cta" role="complementary" aria-label="Get started prompt">
+  <div class="sticky-cta-left">
+    <span class="sticky-cta-dot"></span>
+    <span class="sticky-cta-text"><strong>Aethyro is live.</strong> 200 free credits · Claude Opus 5 · no card needed</span>
+  </div>
+  <div class="sticky-cta-right">
+    <a href="/app/chat.html" class="sticky-cta-btn">Get Started Free →</a>
+    <button class="sticky-cta-dismiss" id="stickyCTADismiss" aria-label="Dismiss">×</button>
+  </div>
+</div>
 
 <!-- ── NAV ── -->
 <nav aria-label="Main navigation">
@@ -1528,6 +1581,37 @@ patterns are well established.</div>
       }
     });
     drawer.querySelectorAll('a').forEach(function(a) { a.addEventListener('click', close); });
+  })();
+
+  // ── scroll progress bar + sticky CTA ──
+  (function(){
+    var bar = document.getElementById('scroll-bar');
+    var cta = document.getElementById('sticky-cta');
+    var dismiss = document.getElementById('stickyCTADismiss');
+    var dismissed = false;
+    var SHOW_AFTER = 500; // px from top
+
+    function update(){
+      var scrolled = window.scrollY || document.documentElement.scrollTop;
+      var total = document.documentElement.scrollHeight - window.innerHeight;
+      if(bar && total > 0) bar.style.width = Math.min(100, (scrolled / total) * 100) + '%';
+      if(cta && !dismissed){
+        if(scrolled > SHOW_AFTER){ cta.classList.add('visible'); }
+        else { cta.classList.remove('visible'); }
+      }
+    }
+
+    window.addEventListener('scroll', update, {passive: true});
+    update();
+
+    if(dismiss && cta){
+      dismiss.addEventListener('click', function(){
+        dismissed = true;
+        cta.classList.remove('visible');
+        try{ sessionStorage.setItem('ctaDismissed','1'); }catch(e){}
+      });
+      try{ if(sessionStorage.getItem('ctaDismissed')) dismissed = true; }catch(e){}
+    }
   })();
 </script>
 </body>
