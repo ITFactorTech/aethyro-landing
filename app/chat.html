@@ -210,6 +210,7 @@
     <div class="sidebar-foot">
       <a href="/app/dashboard.html">Dashboard →</a>
       <button class="sidebar-workspace-btn" id="workspaceBtn">Workspace</button>
+      <button class="sidebar-workspace-btn" id="referralBtn">🎁 Share &amp; Earn</button>
       <div class="balance-sm" id="balanceSm">— credits</div>
     </div>
   </div>
@@ -245,7 +246,10 @@
       <div class="depleted-bar" id="depletedBar" style="display:none">
         🔴 No credits left. <a href="#" id="depletedBuy">Buy credits →</a>
       </div>
+      <div id="attachChips" style="display:none"></div>
       <form class="composer" id="composer">
+        <button type="button" id="attachBtn" title="Attach file (txt, md, csv, pdf, image)">📎</button>
+        <input type="file" id="fileInput" accept=".txt,.md,.csv,.pdf,.png,.jpg,.jpeg,.webp,.gif" multiple style="display:none"/>
         <textarea id="input" placeholder="Message Aethyro…" rows="1" required></textarea>
         <button type="submit" id="sendBtn">Send</button>
       </form>
@@ -270,6 +274,21 @@
       <div class="pack-btn" data-stripe="https://buy.stripe.com/7sI4gA60H9ZedHY8ww7bW03"><div class="amt">$90</div><div class="cr">7,000 credits</div></div>
     </div>
     <div class="credit-modal-close" id="creditModalClose">Cancel</div>
+  </div>
+</div>
+
+<!-- Referral modal -->
+<div class="workspace-modal-backdrop" id="referralModal">
+  <div class="workspace-modal">
+    <h3>Share &amp; Earn 100 Credits</h3>
+    <p class="wm-sub">Share your link — when a friend signs up and redeems it within 72 hours, you both get 100 free credits automatically.</p>
+    <div class="ref-link-row">
+      <input type="text" class="ref-link-input" id="refLinkInput" readonly value="Loading…"/>
+      <button class="ref-copy-btn" id="refCopyBtn">Copy link</button>
+    </div>
+    <div class="wm-actions" style="margin-top:1.25rem">
+      <button class="wm-cancel" id="refClose">Close</button>
+    </div>
   </div>
 </div>
 
@@ -339,6 +358,8 @@ I often need help with: client quotes, contract review, business Instagram posts
     await refreshBalance();
     await loadConversationList();
     await loadWorkspaceContext();
+    await tryRedeemReferral();
+    loadReferralCode();
     var urlConvId=new URLSearchParams(location.search).get('c');
     if(urlConvId) await loadConversation(urlConvId);
   })();
@@ -609,7 +630,7 @@ I often need help with: client quotes, contract review, business Instagram posts
   });
 
   /* ── Send ── */
-  async function send(message){
+  async function send(message, attachments){
     if(busy||trialLocked) return;
     busy=true; $('sendBtn').disabled=true;
     addMessage('user',message);
@@ -635,7 +656,7 @@ I often need help with: client quotes, contract review, business Instagram posts
             ? await fetch(window.AETHYRO_FN_URL+'/chat',{
                 method:'POST',
                 headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
-                body:JSON.stringify({message:message, history:history.slice(0,-1)})
+                body:JSON.stringify({message:message, history:history.slice(0,-1), attachments:attachments&&attachments.length?attachments:undefined})
               })
             : await fetch(TRIAL_URL,{
                 method:'POST',
@@ -755,7 +776,10 @@ I often need help with: client quotes, contract review, business Instagram posts
     var input=$('input'), text=input.value.trim();
     if(!text) return;
     input.value=''; input.style.height='auto';
-    send(text);
+    var atts=pendingAttachments.slice();
+    pendingAttachments=[];
+    renderChips();
+    send(text, atts);
   });
   $('input').addEventListener('input',function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,160)+'px'; });
   $('input').addEventListener('keydown',function(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('composer').requestSubmit(); } });
@@ -912,6 +936,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       container.appendChild(card);
     });
   }
+
 
   /* ── File attachments ── */
   var pendingAttachments=[];
