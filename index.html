@@ -1825,5 +1825,12 @@ patterns are well established.</div>
     }
   })();
 </script>
+<script>
+/* Capture referral code from ?ref= and persist for post-signup redemption */
+(function(){
+  var ref=new URLSearchParams(location.search).get('ref');
+  if(ref) try{ localStorage.setItem('aethyro_ref',ref.trim().toUpperCase()); }catch(e){}
+})();
+</script>
 </body>
 </html>
