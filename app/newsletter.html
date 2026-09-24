@@ -308,7 +308,6 @@
       var idx=await sb.rpc('newsletter_index');
       var meta=(idx.data||[]).filter(function(x){ return x.slug===slug; })[0];
       if(meta){
-        var rt2=null; /* no body to estimate */
         html+='<div class="issue-view-header">'
           +'<div class="issue-view-meta">'+when(meta.published_at)+' · <span class="lock" style="font-family:var(--font)">subscriber</span></div>'
           +'<h1>'+esc(meta.title)+'</h1>'

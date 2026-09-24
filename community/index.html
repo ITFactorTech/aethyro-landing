@@ -548,13 +548,6 @@ function submitAgent() {
   window.location.href = 'mailto:leer4030@gmail.com?subject=Community+Agent+Submission:+'+encodeURIComponent(name)+'&body=Agent:+'+encodeURIComponent(name)+'%0AEmail:+'+encodeURIComponent(email)+'%0ADescription:+'+encodeURIComponent(desc);
 }
 
-// Animate tick counter
-var tick = 28075;
-setInterval(function() {
-  tick += Math.floor(Math.random() * 5) + 1;
-  var el = document.getElementById('widgetTick');
-  if (el) el.textContent = tick.toLocaleString();
-}, 3000);
 </script>
 </body>
 </html>

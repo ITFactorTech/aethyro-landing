@@ -1,4 +1,4 @@
-// chat v23 — auto-memory: extract user facts post-reply and inject into system prompt
+// chat v24 — bugfixes: safe model-key fallback (haiku), bounds-checked title content
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -215,7 +215,7 @@ serve(async (req) => {
   const attachments: Attachment[] = Array.isArray(body.attachments)
     ? body.attachments.slice(0, MAX_ATTACHMENTS)
     : [];
-  const modelKey: string = ["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "opus";
+  const modelKey: string = ["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "haiku";
   const MODEL = MODEL_MAP[modelKey];
   const rates = CREDIT_RATES[modelKey];
 
@@ -326,7 +326,7 @@ serve(async (req) => {
             },
           ],
         });
-        title = ((tr.content[0] as any).text || "").trim();
+        title = (tr.content.length > 0 ? ((tr.content[0] as any).text || "") : "").trim();
       } catch (_) {}
     }
 

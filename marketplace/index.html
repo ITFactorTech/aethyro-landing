@@ -226,15 +226,15 @@
 
 <!-- Filter bar -->
 <div class="filter-bar">
-  <button class="filter-btn active" onclick="filterProducts('all')">All</button>
-  <button class="filter-btn" onclick="filterProducts('aethyro')">⚡ Aethyro Official</button>
-  <button class="filter-btn" onclick="filterProducts('legal')">⚖️ Legal</button>
-  <button class="filter-btn" onclick="filterProducts('medical')">🏥 Medical</button>
-  <button class="filter-btn" onclick="filterProducts('finance')">🧾 Finance</button>
-  <button class="filter-btn" onclick="filterProducts('realty')">🏡 Real Estate</button>
-  <button class="filter-btn" onclick="filterProducts('hr')">📋 HR</button>
-  <button class="filter-btn" onclick="filterProducts('community')">🌐 Community</button>
-  <button class="filter-btn" onclick="filterProducts('free')">✦ Free</button>
+  <button class="filter-btn active" onclick="filterProducts('all',event)">All</button>
+  <button class="filter-btn" onclick="filterProducts('aethyro',event)">⚡ Aethyro Official</button>
+  <button class="filter-btn" onclick="filterProducts('legal',event)">⚖️ Legal</button>
+  <button class="filter-btn" onclick="filterProducts('medical',event)">🏥 Medical</button>
+  <button class="filter-btn" onclick="filterProducts('finance',event)">🧾 Finance</button>
+  <button class="filter-btn" onclick="filterProducts('realty',event)">🏡 Real Estate</button>
+  <button class="filter-btn" onclick="filterProducts('hr',event)">📋 HR</button>
+  <button class="filter-btn" onclick="filterProducts('community',event)">🌐 Community</button>
+  <button class="filter-btn" onclick="filterProducts('free',event)">✦ Free</button>
 </div>
 
 <!-- Products -->
@@ -511,9 +511,9 @@
 </footer>
 
 <script>
-function filterProducts(cat) {
+function filterProducts(cat, event) {
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  if (event && event.target) event.target.classList.add('active');
 
   document.querySelectorAll('.pcard').forEach(card => {
     const cats = card.dataset.cat || '';
