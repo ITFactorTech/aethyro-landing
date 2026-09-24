@@ -1,4 +1,4 @@
-// chat v21 — tool use (web search via Tavily) + streaming agentic loop
+// chat v22 — model selector (haiku / sonnet / opus) with per-model credit rates
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -14,13 +14,24 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY"); // optional — search disabled if absent
 
-const MODEL = "claude-opus-5-5";
 const TITLE_MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 4096;
 const TITLE_TOKENS = 80;
 const LOW_CREDIT_THRESHOLD = 30;
 const MAX_ATTACHMENTS = 3;
 const MAX_TOOL_ROUNDS = 3;
+
+const MODEL_MAP: Record<string, string> = {
+  haiku:  "claude-haiku-4-5-20251001",
+  sonnet: "claude-sonnet-5",
+  opus:   "claude-opus-5-5",
+};
+// Credit rates per 1K tokens — kept proportional to Anthropic list pricing
+const CREDIT_RATES: Record<string, { input: number; output: number }> = {
+  haiku:  { input: 0.08,  output: 0.40  },
+  sonnet: { input: 0.30,  output: 1.50  },
+  opus:   { input: 1.50,  output: 7.50  },
+};
 
 // Protocol delimiters (single bytes, never appear in normal UTF-8 prose)
 const TOOL_MARK = "\x01"; // wraps tool-events JSON: \x01[...]\x01 then text
@@ -166,6 +177,9 @@ serve(async (req) => {
   const attachments: Attachment[] = Array.isArray(body.attachments)
     ? body.attachments.slice(0, MAX_ATTACHMENTS)
     : [];
+  const modelKey: string = ["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "opus";
+  const MODEL = MODEL_MAP[modelKey];
+  const rates = CREDIT_RATES[modelKey];
 
   if (!message && !attachments.length)
     return new Response(JSON.stringify({ error: "Empty message" }), {
@@ -243,7 +257,7 @@ serve(async (req) => {
   async function finalize(controller: ReadableStreamDefaultController, firstMsg: string) {
     const cost = Math.max(
       1,
-      Math.ceil((inputTokens / 1000) * 1.5 + (outputTokens / 1000) * 7.5)
+      Math.ceil((inputTokens / 1000) * rates.input + (outputTokens / 1000) * rates.output)
     );
     await supaAdmin.from("credit_ledger").insert({
       user_id: user.id,
