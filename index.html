@@ -4,8 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="google-site-verification" content="XeQ5e5OP70f5t_Vn3Rb8UpcFgkEGE_7cj5bBF0vyi-c"/>
-  <title>Aethyro | Private AI Assistant — Powered by Claude Opus 5</title>
-  <meta name="description" content="Aethyro is a private AI assistant powered by Claude Opus 5, running in your browser. No install, no data sold, no surprise bills. 200 free credits on signup — no credit card."/>
+  <title>Aethyro | AI Assistant Powered by Claude Opus 5 — No Install, No Subscription</title>
+  <meta name="description" content="Aethyro is a cloud AI assistant powered by Claude Opus 5. Ask it to code, research, write, plan, or analyze — in your browser, no install, no subscription. 200 free credits on signup."/>
   <link rel="canonical" href="https://aethyro.com/"/>
   <meta name="robots" content="index, follow"/>
   <meta name="keywords" content="private AI assistant, Claude Opus 5, browser AI, affordable AI, AI for professionals, secure AI, no install AI"/>
@@ -19,12 +19,12 @@
   <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
   <meta property="og:type" content="website"/>
   <meta property="og:url" content="https://aethyro.com/"/>
-  <meta property="og:title" content="Aethyro | Private AI — Powered by Claude Opus 5, No Install"/>
-  <meta property="og:description" content="One private AI assistant for your work — code, research, documents, strategy. Runs in your browser, powered by Claude Opus 5. 200 free credits on signup."/>
+  <meta property="og:title" content="Aethyro | AI Assistant Powered by Claude Opus 5 — No Install, No Subscription"/>
+  <meta property="og:description" content="Code, research, write, plan, analyze — one AI assistant in your browser, powered by Claude Opus 5. No install. No subscription. 200 free credits on signup."/>
   <meta property="og:image" content="https://aethyro.com/og-image.png"/>
   <meta name="twitter:card" content="summary_large_image"/>
-  <meta name="twitter:title" content="Aethyro | Private AI — Powered by Claude Opus 5, No Install"/>
-  <meta name="twitter:description" content="Private AI in your browser, powered by Claude Opus 5. No install, no data sold. 200 free credits on signup."/>
+  <meta name="twitter:title" content="Aethyro | AI Assistant Powered by Claude Opus 5 — No Install, No Subscription"/>
+  <meta name="twitter:description" content="One AI assistant that codes, writes, researches, and plans — powered by Claude Opus 5. No install. No subscription. 200 free credits, no card."/>
   <meta name="twitter:image" content="https://aethyro.com/og-image.png"/>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Aethyro","url":"https://aethyro.com","logo":"https://aethyro.com/favicon.svg","description":"Private AI assistant powered by Claude Opus 5. No install, no data sold, no surprise bills.","sameAs":[]}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Aethyro","url":"https://aethyro.com","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://aethyro.com/blog/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script>
@@ -169,6 +169,17 @@
       66%{transform:translate(-20px,25px)}
     }
     .hero-left{position:relative;z-index:2}
+    /* ── TICKER MARQUEE ── */
+    .ticker-wrap{overflow:hidden;background:var(--s1);border-top:1px solid var(--b1);border-bottom:1px solid var(--b1);padding:.6rem 0;position:relative;z-index:1}
+    .ticker-track{display:flex;gap:0;animation:ticker 28s linear infinite;width:max-content}
+    .ticker-track:hover{animation-play-state:paused}
+    .ticker-item{padding:0 2rem;font-family:var(--mono);font-size:.72rem;color:var(--t2);white-space:nowrap;display:flex;align-items:center;gap:.5rem}
+    .ticker-dot{width:4px;height:4px;border-radius:50%;background:var(--orange);flex-shrink:0}
+    @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+    /* ── COUNT-UP ── */
+    .count-up{display:inline}
+
     .hero-status{
       display:inline-flex;align-items:center;gap:.6rem;
       padding:.35rem .85rem;
@@ -426,10 +437,10 @@
       &nbsp;·&nbsp; <span style="color:var(--cyan)">Claude Opus 5</span> &nbsp;·&nbsp; <span style="color:var(--green)">No install required</span>
     </div>
 
-    <h1>Private AI in<br/>your <span class="grad-mix">browser.</span><br/>Powered by Opus 5.</h1>
+    <h1>Your AI assistant.<br/><span class="grad-mix">Powered by</span><br/>Claude Opus 5.</h1>
 
     <p class="hero-sub">
-      Aethyro Cloud is a private AI assistant powered by Claude Opus 5, running in your browser. Ask it to write code, research your documents, review a contract, or plan your next move — no install, no setup, nothing to configure.
+      Aethyro is a cloud AI assistant powered by Claude Opus 5 — Anthropic's most capable model. Ask it to write code, research your documents, review a contract, or plan your next move. No install. No subscription. Opens in your browser in seconds.
     </p>
 
     <!-- Cloud Privacy Badge -->
@@ -463,10 +474,10 @@
     </div>
 
     <div class="hero-meta" style="margin-top:1.5rem">
-      <div class="meta-stat"><strong style="font-size:1.1rem">Opus<span style="color:var(--orange)">5</span></strong><span>Model</span></div>
-      <div class="meta-stat"><strong>200</strong><span>Free credits</span></div>
+      <div class="meta-stat"><strong style="font-size:1.1rem">Opus<span style="color:var(--orange)">5</span></strong><span>Model tier</span></div>
+      <div class="meta-stat"><strong data-count="200">200</strong><span>Free credits</span></div>
       <div class="meta-stat"><strong style="font-size:1rem">Pay</strong><span>As you go</span></div>
-      <div class="meta-stat"><strong>0</strong><span>Data sold</span></div>
+      <div class="meta-stat"><strong data-count="0">0</strong><span>Data sold</span></div>
     </div>
   </div>
 
@@ -493,12 +504,38 @@
 </div>
 </div>
 
+<!-- ── CAPABILITY TICKER ── -->
+<div class="ticker-wrap" aria-hidden="true">
+  <div class="ticker-track" id="tickerTrack">
+    <span class="ticker-item"><span class="ticker-dot"></span>Write code in any language</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Summarize contracts instantly</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Draft emails &amp; proposals</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Review security vulnerabilities</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Build go-to-market strategies</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Analyze spreadsheets &amp; data</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Generate SOPs &amp; checklists</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Research topics with citations</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Debug and refactor code</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Plan 90-day roadmaps</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Write code in any language</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Summarize contracts instantly</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Draft emails &amp; proposals</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Review security vulnerabilities</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Build go-to-market strategies</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Analyze spreadsheets &amp; data</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Generate SOPs &amp; checklists</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Research topics with citations</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Debug and refactor code</span>
+    <span class="ticker-item"><span class="ticker-dot"></span>Plan 90-day roadmaps</span>
+  </div>
+</div>
+
 <!-- ── WHY AETHYRO (value props) ── -->
 <section class="bento-section" id="how">
   <div class="container">
     <span class="sec-eyebrow">Why Aethyro</span>
-    <h2>One assistant.<br/><span class="grad-orange">Everything private.</span></h2>
-    <p class="sec-sub">No new accounts to juggle, no six different subscriptions, no data leaving your building.</p>
+    <h2>One assistant.<br/><span class="grad-orange">Zero BS.</span></h2>
+    <p class="sec-sub">No six subscriptions. No monthly pressure. No surprise bills. No data sold. Just Claude Opus 5, ready when you are.</p>
     <div class="bento-grid">
 
       <div class="bento-card bc-span3">
@@ -709,13 +746,13 @@ deps mapped, runs in sequence.</div>
     <div class="tab-panel" id="ex-founder">
       <div class="io-card">
         <span class="io-role">Go-to-market strategy</span>
-        <div class="io-in"><span class="lbl">You ask</span>Give me a 90-day GTM plan for a local-AI product.</div>
-        <div class="io-out"><span class="lbl">Aethyro returns</span>Kickoff  — pick 1 vertical (CPA firms)
-Align    — "can't leak data" message
-Implement— trial→paid funnel live
+        <div class="io-in"><span class="lbl">You ask</span>Give me a 90-day GTM plan for a new SaaS product targeting small businesses.</div>
+        <div class="io-out"><span class="lbl">Aethyro returns</span>Kickoff  — pick 1 vertical (accounting firms)
+Align    — "saves 5 hrs/week" message
+Implement— free trial → paid funnel live
 Refine   — 5 design-partner calls
 Optimize — double down on best channel
-Scale    — case studies → ads</div>
+Scale    — case studies → paid ads</div>
         <span class="io-note">// structured, actionable plan</span>
       </div>
       <div class="io-card">
@@ -876,8 +913,8 @@ patterns are well established.</div>
 <section aria-label="Newsletter" style="padding:3.5rem 1.5rem;background:linear-gradient(135deg,rgba(0,212,255,.04) 0%,rgba(139,92,246,.04) 100%);border-top:1px solid var(--b1);border-bottom:1px solid var(--b1)">
   <div class="container" style="max-width:680px;text-align:center">
     <span style="font-family:var(--mono);font-size:.7rem;color:var(--cyan);letter-spacing:.1em;text-transform:uppercase">The Aethyro Dispatch</span>
-    <h2 style="font-size:clamp(1.3rem,2.5vw,1.8rem);margin:.5rem 0 .75rem">Local AI, every week.<br/><span class="grad-cyan">No fluff. Just what works.</span></h2>
-    <p style="color:var(--t2);font-size:.85rem;line-height:1.6;margin-bottom:1.5rem">Hardware picks, model reviews, build guides, and the real state of running AI privately. Free, no spam.</p>
+    <h2 style="font-size:clamp(1.3rem,2.5vw,1.8rem);margin:.5rem 0 .75rem">AI that actually works,<br/><span class="grad-cyan">every week.</span></h2>
+    <p style="color:var(--t2);font-size:.85rem;line-height:1.6;margin-bottom:1.5rem">Real talk on AI tools, model updates, what's worth your time (and what's overhyped), and practical workflows you can steal. Free. No spam. No corporate fluff.</p>
     <a href="/app/newsletter.html" class="btn btn-orange" style="display:inline-flex;align-items:center;gap:.5rem" onclick="if(typeof gtag!=='undefined')gtag('event','newsletter_cta_click',{surface:'homepage'})">
       Read the Dispatch →
     </a>
@@ -1064,7 +1101,7 @@ patterns are well established.</div>
       ["What can you help me with?","Code, document research, security reviews, drafting, and strategy — powered by Claude Opus 5. Your data is never sold or used to train AI models."],
       ["Is my data safe?","Yes. Queries go to Anthropic's Claude API to generate your response only. Aethyro never sells your data and Anthropic has a strict no-training policy on API inputs."],
       ["How should I price my product?","Go flat or credit-pack — not per-seat. Buyers fear metered AI bills. \"Buy credits, they never expire\" removes purchase anxiety and lets you upsell naturally. Add subscriptions only once usage patterns are clear."],
-      ["Give me a 90-day GTM plan.","Kickoff — pick ONE vertical\nAlign — lead with \"data never sold\"\nImplement — get the trial->paid funnel live\nRefine — 5 design-partner calls\nOptimize — double down on the best channel\nScale — case studies, then paid ads"],
+      ["Give me a 90-day GTM plan.","Kickoff   — lock in ONE vertical\nAlign     — nail the core message (what pain you solve)\nImplement — free trial → paid funnel live\nRefine    — 5 design-partner calls\nOptimize  — double down on best-performing channel\nScale     — case studies, then paid distribution"],
       ["Why Aethyro instead of ChatGPT?","Three reasons: model quality (Claude Opus 5 is state-of-the-art), privacy (your data stays out of training), pricing (credits never expire — no monthly subscription pressure)."]
     ];
     var busy=false;
@@ -1082,6 +1119,52 @@ patterns are well established.</div>
       if (el) { e.preventDefault(); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     });
   });
+
+  // ── count-up animation on scroll ──
+  (function(){
+    var targets = document.querySelectorAll('.meta-stat strong[data-count]');
+    if (!targets.length) return;
+    function animateCount(el) {
+      var end = parseInt(el.getAttribute('data-count'), 10);
+      var dur = 1200, step = 16, steps = dur / step, inc = end / steps, cur = 0;
+      var t = setInterval(function(){
+        cur = Math.min(cur + inc, end);
+        el.textContent = Math.round(cur).toLocaleString();
+        if (cur >= end) clearInterval(t);
+      }, step);
+    }
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { animateCount(e.target); obs.unobserve(e.target); }
+      });
+    }, {threshold: 0.5});
+    targets.forEach(function(t){ obs.observe(t); });
+  })();
+
+  // ── bento card 3D tilt on hover ──
+  document.querySelectorAll('.bento-card,.price-card,.io-card').forEach(function(card){
+    card.addEventListener('mousemove', function(e){
+      var r = card.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width - 0.5;
+      var y = (e.clientY - r.top) / r.height - 0.5;
+      card.style.transform = 'perspective(600px) rotateY('+(x*6)+'deg) rotateX('+(-y*6)+'deg) translateY(-2px)';
+    });
+    card.addEventListener('mouseleave', function(){
+      card.style.transform = '';
+    });
+  });
+
+  // ── fade-in sections on scroll ──
+  (function(){
+    var els = document.querySelectorAll('.bento-card, .io-card, .price-card');
+    els.forEach(function(el){ el.style.opacity='0'; el.style.transform='translateY(24px)'; el.style.transition='opacity .5s ease, transform .5s ease'; });
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){ e.target.style.opacity='1'; e.target.style.transform=''; obs.unobserve(e.target); }
+      });
+    }, {threshold: 0.1});
+    els.forEach(function(el){ obs.observe(el); });
+  })();
 </script>
 </body>
 </html>
