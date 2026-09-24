@@ -1,0 +1,20 @@
+{
+  "name": "Aethyro — Private AI Assistant",
+  "short_name": "Aethyro",
+  "description": "Private AI assistant powered by Claude Opus 5. No install, no data sold.",
+  "start_url": "/app/chat.html",
+  "display": "standalone",
+  "background_color": "#030303",
+  "theme_color": "#030303",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "screenshots": []
+}
