@@ -169,6 +169,13 @@
   .ref-copy-btn:hover{opacity:.85}
   .ref-copy-btn.copied{background:var(--green);color:#fff}
 
+  /* ── Tool call cards ── */
+  .tool-cards{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.5rem}
+  .tool-card{display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .75rem;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.18);border-radius:8px;font-size:.76rem;color:var(--t2);max-width:100%}
+  .tool-card-icon{font-size:.95rem;flex-shrink:0}
+  .tool-card-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .tool-card-label em{color:var(--cyan);font-style:normal}
+
   /* ── Attachments ── */
   .attach-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .55rem;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);border-radius:6px;font-size:.75rem;color:var(--cyan);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .attach-chip-x{background:none;border:none;color:var(--cyan);cursor:pointer;font-size:.9rem;line-height:1;padding:0 0 0 .25rem;opacity:.7;flex-shrink:0}
@@ -692,10 +699,30 @@ I often need help with: client quotes, contract review, business Instagram posts
       }
 
       var reader=resp.body.getReader(), decoder=new TextDecoder();
-      var full='', raw='';
+      var full='', raw='', toolsDiv=null, toolsParsed=false;
+      /* Insert a tool-cards container above the bubble */
+      toolsDiv=document.createElement('div');
+      toolsDiv.className='tool-cards';
+      bubble.parentNode.insertBefore(toolsDiv, bubble);
+
       while(true){
         var chunk=await reader.read(); if(chunk.done) break;
         raw+=decoder.decode(chunk.value,{stream:true});
+
+        /* Parse \x01{tool_events}\x01 prefix exactly once */
+        if(!toolsParsed){
+          if(raw.charCodeAt(0)===1){
+            var endMark=raw.indexOf('\x01',1);
+            if(endMark===-1) continue; /* wait for full prefix */
+            try{
+              var evts=JSON.parse(raw.slice(1,endMark));
+              renderToolCards(toolsDiv,evts);
+            }catch(e){}
+            raw=raw.slice(endMark+1);
+          }
+          toolsParsed=true;
+        }
+
         var mi=raw.indexOf(USAGE_MARK);
         full=mi===-1?raw:raw.slice(0,mi);
         bubble.textContent=full; bubble.appendChild(cursor);
@@ -891,6 +918,25 @@ I often need help with: client quotes, contract review, business Instagram posts
       setTimeout(function(){ $('refCopyBtn').textContent='Copy link'; $('refCopyBtn').classList.remove('copied'); },2500);
     }).catch(function(){ $('refLinkInput').select(); document.execCommand('copy'); });
   });
+
+  /* ── Tool call card rendering ── */
+  function renderToolCards(container, events){
+    container.innerHTML='';
+    (events||[]).forEach(function(ev){
+      var card=document.createElement('div');
+      card.className='tool-card';
+      if(ev.tool==='web_search'){
+        var q=ev.input&&ev.input.query?ev.input.query:'';
+        card.innerHTML='<span class="tool-card-icon">🔍</span><span class="tool-card-label">Searched: <em>'+
+          q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+
+          '</em></span>';
+      } else {
+        card.innerHTML='<span class="tool-card-icon">🛠</span><span class="tool-card-label">'+ev.tool+'</span>';
+      }
+      container.appendChild(card);
+    });
+  }
+
 
   /* ── File attachments ── */
   var pendingAttachments=[];
