@@ -176,6 +176,13 @@
   .tool-card-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .tool-card-label em{color:var(--cyan);font-style:normal}
 
+  /* ── Model selector ── */
+  .model-bar{display:none;align-items:center;gap:.4rem;padding:.4rem .6rem 0}
+  .model-btn{background:none;border:1px solid var(--b2);border-radius:20px;color:var(--t3);cursor:pointer;font-family:var(--font);font-size:.72rem;padding:.25rem .7rem;transition:color .15s,border-color .15s,background .15s;white-space:nowrap}
+  .model-btn:hover{color:var(--text);border-color:var(--b3)}
+  .model-btn.active{background:rgba(0,212,255,.12);border-color:var(--cyan);color:var(--cyan)}
+  .model-btn .model-cost{opacity:.65;margin-left:.25rem;font-size:.68rem}
+
   /* ── Attachments ── */
   .attach-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .55rem;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);border-radius:6px;font-size:.75rem;color:var(--cyan);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .attach-chip-x{background:none;border:none;color:var(--cyan);cursor:pointer;font-size:.9rem;line-height:1;padding:0 0 0 .25rem;opacity:.7;flex-shrink:0}
@@ -245,6 +252,11 @@
       </div>
       <div class="depleted-bar" id="depletedBar" style="display:none">
         🔴 No credits left. <a href="#" id="depletedBuy">Buy credits →</a>
+      </div>
+      <div class="model-bar" id="modelBar">
+        <button class="model-btn" data-model="haiku" id="mBtnHaiku">Haiku<span class="model-cost">~1 cr/msg</span></button>
+        <button class="model-btn" data-model="sonnet" id="mBtnSonnet">Sonnet<span class="model-cost">~4 cr/msg</span></button>
+        <button class="model-btn active" data-model="opus" id="mBtnOpus">Opus<span class="model-cost">~15 cr/msg</span></button>
       </div>
       <div id="attachChips" style="display:none"></div>
       <form class="composer" id="composer">
@@ -343,9 +355,28 @@ I often need help with: client quotes, contract review, business Instagram posts
   var session=null, history=[], busy=false, trialLocked=false, depleted=false;
   var currentConvId=null;
   var TRIAL_URL=window.AETHYRO_FN_URL+'/trial-chat';
+  var currentModel=(function(){ var m=localStorage.getItem('aethyro_model'); return ['haiku','sonnet','opus'].includes(m)?m:'opus'; })();
   var USAGE_MARK='\u0000';
 
   function track(name,params){ if(typeof gtag!=='undefined') gtag('event',name,params||{}); }
+
+  /* ── Model selector ── */
+  function initModelBar(){
+    var bar=$('modelBar');
+    bar.style.display='flex';
+    bar.querySelectorAll('.model-btn').forEach(function(btn){
+      btn.classList.toggle('active', btn.getAttribute('data-model')===currentModel);
+      btn.addEventListener('click', function(){
+        currentModel=btn.getAttribute('data-model');
+        localStorage.setItem('aethyro_model', currentModel);
+        bar.querySelectorAll('.model-btn').forEach(function(b){ b.classList.toggle('active', b===btn); });
+        var names={haiku:'Haiku', sonnet:'Sonnet', opus:'Opus'};
+        $('cloudNote').textContent='// Aethyro Cloud — Claude '+names[currentModel]+' · credits billed per token';
+      });
+    });
+    var names={haiku:'Haiku', sonnet:'Sonnet', opus:'Opus'};
+    $('cloudNote').textContent='// Aethyro Cloud — Claude '+names[currentModel]+' · credits billed per token';
+  }
 
   (async function init(){
     var s=await supabase.auth.getSession();
@@ -355,6 +386,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     $('sidebarToggle').style.display='';
     $('balancePill').style.display='flex';
     $('buyBtn').style.display='';
+    initModelBar();
     await refreshBalance();
     await loadConversationList();
     await loadWorkspaceContext();
@@ -656,7 +688,7 @@ I often need help with: client quotes, contract review, business Instagram posts
             ? await fetch(window.AETHYRO_FN_URL+'/chat',{
                 method:'POST',
                 headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
-                body:JSON.stringify({message:message, history:history.slice(0,-1), attachments:attachments&&attachments.length?attachments:undefined})
+                body:JSON.stringify({message:message, history:history.slice(0,-1), attachments:attachments&&attachments.length?attachments:undefined, model:currentModel})
               })
             : await fetch(TRIAL_URL,{
                 method:'POST',
