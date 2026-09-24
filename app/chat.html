@@ -138,6 +138,30 @@
   .sidebar-toggle{display:none;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;padding:.3rem .4rem;border-radius:6px;line-height:1}
   .sidebar-toggle:hover{color:var(--text);background:rgba(255,255,255,.06)}
 
+  /* ── Workspace ── */
+  .sidebar-workspace-btn{display:flex;align-items:center;gap:.45rem;background:none;border:none;color:var(--t2);font-family:var(--font);font-size:.78rem;cursor:pointer;padding:.3rem 0;text-align:left;transition:color .15s;width:100%}
+  .sidebar-workspace-btn:hover{color:var(--text)}
+  .sidebar-workspace-btn.active{color:var(--cyan)}
+  .workspace-indicator{width:6px;height:6px;border-radius:50%;background:var(--cyan);flex-shrink:0;box-shadow:0 0 6px var(--cyan)}
+  .workspace-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:50;padding:1rem}
+  .workspace-modal-backdrop.show{display:flex}
+  .workspace-modal{background:var(--s2);border:1px solid var(--b2);border-radius:16px;padding:1.75rem;max-width:520px;width:100%}
+  .workspace-modal h3{font-size:1.1rem;margin-bottom:.35rem}
+  .wm-sub{color:var(--t2);font-size:.83rem;margin-bottom:1.25rem;line-height:1.6}
+  .workspace-modal textarea{width:100%;resize:vertical;min-height:180px;padding:.8rem 1rem;background:rgba(0,0,0,.4);border:1px solid var(--b2);border-radius:10px;color:var(--text);font-family:var(--font);font-size:.88rem;line-height:1.6;outline:none;box-sizing:border-box}
+  .workspace-modal textarea:focus{border-color:var(--cyan)}
+  .wm-counter{font-family:var(--mono);font-size:.68rem;color:var(--t3);text-align:right;margin-top:.4rem;margin-bottom:1rem}
+  .wm-counter.over{color:#fca5a5}
+  .wm-actions{display:flex;gap:.75rem;justify-content:flex-end}
+  .wm-save{padding:.6rem 1.4rem;background:var(--cyan);color:#000;font-weight:700;border:none;border-radius:9px;font-family:var(--font);font-size:.88rem;cursor:pointer;transition:opacity .15s}
+  .wm-save:hover{opacity:.85}
+  .wm-save:disabled{opacity:.4;cursor:not-allowed}
+  .wm-cancel{padding:.6rem 1rem;background:none;border:1px solid var(--b2);color:var(--t2);border-radius:9px;font-family:var(--font);font-size:.88rem;cursor:pointer;transition:all .15s}
+  .wm-cancel:hover{color:var(--text);border-color:var(--b3)}
+  .context-nudge{display:flex;align-items:center;gap:.6rem;margin:1.5rem auto 0;padding:.75rem 1rem;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.18);border-radius:10px;font-size:.82rem;color:var(--t2);cursor:pointer;max-width:380px;transition:background .15s}
+  .context-nudge:hover{background:rgba(0,212,255,.1)}
+  .context-nudge strong{color:var(--cyan)}
+
   /* ── Responsive ── */
   @media(max-width:640px){
     .sidebar{display:none;position:fixed;inset:0 auto 0 0;z-index:40;width:80vw;max-width:280px;box-shadow:4px 0 24px rgba(0,0,0,.5)}
@@ -163,6 +187,7 @@
     <div class="sidebar-convs" id="convList"></div>
     <div class="sidebar-foot">
       <a href="/app/dashboard.html">Dashboard →</a>
+      <button class="sidebar-workspace-btn" id="workspaceBtn">Workspace</button>
       <div class="balance-sm" id="balanceSm">— credits</div>
     </div>
   </div>
@@ -226,6 +251,22 @@
   </div>
 </div>
 
+<!-- Workspace context modal -->
+<div class="workspace-modal-backdrop" id="workspaceModal">
+  <div class="workspace-modal">
+    <h3>Your Workspace Context</h3>
+    <p class="wm-sub">Tell Claude who you are. This loads automatically with every conversation — no re-explaining yourself each time you open a chat.</p>
+    <textarea id="workspaceInput" placeholder="Example: I'm a self-employed plumber in Phoenix with a 3-person crew. My biggest time drain is writing client proposals and follow-up emails. I prefer concise, plain-English responses — no jargon.
+
+I often need help with: client quotes, contract review, business Instagram posts, and understanding invoices. When I ask for writing help, match a professional-but-approachable tone."></textarea>
+    <div class="wm-counter" id="wmCounter">0 / 2000</div>
+    <div class="wm-actions">
+      <button class="wm-cancel" id="wmCancel">Cancel</button>
+      <button class="wm-save" id="wmSave">Save context</button>
+    </div>
+  </div>
+</div>
+
 <script src="./vendor/supabase.js"></script>
 <script src="./config.js"></script>
 <script>
@@ -275,6 +316,7 @@
     $('buyBtn').style.display='';
     await refreshBalance();
     await loadConversationList();
+    await loadWorkspaceContext();
     var urlConvId=new URLSearchParams(location.search).get('c');
     if(urlConvId) await loadConversation(urlConvId);
   })();
@@ -675,6 +717,94 @@
   });
   $('input').addEventListener('input',function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,160)+'px'; });
   $('input').addEventListener('keydown',function(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('composer').requestSubmit(); } });
+
+  /* ── Workspace Context ── */
+  var workspaceContext = null;
+  var WM_MAX = 2000;
+
+  async function loadWorkspaceContext(){
+    if(!session) return;
+    try{
+      var r = await supabase.from('profiles').select('workspace_context').eq('id', session.user.id).single();
+      workspaceContext = (r.data && r.data.workspace_context) ? r.data.workspace_context : null;
+    }catch(e){ workspaceContext = null; }
+    setWorkspaceActive(!!workspaceContext);
+    /* Add nudge to empty state if no context set */
+    if(!workspaceContext){
+      var emptyEl = $('emptyState');
+      if(emptyEl && !emptyEl.querySelector('.context-nudge')) appendContextNudge(emptyEl);
+    }
+  }
+
+  function appendContextNudge(container){
+    var nudge = document.createElement('div');
+    nudge.className = 'context-nudge';
+    nudge.innerHTML = '<strong>💡 Personalize your AI</strong>&nbsp;— tell Claude who you are so every response fits your context.';
+    nudge.addEventListener('click', openWorkspaceModal);
+    container.appendChild(nudge);
+  }
+
+  function setWorkspaceActive(active){
+    var btn = $('workspaceBtn');
+    if(!btn) return;
+    if(active){
+      btn.classList.add('active');
+      btn.innerHTML = '<span class="workspace-indicator"></span> Workspace';
+    } else {
+      btn.classList.remove('active');
+      btn.innerHTML = 'Workspace';
+    }
+  }
+
+  function openWorkspaceModal(){
+    $('workspaceInput').value = workspaceContext || '';
+    updateWmCounter();
+    $('workspaceModal').classList.add('show');
+    setTimeout(function(){ $('workspaceInput').focus(); }, 60);
+  }
+
+  function closeWorkspaceModal(){
+    $('workspaceModal').classList.remove('show');
+  }
+
+  function updateWmCounter(){
+    var len = ($('workspaceInput').value || '').length;
+    $('wmCounter').textContent = len + ' / ' + WM_MAX;
+    $('wmCounter').classList.toggle('over', len > WM_MAX);
+    $('wmSave').disabled = len > WM_MAX;
+  }
+
+  $('workspaceBtn').addEventListener('click', openWorkspaceModal);
+  $('wmCancel').addEventListener('click', closeWorkspaceModal);
+  $('workspaceModal').addEventListener('click', function(e){ if(e.target === this) closeWorkspaceModal(); });
+  $('workspaceInput').addEventListener('input', updateWmCounter);
+
+  $('wmSave').addEventListener('click', async function(){
+    var text = ($('workspaceInput').value || '').trim().slice(0, WM_MAX);
+    $('wmSave').disabled = true;
+    $('wmSave').textContent = 'Saving…';
+    try{
+      var r = await supabase.from('profiles').update({
+        workspace_context: text || null,
+        updated_at: new Date().toISOString()
+      }).eq('id', session.user.id);
+      if(r.error) throw r.error;
+      workspaceContext = text || null;
+      setWorkspaceActive(!!workspaceContext);
+      closeWorkspaceModal();
+      showToast(text ? 'Workspace context saved — Claude now knows you' : 'Workspace context cleared', 'ok');
+      /* Remove nudge from empty state if context is now set */
+      if(workspaceContext){
+        var nudge = document.querySelector('.context-nudge');
+        if(nudge) nudge.remove();
+      }
+    }catch(e){
+      showToast('Could not save — please try again', 'err');
+    }finally{
+      $('wmSave').disabled = false;
+      $('wmSave').textContent = 'Save context';
+    }
+  });
 
   /* ── Credit modal ── */
   function openCreditModal(){ $('creditModal').classList.add('show'); }
