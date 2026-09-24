@@ -504,6 +504,10 @@
       .calc-cost{font-size:.78rem}
     }
 
+    /* ── SCROLL REVEAL ── */
+    .reveal{opacity:0;transform:translateY(28px);transition:opacity .65s cubic-bezier(.4,0,.2,1),transform .65s cubic-bezier(.4,0,.2,1)}
+    .reveal.in{opacity:1;transform:translateY(0)}
+
     /* ── RESPONSIVE ── */
     @media(max-width:1024px){
       .hero{grid-template-columns:1fr;max-width:700px}
@@ -1604,20 +1608,59 @@ patterns are well established.</div>
       card.style.transform = 'perspective(600px) rotateY('+(x*6)+'deg) rotateX('+(-y*6)+'deg) translateY(-2px)';
     });
     card.addEventListener('mouseleave', function(){
-      card.style.transform = '';
+      card.style.transform = card.classList.contains('in') ? '' : 'translateY(28px)';
     });
   });
 
-  // ── fade-in sections on scroll ──
+  // ── scroll reveal ──
   (function(){
-    var els = document.querySelectorAll('.bento-card, .io-card, .price-card');
-    els.forEach(function(el){ el.style.opacity='0'; el.style.transform='translateY(24px)'; el.style.transition='opacity .5s ease, transform .5s ease'; });
+    // staggered groups: each item in the group gets an increasing delay
+    var STAGGER = 90; // ms per item
+    var groups = [
+      { sel: '.step',        delay: STAGGER },
+      { sel: '.tcard',       delay: STAGGER },
+      { sel: '.bento-card',  delay: STAGGER },
+      { sel: '.price-card',  delay: STAGGER },
+    ];
+    // individual (no stagger)
+    var singles = [
+      '.sec-eyebrow', 'section > h2', '.sec-sub',
+      '.io-card', '.faq-item', '.compare-wrap',
+      '.calc-inner > *',
+    ];
+
+    // mark staggered items — set transition-delay per index within their parent
+    groups.forEach(function(g){
+      var parentMap = {};
+      document.querySelectorAll(g.sel).forEach(function(el){
+        var p = el.parentNode;
+        if (!parentMap[p]) parentMap[p] = [];
+        parentMap[p].push(el);
+      });
+      Object.keys(parentMap).forEach(function(k){
+        parentMap[k].forEach(function(el, i){
+          el.classList.add('reveal');
+          el.style.transitionDelay = (i * g.delay) + 'ms';
+        });
+      });
+    });
+
+    singles.forEach(function(sel){
+      document.querySelectorAll(sel).forEach(function(el){
+        el.classList.add('reveal');
+      });
+    });
+
     var obs = new IntersectionObserver(function(entries){
       entries.forEach(function(e){
-        if(e.isIntersecting){ e.target.style.opacity='1'; e.target.style.transform=''; obs.unobserve(e.target); }
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          obs.unobserve(e.target);
+        }
       });
-    }, {threshold: 0.1});
-    els.forEach(function(el){ obs.observe(el); });
+    }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.reveal').forEach(function(el){ obs.observe(el); });
   })();
 
   // ── FAQ accordion ──
