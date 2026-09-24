@@ -243,30 +243,13 @@
     }
 
     /* ─────────────────────────────
-       CAPABILITY / AGENT GRID
+       CAPABILITY SECTION
     ───────────────────────────── */
     .marketplace-section{padding:6rem 1.5rem}
     .sec-header{
       display:flex;align-items:flex-end;justify-content:space-between;
       flex-wrap:wrap;gap:1rem;margin-bottom:3rem;
     }
-    .agents-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem}
-    .agent-card{
-      background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:1.5rem;
-      display:flex;flex-direction:column;gap:.85rem;
-      transition:border-color .2s,transform .15s,box-shadow .2s;position:relative;
-    }
-    .agent-card:hover{border-color:var(--b2);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.4)}
-    .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem}
-    .agent-icon{
-      width:42px;height:42px;border-radius:11px;
-      display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;
-    }
-    .agent-name{font-size:.98rem;font-weight:700;color:var(--white)}
-    .agent-by{font-size:.7rem;color:var(--t3);margin-top:.1rem;font-family:var(--mono)}
-    .agent-desc{font-size:.84rem;color:var(--t2);line-height:1.65;flex:1}
-    .marketplace-footer{text-align:center;margin-top:2.5rem;padding-top:2.5rem;border-top:1px solid var(--b1)}
-    .marketplace-footer p{color:var(--t2);font-size:.88rem;margin-bottom:1.1rem}
 
     /* ── tabs / explorer ── */
     .tabs{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1.5rem}
@@ -457,19 +440,6 @@
       </span>
     </div>
 
-    <!-- Industry examples — show variety, not lock-in -->
-    <div style="margin-bottom:1.25rem">
-      <span style="font-size:.7rem;font-family:var(--mono);color:var(--t3);display:block;margin-bottom:.5rem">// built for any professional business</span>
-      <div style="display:flex;gap:.35rem;flex-wrap:wrap">
-        <span style="padding:.28rem .65rem;background:rgba(255,255,255,.03);border:1px solid var(--b2);border-radius:6px;font-size:.72rem;color:var(--t2)">⚖️ Law Firms</span>
-        <span style="padding:.28rem .65rem;background:rgba(255,255,255,.03);border:1px solid var(--b2);border-radius:6px;font-size:.72rem;color:var(--t2)">🧾 CPA &amp; Accounting</span>
-        <span style="padding:.28rem .65rem;background:rgba(255,255,255,.03);border:1px solid var(--b2);border-radius:6px;font-size:.72rem;color:var(--t2)">🏥 Medical Practices</span>
-        <span style="padding:.28rem .65rem;background:rgba(255,255,255,.03);border:1px solid var(--b2);border-radius:6px;font-size:.72rem;color:var(--t2)">🏡 Real Estate</span>
-        <span style="padding:.28rem .65rem;background:rgba(255,255,255,.03);border:1px solid var(--b2);border-radius:6px;font-size:.72rem;color:var(--t2)">📋 HR &amp; Staffing</span>
-        <span style="padding:.28rem .65rem;background:rgba(255,255,255,.03);border:1px solid var(--b2);border-radius:6px;font-size:.72rem;color:var(--t2)">+ more</span>
-      </div>
-    </div>
-
     <div class="hero-actions">
       <a href="/app/chat.html" class="btn btn-lg btn-orange">Start Free — No Card →</a>
       <a href="#pricing" class="btn btn-lg btn-ghost">See Pricing →</a>
@@ -533,26 +503,26 @@
 
       <div class="bento-card bc-span3">
         <div class="bento-icon">🔒</div>
-        <h3>Private by design</h3>
-        <p>Every response is generated on your own computer. Nothing you type, upload, or generate is ever sent to a cloud server — by architecture, not policy.</p>
+        <h3>Your data, never sold</h3>
+        <p>Your queries go to Anthropic's Claude API to generate your response only. Aethyro never sells your data and Anthropic has a strict no-training policy on API inputs.</p>
       </div>
 
       <div class="bento-card bc-span3">
         <div class="bento-icon">💬</div>
         <h3>One assistant, every job</h3>
-        <p>Code, document research, security review, documentation, strategy — one place to ask, instead of a different tool for each.</p>
+        <p>Code, document research, contract review, documentation, strategy — one place to ask, instead of juggling six different tools and subscriptions.</p>
       </div>
 
       <div class="bento-card bc-span3">
-        <div class="bento-icon">💰</div>
-        <h3>One flat price</h3>
-        <p>No per-query billing, no metered API bills, no surprise invoices. Pick a plan, use it as much as you want.</p>
+        <div class="bento-icon">💳</div>
+        <h3>Credits that never expire</h3>
+        <p>Buy a credit pack, use it whenever. No monthly pressure, no surprise invoices. Start free with 200 credits — no card required.</p>
       </div>
 
       <div class="bento-card bc-span3">
-        <div class="bento-icon">📈</div>
-        <h3>Gets better over time</h3>
-        <p>Aethyro evaluates its own performance and improves how it works for you — without any of your data ever leaving your machine.</p>
+        <div class="bento-icon">⚡</div>
+        <h3>State-of-the-art model</h3>
+        <p>Powered by Claude Opus 5 — Anthropic's most capable model. Not a cost-cutting tier. No install, no GPU, no setup. Works in any browser.</p>
       </div>
 
     </div>
@@ -561,60 +531,64 @@
 
 <div class="divider"></div>
 
-<!-- ── ONE ASSISTANT, EVERY SPECIALTY ── -->
-<section class="marketplace-section" id="agents">
+<!-- ── WHAT AETHYRO HANDLES ── -->
+<section class="marketplace-section" id="capabilities">
   <div class="container">
     <div class="sec-header">
       <div>
-        <span class="sec-eyebrow">What it can do</span>
-        <h2>One assistant.<br/><span class="grad-cyan">Every specialty.</span></h2>
-        <p class="sec-sub" style="margin-top:.5rem">Ask it anything — Aethyro routes the work internally, so you never have to think about which tool to pick.</p>
+        <span class="sec-eyebrow">What it handles</span>
+        <h2>Ask it anything.<br/><span class="grad-cyan">One conversation.</span></h2>
+        <p class="sec-sub" style="margin-top:.5rem">Aethyro is a single intelligent assistant powered by Claude Opus 5. There's nothing to configure — just describe what you need and it gets to work.</p>
       </div>
-      <a href="https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00" target="_blank" rel="noopener" class="btn btn-sm btn-orange">Start free trial →</a>
+      <a href="/app/chat.html" class="btn btn-sm btn-orange">Start free →</a>
     </div>
-    <div class="agents-grid">
 
-      <div class="agent-card">
-        <div class="card-top"><div class="agent-icon" style="background:rgba(255,77,0,.12)">💻</div><div class="badge b-orange">Code</div></div>
-        <div><div class="agent-name">Code</div><div class="agent-by">internally: forge</div></div>
-        <p class="agent-desc">Production-ready Python, JavaScript, and TypeScript — with error handling, type hints, and comments where they matter.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.75rem;margin-top:.5rem">
+      <div style="background:var(--s2);border:1px solid var(--b1);border-radius:12px;padding:1.25rem 1.4rem;display:flex;gap:.85rem;align-items:flex-start">
+        <span style="font-size:1.4rem;flex-shrink:0">💻</span>
+        <div>
+          <div style="font-size:.92rem;font-weight:700;color:var(--white);margin-bottom:.2rem">Code &amp; Engineering</div>
+          <div style="font-size:.82rem;color:var(--t2);line-height:1.6">Write, review, debug, and document code. Python, JavaScript, TypeScript, SQL, and more. Security reviews against OWASP Top 10 included.</div>
+        </div>
       </div>
-
-      <div class="agent-card">
-        <div class="card-top"><div class="agent-icon" style="background:rgba(0,212,255,.1)">🔎</div><div class="badge b-cyan">Research</div></div>
-        <div><div class="agent-name">Research &amp; documents</div><div class="agent-by">internally: oracle</div></div>
-        <p class="agent-desc">Finds answers in your own files and cites exactly where they came from — document, memory, or inference.</p>
+      <div style="background:var(--s2);border:1px solid var(--b1);border-radius:12px;padding:1.25rem 1.4rem;display:flex;gap:.85rem;align-items:flex-start">
+        <span style="font-size:1.4rem;flex-shrink:0">📄</span>
+        <div>
+          <div style="font-size:.92rem;font-weight:700;color:var(--white);margin-bottom:.2rem">Documents &amp; Research</div>
+          <div style="font-size:.82rem;color:var(--t2);line-height:1.6">Summarize contracts, extract key clauses, compare documents, and answer questions about your files — with citations.</div>
+        </div>
       </div>
-
-      <div class="agent-card">
-        <div class="card-top"><div class="agent-icon" style="background:rgba(239,68,68,.12)">🛡️</div><div class="badge b-red">Security</div></div>
-        <div><div class="agent-name">Security review</div><div class="agent-by">internally: sentinel</div></div>
-        <p class="agent-desc">Checks code against the OWASP Top 10 and CWE, and tells you exactly how to fix what it finds.</p>
+      <div style="background:var(--s2);border:1px solid var(--b1);border-radius:12px;padding:1.25rem 1.4rem;display:flex;gap:.85rem;align-items:flex-start">
+        <span style="font-size:1.4rem;flex-shrink:0">✍️</span>
+        <div>
+          <div style="font-size:.92rem;font-weight:700;color:var(--white);margin-bottom:.2rem">Writing &amp; Drafting</div>
+          <div style="font-size:.82rem;color:var(--t2);line-height:1.6">Emails, proposals, reports, SOPs, marketing copy, legal correspondence drafts — clear and ready to edit.</div>
+        </div>
       </div>
-
-      <div class="agent-card">
-        <div class="card-top"><div class="agent-icon" style="background:rgba(34,197,94,.1)">📘</div><div class="badge b-green">Docs</div></div>
-        <div><div class="agent-name">Documentation</div><div class="agent-by">internally: codex</div></div>
-        <p class="agent-desc">Turns a codebase or process into clear docs a human can actually follow — markdown, examples included.</p>
+      <div style="background:var(--s2);border:1px solid var(--b1);border-radius:12px;padding:1.25rem 1.4rem;display:flex;gap:.85rem;align-items:flex-start">
+        <span style="font-size:1.4rem;flex-shrink:0">🎯</span>
+        <div>
+          <div style="font-size:.92rem;font-weight:700;color:var(--white);margin-bottom:.2rem">Strategy &amp; Planning</div>
+          <div style="font-size:.82rem;color:var(--t2);line-height:1.6">Go-to-market plans, pricing strategy, competitive analysis, 90-day roadmaps. Structured and direct, not generic.</div>
+        </div>
       </div>
-
-      <div class="agent-card">
-        <div class="card-top"><div class="agent-icon" style="background:rgba(245,158,11,.12)">🎯</div><div class="badge b-gold">Strategy</div></div>
-        <div><div class="agent-name">Strategy &amp; planning</div><div class="agent-by">internally: avery</div></div>
-        <p class="agent-desc">Structured, actionable plans for growth, pricing, and go-to-market. Direct, not generic.</p>
+      <div style="background:var(--s2);border:1px solid var(--b1);border-radius:12px;padding:1.25rem 1.4rem;display:flex;gap:.85rem;align-items:flex-start">
+        <span style="font-size:1.4rem;flex-shrink:0">🔢</span>
+        <div>
+          <div style="font-size:.92rem;font-weight:700;color:var(--white);margin-bottom:.2rem">Analysis &amp; Data</div>
+          <div style="font-size:.82rem;color:var(--t2);line-height:1.6">Interpret spreadsheets, financial statements, research data, and survey results. Explain the numbers, not just repeat them.</div>
+        </div>
       </div>
-
-      <div class="agent-card">
-        <div class="card-top"><div class="agent-icon" style="background:rgba(139,92,246,.1)">🕸️</div><div class="badge b-violet">Workflows</div></div>
-        <div><div class="agent-name">Workflows</div><div class="agent-by">internally: nexus</div></div>
-        <p class="agent-desc">Breaks a complex task into steps and routes each one automatically, in the right order.</p>
+      <div style="background:var(--s2);border:1px solid var(--b1);border-radius:12px;padding:1.25rem 1.4rem;display:flex;gap:.85rem;align-items:flex-start">
+        <span style="font-size:1.4rem;flex-shrink:0">🗂️</span>
+        <div>
+          <div style="font-size:.92rem;font-weight:700;color:var(--white);margin-bottom:.2rem">Workflows &amp; Processes</div>
+          <div style="font-size:.82rem;color:var(--t2);line-height:1.6">Break complex tasks into clear steps. Build SOPs, checklists, project plans, and intake forms for any business process.</div>
+        </div>
       </div>
-
     </div>
-    <div class="marketplace-footer">
-      <p>All six specialties are available in Aethyro Cloud, powered by Claude Opus 5 in your browser.</p>
-      <a href="https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00" target="_blank" rel="noopener" class="btn btn-sm btn-ghost">Start your free trial →</a>
-    </div>
+
+    <p style="text-align:center;margin-top:2rem;color:var(--t3);font-size:.78rem;font-family:var(--mono)">// powered by Claude Opus 5 · one conversation handles all of it</p>
   </div>
 </section>
 
@@ -911,16 +885,16 @@ patterns are well established.</div>
   </div>
 </section>
 
-<!-- ── COMMUNITY + EXPLORE MORE ── -->
+<!-- ── COMMUNITY ── -->
 <section class="cta-section" id="community" style="padding:4.5rem 1.5rem">
   <div class="container">
     <span class="sec-eyebrow">Community</span>
     <h2 style="font-size:clamp(1.6rem,3vw,2.2rem)">Build with AI <span class="grad-cyan">together.</span></h2>
-    <p style="max-width:560px">Join other Aethyro users to get help and share setups, or explore the <a href="/marketplace/" style="color:var(--orange)">marketplace</a>, the <a href="/builder/" style="color:var(--orange)">agent builder</a>, and the <a href="/community/" style="color:var(--orange)">community hub</a> if you want to go deeper.</p>
+    <p style="max-width:520px;margin:0 auto 2rem">Join other Aethyro users to share setups, get help, and stay ahead of what's working in private AI.</p>
     <div class="cta-actions">
       <a class="btn btn-lg btn-orange" data-community href="#">Join the Discord →</a>
     </div>
-    <p class="cta-note">// real people using Aethyro Cloud · be an early member</p>
+    <p class="cta-note">// early community · be a founding member</p>
   </div>
 </section>
 
@@ -949,17 +923,15 @@ patterns are well established.</div>
       <h4>Product</h4>
       <a href="#how">How it works</a>
       <a href="#pricing">Pricing</a>
-      <a href="/app/chat.html">Aethyro Cloud (chat now)</a>
+      <a href="/app/chat.html">Chat now</a>
       <a href="/blog/">Blog</a>
-      <a href="/marketplace/">Marketplace</a>
-      <a href="/builder/">Agent builder</a>
+      <a href="/app/newsletter.html">Newsletter</a>
     </div>
     <div class="footer-col">
       <h4>Account</h4>
       <a href="/app/chat.html">Start for Free</a>
       <a href="/app/login.html">Log in</a>
       <a href="/app/dashboard.html">Dashboard</a>
-      <a href="/app/newsletter.html">Newsletter</a>
       <a data-community href="#">Community</a>
     </div>
     <div class="footer-col">
