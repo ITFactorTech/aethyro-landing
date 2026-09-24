@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Aethyro Pricing — Private Local AI Starting at $29/Month</title>
-  <meta name="description" content="Fixed monthly pricing for private local AI. Personal from $29/mo. No cloud, no per-query fees, no surprise bills. 14-day free trial on all plans."/>
+  <title>Aethyro Pricing — Pay Only for What You Use</title>
+  <meta name="description" content="No subscriptions. Buy credits and spend them as you go. New accounts start with 200 free credits. Powered by Claude Opus 5."/>
   <link rel="canonical" href="https://aethyro.com/pricing.html"/>
   <meta name="robots" content="index, follow"/>
-  <meta property="og:title" content="Aethyro Pricing — Private Local AI Starting at $29/Month"/>
-  <meta property="og:description" content="Fixed monthly pricing. No cloud, no per-query fees. 14-day free trial on all plans."/>
+  <meta property="og:title" content="Aethyro Pricing — Pay Only for What You Use"/>
+  <meta property="og:description" content="No subscriptions. Buy credits and spend them as you go. New accounts start with 200 free credits."/>
   <meta property="og:url" content="https://aethyro.com/pricing.html"/>
   <meta property="og:type" content="website"/>
   <meta name="twitter:card" content="summary_large_image"/>
-  <meta name="twitter:title" content="Aethyro Pricing — Private AI Starting at $29/Month"/>
-  <meta name="twitter:description" content="Fixed monthly pricing. No cloud, no per-query fees. 14-day free trial on all plans."/>
+  <meta name="twitter:title" content="Aethyro Pricing — Pay Only for What You Use"/>
+  <meta name="twitter:description" content="No subscriptions. Buy credits and spend them as you go. New accounts start with 200 free credits."/>
   <meta name="twitter:image" content="https://aethyro.com/og-image.png"/>
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Aethyro","url":"https://aethyro.com","applicationCategory":"ProductivityApplication","operatingSystem":"Windows, macOS, Linux","offers":[{"@type":"Offer","name":"Personal","price":"29.00","priceCurrency":"USD","billingIncrement":"P1M","description":"Private local AI for individuals and families"},{"@type":"Offer","name":"Research","price":"199.00","priceCurrency":"USD","billingIncrement":"P1M","description":"For researchers and educators"},{"@type":"Offer","name":"Developer","price":"299.00","priceCurrency":"USD","billingIncrement":"P1M","description":"For developers and agencies"},{"@type":"Offer","name":"Professional","price":"499.00","priceCurrency":"USD","billingIncrement":"P1M","description":"For legal, medical, CPA, and realty professionals"}]}
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Aethyro","url":"https://aethyro.com","applicationCategory":"ProductivityApplication","operatingSystem":"Web","offers":[{"@type":"Offer","name":"Starter","price":"4.00","priceCurrency":"USD","description":"200 credits — ~20 Opus or ~200 Haiku messages"},{"@type":"Offer","name":"Standard","price":"10.00","priceCurrency":"USD","description":"600 credits — ~40 Opus or ~600 Haiku messages"},{"@type":"Offer","name":"Pro","price":"30.00","priceCurrency":"USD","description":"2000 credits — ~130 Opus or ~2000 Haiku messages"},{"@type":"Offer","name":"Power","price":"90.00","priceCurrency":"USD","description":"7000 credits — ~460 Opus or ~7000 Haiku messages"}]}
   </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="/favicon.svg"/>
@@ -40,26 +40,29 @@
     .nav-cta{padding:.5rem 1.1rem;background:var(--orange);color:#fff;font-weight:700;border-radius:8px;text-decoration:none;font-size:.82rem}
     .nav-cta:hover{background:var(--orange2)}
     .wrap{max-width:1100px;margin:0 auto;padding:5rem 1.5rem 7rem}
-    .page-header{text-align:center;margin-bottom:4rem}
+    .page-header{text-align:center;margin-bottom:1.5rem}
     .eyebrow{font-family:var(--mono);font-size:.65rem;color:var(--orange);text-transform:uppercase;letter-spacing:.12em;margin-bottom:.75rem}
     h1{font-size:clamp(2rem,5vw,3.5rem);font-weight:800;letter-spacing:-1.5px;margin-bottom:1rem}
-    .page-header p{color:var(--t2);font-size:1rem;max-width:500px;margin:0 auto}
-    .toggle-wrap{display:flex;align-items:center;justify-content:center;gap:.75rem;margin-top:1.5rem;font-size:.82rem;color:var(--t2)}
-    .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin-bottom:3rem}
-    .plan{background:var(--s2);border:1px solid var(--b1);border-radius:16px;padding:2rem;display:flex;flex-direction:column;gap:.75rem;transition:border-color .18s}
-    .plan:hover{border-color:var(--b2)}
+    .page-header p{color:var(--t2);font-size:1rem;max-width:520px;margin:0 auto 1.5rem}
+    .free-badge{display:inline-flex;align-items:center;gap:.5rem;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:100px;padding:.45rem 1.1rem;font-size:.84rem;color:#86efac;font-weight:600}
+    .free-badge strong{color:#22c55e}
+
+    /* ── Credit packs ── */
+    .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1rem;margin:3rem 0 2rem}
+    .plan{background:var(--s2);border:1px solid var(--b1);border-radius:16px;padding:2rem;display:flex;flex-direction:column;gap:.75rem;transition:border-color .18s,transform .18s}
+    .plan:hover{border-color:var(--b2);transform:translateY(-2px)}
     .plan.featured{background:linear-gradient(var(--s2),var(--s2)) padding-box,linear-gradient(135deg,rgba(255,77,0,.5),rgba(0,212,255,.35)) border-box;border:1px solid transparent}
     .plan-badge{font-family:var(--mono);font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:.18rem .5rem;border-radius:5px;display:inline-block;width:fit-content}
     .badge-orange{background:rgba(255,77,0,.12);color:#ff7a3d;border:1px solid rgba(255,77,0,.2)}
     .badge-cyan{background:rgba(0,212,255,.1);color:var(--cyan);border:1px solid rgba(0,212,255,.2)}
     .badge-violet{background:rgba(139,92,246,.1);color:#c4b5fd;border:1px solid rgba(139,92,246,.2)}
     .badge-gold{background:rgba(245,158,11,.1);color:#fcd34d;border:1px solid rgba(245,158,11,.2)}
-    .plan-name{font-size:1.1rem;font-weight:800;color:#fff}
+    .plan-name{font-size:1.05rem;font-weight:800;color:#fff}
     .plan-target{font-size:.78rem;color:var(--t3);font-family:var(--mono)}
     .plan-price{display:flex;align-items:baseline;gap:.3rem;margin:.4rem 0}
-    .plan-price .amt{font-size:2.2rem;font-weight:800;letter-spacing:-1px;color:#fff;font-family:var(--mono)}
-    .plan-price .per{font-size:.78rem;color:var(--t2)}
-    .plan-trial{font-family:var(--mono);font-size:.68rem;color:var(--green);margin-bottom:.25rem}
+    .plan-price .amt{font-size:2.6rem;font-weight:800;letter-spacing:-1.5px;color:#fff;font-family:var(--mono)}
+    .plan-price .per{font-size:.8rem;color:var(--t2);align-self:center}
+    .plan-credits{font-size:.82rem;color:var(--cyan);font-family:var(--mono);font-weight:600}
     .plan-features{list-style:none;flex:1}
     .plan-features li{display:flex;align-items:flex-start;gap:.5rem;font-size:.83rem;color:var(--t2);padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.04)}
     .plan-features li:last-child{border-bottom:none}
@@ -69,8 +72,34 @@
     .cta-orange:hover{background:var(--orange2)}
     .cta-ghost{background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--b2)}
     .cta-ghost:hover{border-color:var(--b3);background:rgba(255,255,255,.08)}
-    .compare{margin-top:3rem}
-    .compare h2{font-size:1.4rem;font-weight:800;margin-bottom:1.5rem;text-align:center}
+
+    /* ── What every account includes ── */
+    .all-includes{margin:4rem 0;padding:2.5rem;background:var(--s1);border:1px solid var(--b1);border-radius:16px}
+    .all-includes h2{font-size:1.3rem;font-weight:800;margin-bottom:1.5rem;text-align:center}
+    .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}
+    .feature-item{display:flex;gap:.75rem;align-items:flex-start}
+    .feature-icon{font-size:1.3rem;flex-shrink:0;margin-top:.1rem}
+    .feature-text strong{display:block;font-size:.88rem;font-weight:700;color:var(--text);margin-bottom:.15rem}
+    .feature-text span{font-size:.78rem;color:var(--t2);line-height:1.5}
+
+    /* ── Model tiers ── */
+    .model-tiers{margin:4rem 0}
+    .model-tiers h2{font-size:1.3rem;font-weight:800;margin-bottom:.5rem;text-align:center}
+    .model-tiers .subtitle{text-align:center;color:var(--t2);font-size:.88rem;margin-bottom:2rem}
+    .model-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+    .model-card{background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:1.5rem;text-align:center}
+    .model-card .model-name{font-family:var(--mono);font-size:.68rem;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.4rem}
+    .model-card .model-title{font-weight:800;font-size:1.05rem;color:var(--text);margin-bottom:.5rem}
+    .model-card .model-cost{font-family:var(--mono);font-size:1.2rem;font-weight:700;margin-bottom:.3rem}
+    .model-card .model-desc{font-size:.78rem;color:var(--t2);line-height:1.5}
+    .model-card.m-haiku .model-cost{color:var(--green)}
+    .model-card.m-sonnet .model-cost{color:var(--cyan)}
+    .model-card.m-opus .model-cost{color:var(--orange)}
+
+    /* ── Compare ── */
+    .compare{margin-top:4rem}
+    .compare h2{font-size:1.4rem;font-weight:800;margin-bottom:.5rem;text-align:center}
+    .compare .subtitle{text-align:center;color:var(--t2);font-size:.88rem;margin-bottom:2rem}
     .compare-table{width:100%;border-collapse:collapse;border:1px solid var(--b1);border-radius:12px;overflow:hidden}
     .compare-table th,.compare-table td{padding:.75rem 1rem;text-align:left;border-bottom:1px solid var(--b1);font-size:.83rem}
     .compare-table th{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);background:rgba(255,255,255,.02)}
@@ -79,12 +108,16 @@
     .compare-table tr:last-child td{border-bottom:none}
     .yes{color:var(--green)}
     .no{color:var(--t3)}
+
+    /* ── FAQ ── */
     .faq{margin-top:4rem}
     .faq h2{font-size:1.4rem;font-weight:800;margin-bottom:1.5rem;text-align:center}
     .faq-item{border-bottom:1px solid var(--b1);padding:1.25rem 0}
     .faq-item:first-of-type{border-top:1px solid var(--b1)}
     .faq-q{font-weight:700;color:#fff;font-size:.95rem;margin-bottom:.5rem}
     .faq-a{color:var(--t2);font-size:.88rem;line-height:1.7}
+
+    /* ── Guarantee ── */
     .guarantee{margin-top:3rem;padding:2rem;background:rgba(34,197,94,.04);border:1px solid rgba(34,197,94,.2);border-radius:14px;text-align:center}
     .guarantee h3{font-weight:800;font-size:1.1rem;margin-bottom:.5rem;color:var(--green)}
     .guarantee p{color:var(--t2);font-size:.88rem;max-width:500px;margin:0 auto}
@@ -93,10 +126,19 @@
     .trust-item .ic{font-size:1.3rem;margin-bottom:.5rem}
     .trust-item .t{font-weight:700;font-size:.82rem;color:#fff;margin-bottom:.25rem}
     .trust-item .d{font-size:.72rem;color:var(--t3);line-height:1.5}
-    @media(max-width:700px){.trust-strip{grid-template-columns:1fr 1fr}}
+
+    /* ── CTA bar ── */
+    .cta-bar{margin-top:4rem;text-align:center;padding:3rem 2rem;background:linear-gradient(135deg,rgba(255,77,0,.06),rgba(0,212,255,.04));border:1px solid rgba(255,77,0,.15);border-radius:20px}
+    .cta-bar h2{font-size:1.6rem;font-weight:800;margin-bottom:.5rem}
+    .cta-bar p{color:var(--t2);font-size:.9rem;margin-bottom:1.5rem}
+    .cta-bar .btn{display:inline-block;padding:.85rem 2rem;background:var(--orange);color:#fff;font-weight:700;border-radius:10px;text-decoration:none;font-size:.95rem;transition:background .2s}
+    .cta-bar .btn:hover{background:var(--orange2)}
+
     footer{border-top:1px solid var(--b1);padding:2rem 1.5rem;text-align:center;font-size:.72rem;color:var(--t3);font-family:var(--mono)}
     footer a{color:var(--orange);text-decoration:none}
-    @media(max-width:600px){.plans-grid{grid-template-columns:1fr}.wrap{padding:3rem 1rem 5rem}}
+    @media(max-width:700px){.trust-strip{grid-template-columns:1fr 1fr}.model-grid{grid-template-columns:1fr}}
+    @media(max-width:600px){.plans-grid{grid-template-columns:1fr}.wrap{padding:3rem 1rem 5rem}.features-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:420px){.features-grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -105,7 +147,7 @@
     <a href="/" class="nav-logo" aria-label="Aethyro home"><span class="nav-dot"></span> Aethyro</a>
     <div style="display:flex;align-items:center;gap:.5rem">
       <a href="/app/login.html" class="nav-link">Log in</a>
-      <a href="https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00" target="_blank" rel="noopener" class="nav-cta" onclick="gtag('event','begin_checkout',{plan:'personal',value:29,currency:'USD',surface:'nav'})">Start Free Trial</a>
+      <a href="/app/signup.html" class="nav-cta" onclick="gtag('event','signup_click',{surface:'pricing_nav'})">Start free →</a>
     </div>
   </div>
 </nav>
@@ -113,155 +155,152 @@
 <div class="wrap">
   <div class="page-header">
     <div class="eyebrow">Pricing</div>
-    <h1>Fixed price. Unlimited AI.<br/>Runs on your hardware.</h1>
-    <p>No per-query fees. No usage caps on local inference. No surprise bills. Cancel anytime.</p>
+    <h1>Pay only for<br/>what you use.</h1>
+    <p>No subscriptions, no monthly fees, no rate limits. Buy credits and spend them when you need them.</p>
+    <div class="free-badge">🎁 <strong>200 free credits</strong> on every new account — no card required</div>
   </div>
 
+  <!-- Credit packs -->
   <div class="plans-grid">
 
-    <!-- Personal -->
     <div class="plan">
-      <span class="plan-badge badge-orange">Personal</span>
-      <div class="plan-name">Personal</div>
-      <div class="plan-target">// individuals & families</div>
-      <div class="plan-price"><span class="amt">$29</span><span class="per">/month</span></div>
-      <div class="plan-trial">✓ 14-day free trial</div>
+      <span class="plan-badge badge-orange">Starter</span>
+      <div class="plan-name">Starter Pack</div>
+      <div class="plan-price"><span class="amt">$4</span></div>
+      <div class="plan-credits">200 credits</div>
       <ul class="plan-features">
-        <li><span class="ck">✓</span>All 6 sovereign AI agents</li>
-        <li><span class="ck">✓</span>100% local inference</li>
-        <li><span class="ck">✓</span>Unlimited local queries</li>
-        <li><span class="ck">✓</span>1 device license</li>
-        <li><span class="ck">✓</span>Basic marketplace access</li>
-        <li><span class="ck">✓</span>Email support</li>
+        <li><span class="ck">✓</span>~200 Haiku messages</li>
+        <li><span class="ck">✓</span>~50 Sonnet messages</li>
+        <li><span class="ck">✓</span>~13 Opus messages</li>
+        <li><span class="ck">✓</span>Credits never expire</li>
       </ul>
-      <a href="https://buy.stripe.com/bJecN660H2B83tk8Td7bW02" target="_blank" rel="noopener" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'personal',value:29,currency:'USD'})">Start Free Trial →</a>
+      <a href="/app/signup.html" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'starter',value:4,currency:'USD'})">Get started →</a>
     </div>
 
-    <!-- Research -->
     <div class="plan">
-      <span class="plan-badge badge-cyan">Research</span>
-      <div class="plan-name">Research</div>
-      <div class="plan-target">// researchers & educators</div>
-      <div class="plan-price"><span class="amt">$199</span><span class="per">/month</span></div>
-      <div class="plan-trial">✓ 14-day free trial</div>
+      <span class="plan-badge badge-cyan">Standard</span>
+      <div class="plan-name">Standard Pack</div>
+      <div class="plan-price"><span class="amt">$10</span></div>
+      <div class="plan-credits">600 credits</div>
       <ul class="plan-features">
-        <li><span class="ck">✓</span>Everything in Personal</li>
-        <li><span class="ck">✓</span>Priority access to the research agent</li>
-        <li><span class="ck">✓</span>Advanced RAG document store</li>
-        <li><span class="ck">✓</span>3 device licenses</li>
-        <li><span class="ck">✓</span>Full marketplace access</li>
-        <li><span class="ck">✓</span>Priority support</li>
+        <li><span class="ck">✓</span>~600 Haiku messages</li>
+        <li><span class="ck">✓</span>~150 Sonnet messages</li>
+        <li><span class="ck">✓</span>~40 Opus messages</li>
+        <li><span class="ck">✓</span>Credits never expire</li>
       </ul>
-      <a href="https://buy.stripe.com/28E9AUbl1ejQbZQc5p7bW03" target="_blank" rel="noopener" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'research',value:199,currency:'USD'})">Start Free Trial →</a>
+      <a href="/app/signup.html" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'standard',value:10,currency:'USD'})">Get started →</a>
     </div>
 
-    <!-- Dev -->
     <div class="plan featured">
-      <span class="plan-badge badge-violet">Dev — Most Popular</span>
-      <div class="plan-name">Developer</div>
-      <div class="plan-target">// developers & agencies</div>
-      <div class="plan-price"><span class="amt">$299</span><span class="per">/month</span></div>
-      <div class="plan-trial">✓ 14-day free trial</div>
+      <span class="plan-badge badge-violet">Pro — Best Value</span>
+      <div class="plan-name">Pro Pack</div>
+      <div class="plan-price"><span class="amt">$30</span></div>
+      <div class="plan-credits">2,000 credits</div>
       <ul class="plan-features">
-        <li><span class="ck">✓</span>Everything in Research</li>
-        <li><span class="ck">✓</span>Priority access to the code & docs agents</li>
-        <li><span class="ck">✓</span>Custom agent builder</li>
-        <li><span class="ck">✓</span>API access (REST + WS)</li>
-        <li><span class="ck">✓</span>Unlimited device licenses</li>
-        <li><span class="ck">✓</span>Slack-wired notifications</li>
+        <li><span class="ck">✓</span>~2,000 Haiku messages</li>
+        <li><span class="ck">✓</span>~500 Sonnet messages</li>
+        <li><span class="ck">✓</span>~130 Opus messages</li>
+        <li><span class="ck">✓</span>Credits never expire</li>
       </ul>
-      <a href="https://buy.stripe.com/dRmcN61Kra3A7JAglF7bW04" target="_blank" rel="noopener" class="plan-cta cta-orange" onclick="gtag('event','begin_checkout',{plan:'developer',value:299,currency:'USD'})">Start Free Trial →</a>
+      <a href="/app/signup.html" class="plan-cta cta-orange" onclick="gtag('event','begin_checkout',{plan:'pro',value:30,currency:'USD'})">Get started →</a>
     </div>
 
-    <!-- CPA -->
     <div class="plan">
-      <span class="plan-badge badge-gold">CPA / Pro</span>
-      <div class="plan-name">Professional</div>
-      <div class="plan-target">// law · medical · CPA · realty</div>
-      <div class="plan-price"><span class="amt">$499</span><span class="per">/month</span></div>
-      <div class="plan-trial">✓ 14-day free trial</div>
+      <span class="plan-badge badge-gold">Power</span>
+      <div class="plan-name">Power Pack</div>
+      <div class="plan-price"><span class="amt">$90</span></div>
+      <div class="plan-credits">7,000 credits</div>
       <ul class="plan-features">
-        <li><span class="ck">✓</span>Everything in Developer</li>
-        <li><span class="ck">✓</span>Built for HIPAA-sensitive & privileged data</li>
-        <li><span class="ck">✓</span>Legal, medical, CPA vertical agents</li>
-        <li><span class="ck">✓</span>Client document isolation</li>
-        <li><span class="ck">✓</span>White-label option</li>
-        <li><span class="ck">✓</span>Dedicated setup call</li>
-        <li><span class="ck">✓</span>SLA + priority Slack support</li>
+        <li><span class="ck">✓</span>~7,000 Haiku messages</li>
+        <li><span class="ck">✓</span>~1,750 Sonnet messages</li>
+        <li><span class="ck">✓</span>~460 Opus messages</li>
+        <li><span class="ck">✓</span>Credits never expire</li>
       </ul>
-      <a href="https://buy.stripe.com/8x2fZiagX4Jg9RI3yT7bW05" target="_blank" rel="noopener" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'professional',value:499,currency:'USD'})">Start Free Trial →</a>
+      <a href="/app/signup.html" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'power',value:90,currency:'USD'})">Get started →</a>
     </div>
 
   </div>
+  <p style="text-align:center;color:var(--t3);font-size:.76rem;font-family:var(--mono)">// Credits purchased from inside the app after signup · buy additional packs anytime, they stack</p>
 
-  <div class="guarantee">
-    <h3>14-day free trial on every plan</h3>
-    <p>Full access to every feature. No credit card required. If you decide it's not for you, just cancel — no questions, no fees, no hard feelings.</p>
-  </div>
-
-  <div class="trust-strip">
-    <div class="trust-item">
-      <div class="ic">🔒</div>
-      <div class="t">Secure checkout</div>
-      <div class="d">Payments processed by Stripe. We never see or store your card details.</div>
-    </div>
-    <div class="trust-item">
-      <div class="ic">💻</div>
-      <div class="t">100% local by default</div>
-      <div class="d">The desktop app's AI inference runs entirely on your hardware — it never leaves your machine.</div>
-    </div>
-    <div class="trust-item">
-      <div class="ic">🚫</div>
-      <div class="t">No lock-in</div>
-      <div class="d">Cancel any local plan anytime. Cloud credits never expire and carry no subscription.</div>
-    </div>
-    <div class="trust-item">
-      <div class="ic">⚡</div>
-      <div class="t">Built on Claude Opus 5</div>
-      <div class="d">Aethyro Cloud runs on Anthropic's frontier model, not a smaller stand-in.</div>
-    </div>
-  </div>
-
-  <div class="compare" style="margin-top:4rem">
-    <h2>Aethyro Cloud — pay only for what you use</h2>
-    <p style="text-align:center;color:var(--t2);font-size:.88rem;max-width:560px;margin:-.5rem auto 2rem">A separate product from the plans above: instead of installing anything, chat with Aethyro right in your browser. It runs on our servers, not your hardware — buy a credit pack and spend it down as you go. New accounts get 200 free credits (~$2) automatically.</p>
-    <div class="plans-grid" style="max-width:760px;margin:0 auto">
-      <div class="plan">
-        <span class="plan-badge badge-cyan">Starter</span>
-        <div class="plan-price"><span class="amt">$10</span></div>
-        <div class="plan-target">// 1,000 credits</div>
-        <ul class="plan-features">
-          <li><span class="ck">✓</span>~160 typical exchanges</li>
-          <li><span class="ck">✓</span>No expiration</li>
-        </ul>
-        <a href="/app/chat.html" class="plan-cta cta-ghost">Chat now →</a>
+  <!-- Model tiers -->
+  <div class="model-tiers">
+    <h2>Three models, one platform</h2>
+    <p class="subtitle">Switch models any time. Spend credits where they matter most.</p>
+    <div class="model-grid">
+      <div class="model-card m-haiku">
+        <div class="model-name">claude haiku 4.5</div>
+        <div class="model-title">Haiku</div>
+        <div class="model-cost">~1 cr/msg</div>
+        <div class="model-desc">Lightning fast. Perfect for quick answers, brainstorming, and high-volume tasks.</div>
       </div>
-      <div class="plan">
-        <span class="plan-badge badge-cyan">Plus</span>
-        <div class="plan-price"><span class="amt">$25</span></div>
-        <div class="plan-target">// 2,600 credits</div>
-        <ul class="plan-features">
-          <li><span class="ck">✓</span>~430 typical exchanges</li>
-          <li><span class="ck">✓</span>No expiration</li>
-        </ul>
-        <a href="/app/chat.html" class="plan-cta cta-ghost">Chat now →</a>
+      <div class="model-card m-sonnet">
+        <div class="model-name">claude sonnet 5</div>
+        <div class="model-title">Sonnet</div>
+        <div class="model-cost">~4 cr/msg</div>
+        <div class="model-desc">Smart and fast. Excellent for coding, writing, analysis, and most daily tasks.</div>
       </div>
-      <div class="plan featured">
-        <span class="plan-badge badge-cyan">Pro</span>
-        <div class="plan-price"><span class="amt">$50</span></div>
-        <div class="plan-target">// 5,500 credits</div>
-        <ul class="plan-features">
-          <li><span class="ck">✓</span>~915 typical exchanges</li>
-          <li><span class="ck">✓</span>No expiration</li>
-        </ul>
-        <a href="/app/chat.html" class="plan-cta cta-orange">Chat now →</a>
+      <div class="model-card m-opus">
+        <div class="model-name">claude opus 5.5</div>
+        <div class="model-title">Opus</div>
+        <div class="model-cost">~15 cr/msg</div>
+        <div class="model-desc">Frontier intelligence. The world's most capable model for complex, demanding work.</div>
       </div>
     </div>
-    <p style="text-align:center;margin-top:1.5rem;color:var(--t3);font-size:.76rem;font-family:var(--mono)">// 1 credit ≈ $0.01 of usage · buy credits from inside the chat, or start free with your 200-credit signup bonus</p>
   </div>
 
+  <!-- What's included -->
+  <div class="all-includes">
+    <h2>Everything included — for every account</h2>
+    <div class="features-grid">
+      <div class="feature-item">
+        <div class="feature-icon">🧠</div>
+        <div class="feature-text">
+          <strong>Persistent Memory</strong>
+          <span>Conversations are embedded and stored. Claude remembers context across sessions.</span>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📄</div>
+        <div class="feature-text">
+          <strong>Document Knowledge Base</strong>
+          <span>Upload PDFs, text, or CSV files. Claude automatically retrieves relevant sections.</span>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-text">
+          <strong>Agentic Tasks</strong>
+          <span>Set a multi-step goal and let Claude research, plan, and execute it autonomously.</span>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">⏰</div>
+        <div class="feature-text">
+          <strong>Scheduled Routines</strong>
+          <span>Define tasks that run on a cron schedule — daily briefs, reports, monitoring.</span>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">🔗</div>
+        <div class="feature-text">
+          <strong>Integrations</strong>
+          <span>Connect GitHub and Notion. Claude reads your repos and docs in context.</span>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">🎁</div>
+        <div class="feature-text">
+          <strong>Referral Rewards</strong>
+          <span>Share your link. When a friend signs up you both get 100 free credits.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison -->
   <div class="compare">
-    <h2>All plans vs. the cloud alternatives</h2>
+    <h2>How Aethyro compares</h2>
+    <p class="subtitle">Cloud AI tools side by side — honest comparison.</p>
     <div style="overflow-x:auto">
     <table class="compare-table">
       <thead>
@@ -269,54 +308,104 @@
           <th>Feature</th>
           <th>Aethyro</th>
           <th>ChatGPT Plus</th>
-          <th>Copilot Pro</th>
-          <th>Claude Pro</th>
+          <th>Claude.ai Pro</th>
+          <th>Perplexity Pro</th>
         </tr>
       </thead>
       <tbody>
-        <tr><td>Monthly cost</td><td class="yes">$29–$499 fixed</td><td>$20/mo + overages</td><td>$30/mo</td><td>$20/mo</td></tr>
-        <tr><td>Data stays local</td><td class="yes">✓ always</td><td class="no">✗ sent to OpenAI</td><td class="no">✗ sent to Microsoft</td><td class="no">✗ sent to Anthropic</td></tr>
-        <tr><td>Works offline</td><td class="yes">✓ full offline</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
-        <tr><td>Per-query fees</td><td class="yes">✗ none ever</td><td>Rate limits hit</td><td>Rate limits hit</td><td>Rate limits hit</td></tr>
-        <tr><td>Multiple specialist agents</td><td class="yes">✓ 6 included</td><td class="no">1 model only</td><td class="no">1 model only</td><td class="no">1 model only</td></tr>
-        <tr><td>Self-improving over time</td><td class="yes">✓ learns & improves</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
-        <tr><td>14-day free trial</td><td class="yes">✓ all plans</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Monthly fee</td><td class="yes">None (pay-as-you-go)</td><td>$20 / month</td><td>$20 / month</td><td>$20 / month</td></tr>
+        <tr><td>Rate limits</td><td class="yes">None — credit-based</td><td class="no">Hit frequently</td><td class="no">Hit frequently</td><td class="no">Hit frequently</td></tr>
+        <tr><td>Document RAG</td><td class="yes">✓ full knowledge base</td><td>Limited uploads</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Agentic tasks</td><td class="yes">✓ multi-step agent</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Scheduled routines</td><td class="yes">✓ cron-based</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Model choice</td><td class="yes">Haiku · Sonnet · Opus</td><td>GPT-4o only</td><td>Claude models</td><td>Limited</td></tr>
+        <tr><td>Free start</td><td class="yes">✓ 200 credits, no card</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+        <tr><td>Credits expire</td><td class="yes">✗ never</td><td>— N/A</td><td>— N/A</td><td>— N/A</td></tr>
       </tbody>
     </table>
     </div>
   </div>
 
+  <!-- FAQ -->
   <div class="faq">
     <h2>Common questions</h2>
+
     <div class="faq-item">
-      <div class="faq-q">Do I need a powerful computer?</div>
-      <div class="faq-a">Any modern laptop or desktop with 8GB RAM works. An NVIDIA GPU with 8GB+ VRAM gives the best performance, but Aethyro runs fine on CPU-only machines for most tasks.</div>
+      <div class="faq-q">What is a credit?</div>
+      <div class="faq-a">1 credit ≈ $0.02 of AI compute. A typical Haiku message costs ~1 credit, Sonnet ~4 credits, and Opus ~15 credits. Longer conversations with more context cost proportionally more.</div>
     </div>
+
     <div class="faq-item">
-      <div class="faq-q">What happens after the 14-day trial?</div>
-      <div class="faq-a">You're charged the monthly plan price automatically. You can cancel any time before the trial ends with zero charge — no calls required, just cancel in your dashboard.</div>
+      <div class="faq-q">Do credits expire?</div>
+      <div class="faq-a">No — credits never expire. Buy a pack today and spend it at your own pace, whether that's a day or a year from now.</div>
     </div>
+
     <div class="faq-item">
-      <div class="faq-q">Is there a usage limit on the local AI?</div>
-      <div class="faq-a">No. Local inference on your hardware is unlimited — you can run as many queries as you want, 24/7. The only limits are your hardware's speed.</div>
+      <div class="faq-q">What do I get for free?</div>
+      <div class="faq-a">Every new account starts with 200 free credits (a $4 value) automatically — no credit card required. That's enough for ~13 Opus conversations or ~200 quick Haiku queries.</div>
     </div>
+
     <div class="faq-item">
-      <div class="faq-q">Can I upgrade or downgrade my plan?</div>
-      <div class="faq-a">Yes, any time. Changes take effect at the start of your next billing cycle.</div>
+      <div class="faq-q">Can I switch models mid-conversation?</div>
+      <div class="faq-a">Yes — the model bar at the top of the chat lets you switch between Haiku, Sonnet, and Opus any time. Each message is billed at the rate of the model used for that message.</div>
     </div>
+
     <div class="faq-item">
-      <div class="faq-q">Is this HIPAA or attorney-client privilege compliant?</div>
-      <div class="faq-a">Aethyro doesn't automatically make you compliant — that still depends on your own policies, staff training, and any required agreements. What Aethyro does provide: all AI processing happens locally on your hardware, so client, patient, or legal data is never transmitted to our servers or any third-party AI provider. That removes the biggest compliance risk (external data transmission) but doesn't replace the rest of your compliance program. The Professional plan is built for firms working with this kind of sensitive data.</div>
+      <div class="faq-q">How does the Document Knowledge Base work?</div>
+      <div class="faq-a">Upload PDFs, Markdown, TXT, or CSV files in the Intelligence panel. Aethyro chunks and embeds them using Voyage AI's embeddings. When you chat, Claude automatically retrieves the most relevant sections from your documents and uses them as context.</div>
     </div>
+
     <div class="faq-item">
-      <div class="faq-q">What does "self-improving" mean?</div>
-      <div class="faq-a">Aethyro evaluates its own performance over time and refines its behavior based on how you actually use it — on your hardware, with your local data patterns. It gets smarter the longer you use it, without any of your data leaving your machine.</div>
+      <div class="faq-q">What are Agentic Tasks?</div>
+      <div class="faq-a">Agentic Tasks let Claude autonomously plan and execute multi-step goals — like researching a topic, synthesizing findings, and writing a report — without you having to hand-hold each step. Tasks use credits at the selected model's rate across all the steps they run.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Is there a usage cap or rate limit?</div>
+      <div class="faq-a">No caps. Send as many messages as your credits allow, as fast as you want. The only limit is your credit balance.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Can I get a refund?</div>
+      <div class="faq-a">If you've bought credits and haven't used them, reach out within 7 days and we'll make it right. Email <a href="mailto:leer4030@gmail.com" style="color:var(--cyan)">leer4030@gmail.com</a>.</div>
     </div>
   </div>
+
+  <!-- Trust -->
+  <div class="trust-strip" style="margin-top:3rem">
+    <div class="trust-item">
+      <div class="ic">🔒</div>
+      <div class="t">Secure checkout</div>
+      <div class="d">Payments processed by Stripe. We never see or store your card details.</div>
+    </div>
+    <div class="trust-item">
+      <div class="ic">⚡</div>
+      <div class="t">Claude Opus 5.5</div>
+      <div class="d">Anthropic's most capable frontier model — not a smaller stand-in.</div>
+    </div>
+    <div class="trust-item">
+      <div class="ic">💳</div>
+      <div class="t">Credits never expire</div>
+      <div class="d">Buy once, use whenever. No subscription to cancel. No renewal surprise.</div>
+    </div>
+    <div class="trust-item">
+      <div class="ic">🎁</div>
+      <div class="t">200 free credits</div>
+      <div class="d">Every account starts with 200 credits. No card required to try.</div>
+    </div>
+  </div>
+
+  <!-- CTA bar -->
+  <div class="cta-bar">
+    <h2>Start with 200 free credits</h2>
+    <p>No credit card. No subscription. Just sign up and start chatting with the world's best AI.</p>
+    <a href="/app/signup.html" class="btn" onclick="gtag('event','signup_click',{surface:'pricing_cta'})">Create free account →</a>
+  </div>
+
 </div>
 
 <footer>
-  © 2026 Aethyro &nbsp;·&nbsp; <a href="/">Home</a> &nbsp;·&nbsp; <a href="/marketplace/">Marketplace</a> &nbsp;·&nbsp; <a href="/blog/">Blog</a> &nbsp;·&nbsp; <a href="/terms.html">Terms</a> &nbsp;·&nbsp; <a href="/privacy.html">Privacy</a> &nbsp;·&nbsp; <a href="mailto:leer4030@gmail.com">Contact</a>
+  © 2026 Aethyro &nbsp;·&nbsp; <a href="/">Home</a> &nbsp;·&nbsp; <a href="/app/chat.html">Chat</a> &nbsp;·&nbsp; <a href="/terms.html">Terms</a> &nbsp;·&nbsp; <a href="/privacy.html">Privacy</a> &nbsp;·&nbsp; <a href="mailto:leer4030@gmail.com">Contact</a>
 </footer>
 </body>
 </html>
