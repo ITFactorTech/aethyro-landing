@@ -202,6 +202,55 @@
     .composer-wrap{padding:0 .75rem}
     .pack-grid{grid-template-columns:1fr 1fr}
   }
+
+  /* ── Intelligence Panel ── */
+  .intel-panel{position:fixed;top:0;right:0;height:100vh;width:400px;max-width:100vw;background:var(--s1);border-left:1px solid var(--b1);z-index:45;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+  .intel-panel.open{transform:translateX(0)}
+  .intel-overlay{display:none;position:fixed;inset:0;z-index:44;background:rgba(0,0,0,.4)}
+  .intel-overlay.show{display:block}
+  .intel-header{display:flex;align-items:center;justify-content:space-between;padding:.85rem 1rem;border-bottom:1px solid var(--b1);flex-shrink:0}
+  .intel-header-title{font-weight:700;font-size:.95rem;color:var(--text)}
+  .intel-close{background:none;border:none;color:var(--t3);font-size:1.3rem;cursor:pointer;line-height:1;padding:.1rem .4rem;border-radius:5px}
+  .intel-close:hover{color:var(--text);background:rgba(255,255,255,.06)}
+  .intel-tabs{display:flex;border-bottom:1px solid var(--b1);flex-shrink:0}
+  .intel-tab{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--t3);cursor:pointer;font-family:var(--font);font-size:.78rem;font-weight:600;padding:.65rem .4rem;transition:color .15s,border-color .15s}
+  .intel-tab.active{color:var(--orange);border-bottom-color:var(--orange)}
+  .intel-tab:hover:not(.active){color:var(--text)}
+  .intel-content{flex:1;overflow-y:auto;padding:1rem}
+  .intel-section-title{font-size:.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin:1rem 0 .5rem}
+  .intel-form-group{margin-bottom:.75rem}
+  .intel-label{display:block;font-size:.77rem;color:var(--t2);margin-bottom:.3rem}
+  .intel-input,.intel-textarea,.intel-select{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--b2);border-radius:8px;color:var(--text);font-family:var(--font);font-size:.83rem;padding:.55rem .75rem;outline:none;box-sizing:border-box}
+  .intel-textarea{resize:vertical;min-height:70px;line-height:1.5}
+  .intel-input:focus,.intel-textarea:focus,.intel-select:focus{border-color:var(--orange)}
+  .intel-select{cursor:pointer}
+  .intel-btn{padding:.55rem 1.2rem;background:var(--orange);color:#fff;font-weight:700;font-size:.82rem;border:none;border-radius:8px;cursor:pointer;font-family:var(--font);transition:background .15s;white-space:nowrap}
+  .intel-btn:hover{background:var(--orange2)}
+  .intel-btn:disabled{opacity:.5;cursor:wait}
+  .intel-btn-sm{padding:.35rem .85rem;font-size:.75rem}
+  .intel-btn-ghost{background:none;border:1px solid var(--b2);color:var(--t2)}
+  .intel-btn-ghost:hover{background:rgba(255,255,255,.05);color:var(--text);border-color:var(--b3)}
+  .intel-btn-danger{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#fca5a5}
+  .intel-btn-danger:hover{background:rgba(239,68,68,.18)}
+  .intel-card{background:rgba(0,0,0,.3);border:1px solid var(--b1);border-radius:10px;padding:.75rem .9rem;margin-bottom:.55rem}
+  .intel-card-title{font-size:.84rem;font-weight:600;color:var(--text);margin-bottom:.2rem;word-break:break-word}
+  .intel-card-meta{font-size:.72rem;color:var(--t3);margin-bottom:.35rem}
+  .intel-card-result{font-size:.78rem;color:var(--t2);line-height:1.5;max-height:100px;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+  .intel-card-actions{display:flex;gap:.4rem;margin-top:.6rem;flex-wrap:wrap}
+  .intel-status{display:inline-block;font-size:.68rem;font-family:var(--mono);padding:.15rem .45rem;border-radius:4px}
+  .intel-status.pending{background:rgba(245,158,11,.1);color:#fcd34d}
+  .intel-status.running{background:rgba(0,212,255,.1);color:var(--cyan)}
+  .intel-status.completed{background:rgba(34,197,94,.1);color:#86efac}
+  .intel-status.failed{background:rgba(239,68,68,.1);color:#fca5a5}
+  .intel-status.skipped{background:rgba(100,116,139,.1);color:var(--t3)}
+  .intel-empty{text-align:center;color:var(--t3);font-size:.82rem;padding:2rem 1rem}
+  .intel-conn-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.75rem;padding:.25rem .6rem;border-radius:6px}
+  .intel-conn-badge.connected{background:rgba(34,197,94,.1);color:#86efac}
+  .intel-conn-badge.disconnected{background:rgba(100,116,139,.1);color:var(--t3)}
+  .intel-loading{text-align:center;color:var(--t3);font-size:.82rem;padding:1.5rem;font-family:var(--mono)}
+  .intel-btn-row{display:flex;gap:.5rem;justify-content:flex-end}
+  .intel-divider{border:none;border-top:1px solid var(--b1);margin:.9rem 0}
+  @media(max-width:640px){.intel-panel{width:100vw}}
 </style>
 </head>
 <body>
@@ -218,6 +267,7 @@
       <a href="/app/dashboard.html">Dashboard →</a>
       <button class="sidebar-workspace-btn" id="workspaceBtn">Workspace</button>
       <button class="sidebar-workspace-btn" id="referralBtn">🎁 Share &amp; Earn</button>
+      <button class="sidebar-workspace-btn" id="intelBtn">⚡ Intelligence</button>
       <div class="balance-sm" id="balanceSm">— credits</div>
     </div>
   </div>
@@ -319,6 +369,129 @@ I often need help with: client quotes, contract review, business Instagram posts
     </div>
   </div>
 </div>
+
+<!-- Intelligence Panel -->
+<div class="intel-panel" id="intelPanel">
+  <div class="intel-header">
+    <span class="intel-header-title">⚡ Intelligence</span>
+    <button class="intel-close" id="intelClose">×</button>
+  </div>
+  <div class="intel-tabs">
+    <button class="intel-tab active" data-tab="tasks">Tasks</button>
+    <button class="intel-tab" data-tab="knowledge">Knowledge</button>
+    <button class="intel-tab" data-tab="routines">Routines</button>
+    <button class="intel-tab" data-tab="integrations">Integrations</button>
+  </div>
+  <div class="intel-content">
+
+    <!-- Tasks pane -->
+    <div class="intel-pane" id="pane-tasks">
+      <p class="intel-section-title">New Agentic Task</p>
+      <form id="taskForm">
+        <div class="intel-form-group">
+          <label class="intel-label" for="taskGoal">Goal</label>
+          <textarea class="intel-textarea" id="taskGoal" placeholder="Research the latest AI breakthroughs and write a summary…" rows="3" required></textarea>
+        </div>
+        <div class="intel-form-group">
+          <label class="intel-label" for="taskModel">Model</label>
+          <select class="intel-select" id="taskModel">
+            <option value="haiku">Haiku — fast, economical</option>
+            <option value="sonnet" selected>Sonnet — balanced</option>
+            <option value="opus">Opus — most capable</option>
+          </select>
+        </div>
+        <div class="intel-btn-row">
+          <button class="intel-btn" type="submit" id="taskRunBtn">Run Task</button>
+        </div>
+      </form>
+      <hr class="intel-divider">
+      <p class="intel-section-title">Recent Tasks</p>
+      <div id="taskList"></div>
+    </div>
+
+    <!-- Knowledge pane -->
+    <div class="intel-pane" id="pane-knowledge" style="display:none">
+      <p class="intel-section-title">Upload Document</p>
+      <p style="font-size:.8rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">Files are chunked and embedded — Claude will automatically retrieve relevant sections in your conversations.</p>
+      <input type="file" id="docFileInput" accept=".txt,.md,.csv,.pdf" multiple style="display:none"/>
+      <button class="intel-btn" id="docUploadBtn">📄 Choose files…</button>
+      <hr class="intel-divider">
+      <p class="intel-section-title">Your Knowledge Base</p>
+      <div id="docList"></div>
+    </div>
+
+    <!-- Routines pane -->
+    <div class="intel-pane" id="pane-routines" style="display:none">
+      <p class="intel-section-title">New Routine</p>
+      <form id="routineForm">
+        <div class="intel-form-group">
+          <label class="intel-label" for="routineName">Name</label>
+          <input class="intel-input" id="routineName" type="text" placeholder="Daily market brief" required/>
+        </div>
+        <div class="intel-form-group">
+          <label class="intel-label" for="routinePrompt">Prompt</label>
+          <textarea class="intel-textarea" id="routinePrompt" placeholder="Summarize the top 5 AI news stories from the past 24 hours…" rows="3" required></textarea>
+        </div>
+        <div class="intel-form-group">
+          <label class="intel-label" for="routineSchedule">Schedule (cron)</label>
+          <input class="intel-input" id="routineSchedule" type="text" placeholder="0 9 * * 1-5" value="0 9 * * 1-5" required/>
+          <span style="font-size:.69rem;color:var(--t3);display:block;margin-top:.25rem">Format: min hr dom mon dow · e.g. <code style="font-family:var(--mono)">0 9 * * 1-5</code> = weekdays at 9 AM UTC</span>
+        </div>
+        <div class="intel-form-group">
+          <label class="intel-label" for="routineModel">Model</label>
+          <select class="intel-select" id="routineModel">
+            <option value="haiku" selected>Haiku</option>
+            <option value="sonnet">Sonnet</option>
+            <option value="opus">Opus</option>
+          </select>
+        </div>
+        <div class="intel-btn-row">
+          <button class="intel-btn" type="submit" id="routineSaveBtn">Save Routine</button>
+        </div>
+      </form>
+      <hr class="intel-divider">
+      <p class="intel-section-title">Your Routines</p>
+      <div id="routineList"></div>
+    </div>
+
+    <!-- Integrations pane -->
+    <div class="intel-pane" id="pane-integrations" style="display:none">
+      <p class="intel-section-title">GitHub</p>
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem">
+        <span class="intel-conn-badge disconnected" id="ghStatus">Not connected</span>
+        <button class="intel-btn intel-btn-sm intel-btn-danger" id="ghDisconnect" style="display:none">Disconnect</button>
+      </div>
+      <form id="ghConnectForm">
+        <div class="intel-form-group">
+          <label class="intel-label" for="ghTokenInput">Personal Access Token</label>
+          <input class="intel-input" id="ghTokenInput" type="password" placeholder="ghp_…" autocomplete="off"/>
+          <span style="font-size:.69rem;color:var(--t3);display:block;margin-top:.2rem">Needs repo, issues and code read access. <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener" style="color:var(--cyan)">Create token →</a></span>
+        </div>
+        <div class="intel-btn-row">
+          <button class="intel-btn" type="submit" id="ghConnectBtn">Connect</button>
+        </div>
+      </form>
+      <hr class="intel-divider">
+      <p class="intel-section-title">Notion</p>
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem">
+        <span class="intel-conn-badge disconnected" id="ntStatus">Not connected</span>
+        <button class="intel-btn intel-btn-sm intel-btn-danger" id="ntDisconnect" style="display:none">Disconnect</button>
+      </div>
+      <form id="ntConnectForm">
+        <div class="intel-form-group">
+          <label class="intel-label" for="ntTokenInput">Integration Token</label>
+          <input class="intel-input" id="ntTokenInput" type="password" placeholder="secret_…" autocomplete="off"/>
+          <span style="font-size:.69rem;color:var(--t3);display:block;margin-top:.2rem">Create at <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener" style="color:var(--cyan)">notion.so/my-integrations →</a></span>
+        </div>
+        <div class="intel-btn-row">
+          <button class="intel-btn" type="submit" id="ntConnectBtn">Connect</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</div>
+<div class="intel-overlay" id="intelOverlay"></div>
 
 <script src="./vendor/supabase.js"></script>
 <script src="./config.js"></script>
@@ -688,7 +861,7 @@ I often need help with: client quotes, contract review, business Instagram posts
             ? await fetch(window.AETHYRO_FN_URL+'/chat',{
                 method:'POST',
                 headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
-                body:JSON.stringify({message:message, history:history.slice(0,-1), attachments:attachments&&attachments.length?attachments:undefined, model:currentModel})
+                body:JSON.stringify({message:message, history:history.slice(0,-1), attachments:attachments&&attachments.length?attachments:undefined, model:currentModel, conversation_id:convId||undefined})
               })
             : await fetch(TRIAL_URL,{
                 method:'POST',
@@ -952,19 +1125,25 @@ I often need help with: client quotes, contract review, business Instagram posts
   });
 
   /* ── Tool call card rendering ── */
+  var TOOL_ICONS={web_search:'🔍',github_list_repos:'🐙',github_list_issues:'🐛',github_search_code:'🔎',github_read_file:'📄',github_list_prs:'🔀',notion_search:'📓',notion_read_page:'📄'};
   function renderToolCards(container, events){
     container.innerHTML='';
     (events||[]).forEach(function(ev){
       var card=document.createElement('div');
       card.className='tool-card';
-      if(ev.tool==='web_search'){
-        var q=ev.input&&ev.input.query?ev.input.query:'';
-        card.innerHTML='<span class="tool-card-icon">🔍</span><span class="tool-card-label">Searched: <em>'+
-          q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+
-          '</em></span>';
-      } else {
-        card.innerHTML='<span class="tool-card-icon">🛠</span><span class="tool-card-label">'+ev.tool+'</span>';
-      }
+      var icon=TOOL_ICONS[ev.tool]||'🛠';
+      var label=ev.tool;
+      if(ev.tool==='web_search'&&ev.input&&ev.input.query) label='Searched: '+ev.input.query;
+      else if(ev.tool==='github_list_repos') label='GitHub: listing repos';
+      else if(ev.tool==='github_list_issues'&&ev.input&&ev.input.repo) label='GitHub issues: '+ev.input.repo;
+      else if(ev.tool==='github_search_code'&&ev.input&&ev.input.query) label='GitHub search: '+ev.input.query;
+      else if(ev.tool==='github_read_file'&&ev.input&&ev.input.path) label='GitHub file: '+ev.input.path;
+      else if(ev.tool==='github_list_prs'&&ev.input&&ev.input.repo) label='GitHub PRs: '+ev.input.repo;
+      else if(ev.tool==='notion_search'&&ev.input&&ev.input.query) label='Notion: '+ev.input.query;
+      else if(ev.tool==='notion_read_page') label='Notion: reading page';
+      card.innerHTML='<span class="tool-card-icon">'+icon+'</span><span class="tool-card-label"><em>'+
+        label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+
+        '</em></span>';
       container.appendChild(card);
     });
   }
@@ -1052,6 +1231,301 @@ I often need help with: client quotes, contract review, business Instagram posts
       x.addEventListener('click',function(){ pendingAttachments.splice(i,1); renderChips(); });
       chip.appendChild(label); chip.appendChild(x); c.appendChild(chip);
     });
+  }
+
+  /* ── Intelligence Panel ── */
+  function intelEsc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function timeAgo(date){
+    var diff=Date.now()-date.getTime(), s=Math.floor(diff/1000);
+    if(s<60) return 'just now';
+    var m=Math.floor(s/60); if(m<60) return m+'m ago';
+    var h=Math.floor(m/60); if(h<24) return h+'h ago';
+    return Math.floor(h/24)+'d ago';
+  }
+
+  var intelInitialized=false;
+
+  function openIntelPanel(){
+    if(!session){ showToast('Sign in to use Intelligence features','err'); return; }
+    $('intelPanel').classList.add('open');
+    $('intelOverlay').classList.add('show');
+    if(!intelInitialized){ intelInitialized=true; initIntelPanel(); }
+  }
+  function closeIntelPanel(){
+    $('intelPanel').classList.remove('open');
+    $('intelOverlay').classList.remove('show');
+  }
+
+  $('intelBtn').addEventListener('click', openIntelPanel);
+  $('intelClose').addEventListener('click', closeIntelPanel);
+  $('intelOverlay').addEventListener('click', closeIntelPanel);
+
+  document.querySelectorAll('.intel-tab').forEach(function(tab){
+    tab.addEventListener('click',function(){
+      document.querySelectorAll('.intel-tab').forEach(function(t){ t.classList.remove('active'); });
+      document.querySelectorAll('.intel-pane').forEach(function(p){ p.style.display='none'; });
+      tab.classList.add('active');
+      $('pane-'+tab.dataset.tab).style.display='';
+      if(tab.dataset.tab==='tasks') loadTasks();
+      else if(tab.dataset.tab==='knowledge') loadDocuments();
+      else if(tab.dataset.tab==='routines') loadRoutines();
+      else if(tab.dataset.tab==='integrations') loadIntegrations();
+    });
+  });
+
+  function initIntelPanel(){
+    loadTasks();
+    /* Tasks form */
+    $('taskForm').addEventListener('submit',async function(e){
+      e.preventDefault();
+      var goal=$('taskGoal').value.trim(); if(!goal) return;
+      var btn=$('taskRunBtn'); btn.disabled=true; btn.textContent='Running…';
+      try{
+        var r=await fetch(window.AETHYRO_FN_URL+'/run-agent-task',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+          body:JSON.stringify({goal:goal,model:$('taskModel').value})
+        });
+        var d=await r.json();
+        if(!r.ok){ showToast(d.error||'Task failed','err'); return; }
+        $('taskGoal').value='';
+        showToast('Task completed — '+d.credits_used+' cr used','ok');
+        if(typeof d.balance==='number') setBalance(d.balance);
+        loadTasks();
+      }catch(e){ showToast('Network error','err'); }
+      finally{ btn.disabled=false; btn.textContent='Run Task'; }
+    });
+    /* Knowledge tab */
+    $('docFileInput').addEventListener('change',async function(){
+      var files=Array.from(this.files);
+      for(var fi=0;fi<files.length;fi++) await uploadDocument(files[fi]);
+      this.value=''; loadDocuments();
+    });
+    $('docUploadBtn').addEventListener('click',function(){ $('docFileInput').click(); });
+    /* Routines form */
+    $('routineForm').addEventListener('submit',async function(e){
+      e.preventDefault();
+      var name=$('routineName').value.trim(), prompt=$('routinePrompt').value.trim(), schedule=$('routineSchedule').value.trim();
+      if(!name||!prompt||!schedule) return;
+      var btn=$('routineSaveBtn'); btn.disabled=true; btn.textContent='Saving…';
+      try{
+        var r=await supabase.from('user_routines').insert({user_id:session.user.id,name:name,prompt:prompt,schedule:schedule,model:$('routineModel').value});
+        if(r.error){ showToast(r.error.message,'err'); return; }
+        $('routineName').value=''; $('routinePrompt').value=''; $('routineSchedule').value='0 9 * * 1-5';
+        showToast('Routine "'+name+'" created','ok'); loadRoutines();
+      }catch(e){ showToast('Could not save routine','err'); }
+      finally{ btn.disabled=false; btn.textContent='Save Routine'; }
+    });
+    /* Integrations forms */
+    $('ghConnectForm').addEventListener('submit',async function(e){
+      e.preventDefault();
+      var token=$('ghTokenInput').value.trim(); if(!token) return;
+      var btn=$('ghConnectBtn'); btn.disabled=true; btn.textContent='Connecting…';
+      try{
+        var r=await fetch(window.AETHYRO_FN_URL+'/connector-proxy',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+          body:JSON.stringify({action:'connect',provider:'github',token:token})
+        });
+        var d=await r.json();
+        if(!r.ok){ showToast(d.error||'Connection failed','err'); return; }
+        $('ghTokenInput').value='';
+        showToast('GitHub connected as '+(d.metadata&&d.metadata.login||''),'ok');
+        loadIntegrations();
+      }catch(e){ showToast('Network error','err'); }
+      finally{ btn.disabled=false; btn.textContent='Connect'; }
+    });
+    $('ghDisconnect').addEventListener('click',async function(){
+      if(!confirm('Disconnect GitHub?')) return;
+      this.disabled=true;
+      try{
+        await fetch(window.AETHYRO_FN_URL+'/connector-proxy',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+          body:JSON.stringify({action:'disconnect',provider:'github'})
+        });
+        showToast('GitHub disconnected','ok'); loadIntegrations();
+      }catch(e){ showToast('Error','err'); }
+      finally{ this.disabled=false; }
+    });
+    $('ntConnectForm').addEventListener('submit',async function(e){
+      e.preventDefault();
+      var token=$('ntTokenInput').value.trim(); if(!token) return;
+      var btn=$('ntConnectBtn'); btn.disabled=true; btn.textContent='Connecting…';
+      try{
+        var r=await fetch(window.AETHYRO_FN_URL+'/connector-proxy',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+          body:JSON.stringify({action:'connect',provider:'notion',token:token})
+        });
+        var d=await r.json();
+        if(!r.ok){ showToast(d.error||'Connection failed','err'); return; }
+        $('ntTokenInput').value='';
+        showToast('Notion connected','ok'); loadIntegrations();
+      }catch(e){ showToast('Network error','err'); }
+      finally{ btn.disabled=false; btn.textContent='Connect'; }
+    });
+    $('ntDisconnect').addEventListener('click',async function(){
+      if(!confirm('Disconnect Notion?')) return;
+      this.disabled=true;
+      try{
+        await fetch(window.AETHYRO_FN_URL+'/connector-proxy',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+          body:JSON.stringify({action:'disconnect',provider:'notion'})
+        });
+        showToast('Notion disconnected','ok'); loadIntegrations();
+      }catch(e){ showToast('Error','err'); }
+      finally{ this.disabled=false; }
+    });
+  }
+
+  async function loadTasks(){
+    var list=$('taskList');
+    list.innerHTML='<div class="intel-loading">Loading…</div>';
+    var r=await supabase.from('agent_tasks').select('id,goal,status,result,credits_used,created_at').order('created_at',{ascending:false}).limit(10);
+    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty">No tasks yet. Run your first agentic task above.</div>'; return; }
+    list.innerHTML='';
+    r.data.forEach(function(task){
+      var card=document.createElement('div'); card.className='intel-card';
+      card.innerHTML='<div class="intel-card-title">'+intelEsc(task.goal)+'</div>'+
+        '<div class="intel-card-meta"><span class="intel-status '+task.status+'">'+task.status+'</span> · '+timeAgo(new Date(task.created_at))+(task.credits_used?' · '+task.credits_used+' cr':'')+'</div>'+
+        (task.result&&task.status==='completed'?'<div class="intel-card-result">'+intelEsc(task.result.slice(0,200))+'</div>':'');
+      if(task.result&&task.status==='completed'){
+        var actions=document.createElement('div'); actions.className='intel-card-actions';
+        var viewBtn=document.createElement('button'); viewBtn.className='intel-btn intel-btn-sm intel-btn-ghost'; viewBtn.textContent='View result';
+        viewBtn.addEventListener('click',function(){
+          var old=card.querySelector('.intel-expanded');
+          if(old){ old.remove(); return; }
+          var exp=document.createElement('div'); exp.className='intel-expanded';
+          exp.style.cssText='margin-top:.5rem;font-size:.8rem;color:var(--t2);line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;border-top:1px solid var(--b1);padding-top:.5rem';
+          exp.textContent=task.result; card.appendChild(exp);
+        });
+        actions.appendChild(viewBtn); card.appendChild(actions);
+      }
+      list.appendChild(card);
+    });
+  }
+
+  async function uploadDocument(f){
+    if(f.size>10*1024*1024){ showToast(f.name+' exceeds 10 MB','err'); return; }
+    var content='';
+    if(f.type==='application/pdf'){
+      try{
+        if(!window.pdfjsLib){
+          await new Promise(function(res,rej){
+            var s=document.createElement('script');
+            s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            s.onload=function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(); };
+            s.onerror=rej; document.head.appendChild(s);
+          });
+        }
+        var buf=await f.arrayBuffer(), pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+        for(var i=1;i<=pdf.numPages;i++){
+          var page=await pdf.getPage(i), tc=await page.getTextContent();
+          content+=tc.items.map(function(it){return it.str;}).join(' ')+'\n';
+        }
+      }catch(e){ showToast('Could not parse PDF: '+f.name,'err'); return; }
+    } else {
+      content=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){res(fr.result);}; fr.onerror=rej; fr.readAsText(f); });
+    }
+    showToast('Uploading '+f.name+'…','ok');
+    try{
+      var r=await fetch(window.AETHYRO_FN_URL+'/embed-content',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+        body:JSON.stringify({type:'document',name:f.name,file_type:f.type||'text/plain',size_bytes:f.size,content:content})
+      });
+      var d=await r.json();
+      if(!r.ok){ showToast(d.error||'Upload failed','err'); return; }
+      showToast(f.name+' added to knowledge base','ok');
+    }catch(e){ showToast('Upload failed: '+f.name,'err'); }
+  }
+
+  async function loadDocuments(){
+    var list=$('docList');
+    list.innerHTML='<div class="intel-loading">Loading…</div>';
+    var r=await supabase.from('user_documents').select('id,name,file_type,chunk_count,created_at').order('created_at',{ascending:false}).limit(20);
+    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty">No documents yet. Upload files to build your knowledge base.</div>'; return; }
+    list.innerHTML='';
+    r.data.forEach(function(doc){
+      var card=document.createElement('div'); card.className='intel-card';
+      card.innerHTML='<div class="intel-card-title">'+intelEsc(doc.name)+'</div>'+
+        '<div class="intel-card-meta">'+intelEsc(doc.file_type||'text')+(doc.chunk_count?' · '+doc.chunk_count+' chunks':'')+'  · '+timeAgo(new Date(doc.created_at))+'</div>';
+      var actions=document.createElement('div'); actions.className='intel-card-actions';
+      var delBtn=document.createElement('button'); delBtn.className='intel-btn intel-btn-sm intel-btn-danger'; delBtn.textContent='Delete';
+      delBtn.addEventListener('click',async function(){
+        if(!confirm('Delete "'+doc.name+'"?')) return;
+        await supabase.from('user_documents').delete().eq('id',doc.id); card.remove();
+      });
+      actions.appendChild(delBtn); card.appendChild(actions); list.appendChild(card);
+    });
+  }
+
+  async function loadRoutines(){
+    var list=$('routineList');
+    list.innerHTML='<div class="intel-loading">Loading…</div>';
+    var r=await supabase.from('user_routines').select('*').order('created_at',{ascending:false}).limit(20);
+    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty">No routines yet. Create your first scheduled AI task above.</div>'; return; }
+    list.innerHTML='';
+    r.data.forEach(function(rt){
+      var card=document.createElement('div'); card.className='intel-card';
+      var lastRun=rt.last_run_at?timeAgo(new Date(rt.last_run_at)):'Never';
+      card.innerHTML='<div class="intel-card-title">'+intelEsc(rt.name)+'</div>'+
+        '<div class="intel-card-meta">'+intelEsc(rt.schedule)+' · Last run: '+lastRun+'</div>'+
+        (rt.last_result?'<div class="intel-card-result">'+intelEsc(rt.last_result.slice(0,150))+'</div>':'');
+      var actions=document.createElement('div'); actions.className='intel-card-actions';
+      var togBtn=document.createElement('button'); togBtn.className='intel-btn intel-btn-sm intel-btn-ghost';
+      togBtn.textContent=rt.enabled?'Enabled':'Disabled'; togBtn.style.color=rt.enabled?'var(--green)':'var(--t3)';
+      togBtn.addEventListener('click',async function(){
+        rt.enabled=!rt.enabled; togBtn.textContent=rt.enabled?'Enabled':'Disabled'; togBtn.style.color=rt.enabled?'var(--green)':'var(--t3)';
+        await supabase.from('user_routines').update({enabled:rt.enabled}).eq('id',rt.id);
+      });
+      var runBtn=document.createElement('button'); runBtn.className='intel-btn intel-btn-sm'; runBtn.textContent='Run now';
+      runBtn.addEventListener('click',async function(){
+        runBtn.disabled=true; runBtn.textContent='Running…';
+        try{
+          var resp=await fetch(window.AETHYRO_FN_URL+'/run-routines',{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+            body:JSON.stringify({routine_id:rt.id})
+          });
+          var d=await resp.json();
+          if(!resp.ok){ showToast(d.error||'Run failed','err'); return; }
+          showToast('Routine run complete','ok'); loadRoutines();
+        }catch(e){ showToast('Network error','err'); }
+        finally{ runBtn.disabled=false; runBtn.textContent='Run now'; }
+      });
+      var delBtn=document.createElement('button'); delBtn.className='intel-btn intel-btn-sm intel-btn-danger'; delBtn.textContent='Delete';
+      delBtn.addEventListener('click',async function(){
+        if(!confirm('Delete routine "'+rt.name+'"?')) return;
+        await supabase.from('user_routines').delete().eq('id',rt.id); card.remove();
+      });
+      actions.appendChild(togBtn); actions.appendChild(runBtn); actions.appendChild(delBtn);
+      card.appendChild(actions); list.appendChild(card);
+    });
+  }
+
+  async function loadIntegrations(){
+    try{
+      var r=await fetch(window.AETHYRO_FN_URL+'/connector-proxy',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+        body:JSON.stringify({action:'list_integrations'})
+      });
+      var d=await r.json();
+      var integrations=d.integrations||[];
+      var github=integrations.find(function(i){ return i.provider==='github'; });
+      var notion=integrations.find(function(i){ return i.provider==='notion'; });
+      var ghBadge=$('ghStatus');
+      ghBadge.className='intel-conn-badge '+(github?'connected':'disconnected');
+      ghBadge.textContent=github?('✓ '+(github.metadata&&github.metadata.login||'Connected')):'Not connected';
+      $('ghDisconnect').style.display=github?'':'none';
+      var ntBadge=$('ntStatus');
+      ntBadge.className='intel-conn-badge '+(notion?'connected':'disconnected');
+      ntBadge.textContent=notion?('✓ '+(notion.metadata&&notion.metadata.name||'Connected')):'Not connected';
+      $('ntDisconnect').style.display=notion?'':'none';
+    }catch(e){}
   }
 
   /* ── Credit modal ── */
