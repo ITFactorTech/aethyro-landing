@@ -11,6 +11,18 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/javascript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/python.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/typescript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/bash.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/sql.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/rust.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/css.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/xml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/json.min.js"></script>
+<script>document.addEventListener('DOMContentLoaded',function(){if(window.hljs)hljs.configure({ignoreUnescapedHTML:true});});</script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
 <style>
@@ -65,7 +77,18 @@
   @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
   .empty-state{margin:auto;text-align:center;color:var(--t3);padding:2rem}
   .empty-state h2{font-size:1.3rem;color:var(--text);margin-bottom:.5rem}
-  .empty-state p{font-size:.88rem;max-width:420px;margin:0 auto}
+  .empty-state p{font-size:.88rem;max-width:420px;margin:0 auto 1.5rem}
+  .prompt-chips{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center;max-width:520px;margin:.25rem auto 0}
+  .prompt-chip{background:rgba(255,255,255,.04);border:1px solid var(--b2);border-radius:20px;color:var(--t2);cursor:pointer;font-family:var(--font);font-size:.78rem;padding:.4rem .9rem;transition:all .15s;text-align:left}
+  .prompt-chip:hover{border-color:var(--orange);color:var(--text);background:rgba(255,77,0,.06)}
+  /* ── Thinking indicator ── */
+  .thinking-dots{display:inline-flex;gap:3px;align-items:center;padding:.1rem 0}
+  .thinking-dots span{width:5px;height:5px;border-radius:50%;background:var(--t3);animation:tdot .9s ease-in-out infinite}
+  .thinking-dots span:nth-child(2){animation-delay:.15s}
+  .thinking-dots span:nth-child(3){animation-delay:.3s}
+  @keyframes tdot{0%,60%,100%{opacity:.25;transform:scale(.8)}30%{opacity:1;transform:scale(1)}}
+  /* ── Keyboard hint ── */
+  .composer-hint{text-align:right;font-family:var(--mono);font-size:.67rem;color:var(--t3);padding:.3rem .2rem 0;user-select:none}
   .composer-wrap{max-width:800px;width:100%;margin:0 auto;padding:0 1.1rem}
   .low-balance{margin:.5rem 0;padding:.75rem 1rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;font-size:.83rem;color:#fcd34d;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
   .low-balance a{color:var(--orange)}
@@ -119,7 +142,7 @@
   .code-block pre code{background:none;padding:0;font-size:.8rem;white-space:pre}
   /* ── Message copy button ── */
   .msg-row.assistant{position:relative}
-  .msg-copy-btn{display:none;position:absolute;top:.4rem;right:-2.2rem;background:none;border:1px solid var(--b2);border-radius:6px;color:var(--t3);cursor:pointer;padding:.3rem .4rem;line-height:1;transition:all .15s}
+  .msg-copy-btn{display:none;position:absolute;bottom:-.1rem;right:.4rem;background:rgba(0,0,0,.55);border:1px solid var(--b2);border-radius:6px;color:var(--t3);cursor:pointer;padding:.28rem .45rem;line-height:1;transition:all .15s;backdrop-filter:blur(4px)}
   .msg-row.assistant:hover .msg-copy-btn{display:flex;align-items:center}
   .msg-copy-btn:hover{color:var(--text);border-color:var(--orange)}
   .msg-copy-btn.copied{color:var(--green);border-color:var(--green)}
@@ -310,6 +333,14 @@
       <div class="empty-state" id="emptyState">
         <h2>Ask Aethyro anything.</h2>
         <p>Code, research, writing, strategy. New accounts start with 200 free credits.</p>
+        <div class="prompt-chips" id="promptChips">
+          <button class="prompt-chip" data-prompt="Write a Python function with exponential backoff retry logic">Write a Python retry wrapper</button>
+          <button class="prompt-chip" data-prompt="Summarize this contract and highlight any risky clauses I should watch out for">Summarize a contract for risks</button>
+          <button class="prompt-chip" data-prompt="Help me build a go-to-market strategy for a new SaaS product">Plan a GTM strategy</button>
+          <button class="prompt-chip" data-prompt="Explain how large language models work, in plain language">Explain how LLMs work</button>
+          <button class="prompt-chip" data-prompt="Write a compelling cold email for a B2B SaaS outreach">Draft a cold outreach email</button>
+          <button class="prompt-chip" data-prompt="Review my code for bugs and suggest improvements">Review my code</button>
+        </div>
       </div>
     </div>
 
@@ -335,6 +366,7 @@
         <textarea id="input" placeholder="Message Aethyro…" rows="1" required></textarea>
         <button type="submit" id="sendBtn">Send</button>
       </form>
+      <div class="composer-hint">Enter ↵ to send &nbsp;·&nbsp; Shift+Enter for new line</div>
     </div>
   </div>
 </div>
@@ -542,10 +574,15 @@ I often need help with: client quotes, contract review, business Instagram posts
     if(!window.marked || !window.DOMPurify) return;
     var renderer = new marked.Renderer();
     renderer.code = function(code, lang){
-      var escaped = (typeof code === 'object' && code.text) ? code.text : (code || '');
+      var rawText = (typeof code === 'object' && code.text) ? code.text : (code || '');
       var langStr = (typeof code === 'object' && code.lang) ? code.lang : (lang || '');
-      escaped = escaped.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      return '<div class="code-block"><div class="code-header"><span class="code-lang">'+langStr+'</span><button class="btn-copy-code" title="Copy code">Copy</button></div><pre><code>'+escaped+'</code></pre></div>';
+      var highlighted = rawText;
+      if(window.hljs && langStr && hljs.getLanguage(langStr)){
+        try{ highlighted = hljs.highlight(rawText,{language:langStr,ignoreIllegals:true}).value; }catch(e){}
+      } else {
+        highlighted = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      }
+      return '<div class="code-block"><div class="code-header"><span class="code-lang">'+(langStr||'code')+'</span><button class="btn-copy-code" title="Copy code">Copy</button></div><pre><code class="hljs language-'+langStr+'">'+highlighted+'</code></pre></div>';
     };
     marked.use({ renderer: renderer, breaks: true, gfm: true });
   })();
@@ -569,6 +606,17 @@ I often need help with: client quotes, contract review, business Instagram posts
   var USAGE_MARK='\u0000';
 
   function track(name,params){ if(typeof gtag!=='undefined') gtag('event',name,params||{}); }
+
+  /* ── Starter prompt chips (delegated to msgs container) ── */
+  document.getElementById('msgs').addEventListener('click', function(e){
+    var btn=e.target.closest('.prompt-chip');
+    if(!btn) return;
+    var inp=$('input');
+    inp.value=btn.getAttribute('data-prompt');
+    inp.focus();
+    inp.style.height='auto';
+    inp.style.height=Math.min(inp.scrollHeight,160)+'px';
+  });
 
   /* ── Model selector ── */
   function initModelBar(){
@@ -612,7 +660,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     $('trialBadge').style.display='inline-flex';
     $('signupLink').style.display='inline-flex';
     $('cloudNote').textContent='// Aethyro Cloud — free preview, no signup required.';
-    $('emptyState').innerHTML='<h2>Try Aethyro Cloud free.</h2><p>3 free messages a day, no signup. <a href="./signup.html?next=chat" style="color:var(--orange)">Sign up for 200 free credits</a> to save your conversations.</p>';
+    $('emptyState').innerHTML='<h2>Try Aethyro Cloud free.</h2><p>3 free messages a day, no signup. <a href="./signup.html?next=chat" style="color:var(--orange)">Sign up for 200 free credits</a> to save your conversations.</p><div class="prompt-chips" id="promptChips"><button class="prompt-chip" data-prompt="Write a Python function with exponential backoff retry logic">Write a Python retry wrapper</button><button class="prompt-chip" data-prompt="Summarize this contract and highlight any risky clauses I should watch out for">Summarize a contract for risks</button><button class="prompt-chip" data-prompt="Help me build a go-to-market strategy for a new SaaS product">Plan a GTM strategy</button><button class="prompt-chip" data-prompt="Explain how large language models work, in plain language">Explain how LLMs work</button><button class="prompt-chip" data-prompt="Write a compelling cold email for a B2B SaaS outreach">Draft a cold outreach email</button><button class="prompt-chip" data-prompt="Review my code for bugs and suggest improvements">Review my code</button></div>';
     $('signupLink').addEventListener('click', function(){ track('trial_signup_cta_click',{surface:'chat_page',location:'topbar'}); });
     $('trialLimitBarLink').addEventListener('click', function(){ track('trial_signup_cta_click',{surface:'chat_page',location:'limit_bar'}); });
   }
@@ -758,7 +806,9 @@ I often need help with: client quotes, contract review, business Instagram posts
     currentConvId=null;
     history=[];
     $('msgs').innerHTML='';
-    $('msgs').appendChild(Object.assign(document.createElement('div'),{id:'emptyState',className:'empty-state',innerHTML:'<h2>Ask Aethyro anything.</h2><p>Code, research, writing, strategy. New accounts start with 200 free credits.</p>'}));
+    var es=document.createElement('div'); es.id='emptyState'; es.className='empty-state';
+    es.innerHTML='<h2>Ask Aethyro anything.</h2><p>Code, research, writing, strategy. New accounts start with 200 free credits.</p><div class="prompt-chips" id="promptChips"><button class="prompt-chip" data-prompt="Write a Python function with exponential backoff retry logic">Write a Python retry wrapper</button><button class="prompt-chip" data-prompt="Summarize this contract and highlight any risky clauses I should watch out for">Summarize a contract for risks</button><button class="prompt-chip" data-prompt="Help me build a go-to-market strategy for a new SaaS product">Plan a GTM strategy</button><button class="prompt-chip" data-prompt="Explain how large language models work, in plain language">Explain how LLMs work</button><button class="prompt-chip" data-prompt="Write a compelling cold email for a B2B SaaS outreach">Draft a cold outreach email</button><button class="prompt-chip" data-prompt="Review my code for bugs and suggest improvements">Review my code</button></div>';
+    $('msgs').appendChild(es);
     $('chatTitle').textContent='';
     var url=new URL(location.href);
     url.searchParams.delete('c');
@@ -885,7 +935,12 @@ I often need help with: client quotes, contract review, business Instagram posts
     }
 
     var bubble=addMessage('assistant','');
-    var cursor=document.createElement('span'); cursor.className='cursor'; bubble.appendChild(cursor);
+    var thinkingEl=document.createElement('span'); thinkingEl.style.cssText='color:var(--t3);font-size:.82rem';
+    var dots=document.createElement('span'); dots.className='thinking-dots';
+    dots.innerHTML='<span></span><span></span><span></span>';
+    thinkingEl.appendChild(dots);
+    bubble.appendChild(thinkingEl);
+    var cursor=document.createElement('span'); cursor.className='cursor'; cursor.style.display='none';
 
     if(!session) track('trial_message_sent',{surface:'chat_page'});
 
@@ -914,6 +969,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       }
 
       if(resp.status===402){
+        if(thinkingEl && thinkingEl.parentNode===bubble) thinkingEl.remove();
         cursor.remove();
         bubble.classList.add('error');
         bubble.innerHTML='';
@@ -931,11 +987,13 @@ I often need help with: client quotes, contract review, business Instagram posts
         return;
       }
       if(resp.status===429){
+        if(thinkingEl && thinkingEl.parentNode===bubble) thinkingEl.remove();
         cursor.remove(); bubble.classList.add('error');
         bubble.textContent="That's today's free preview limit.";
         lockForSignup(); return;
       }
       if(!resp.ok||!resp.body){
+        if(thinkingEl && thinkingEl.parentNode===bubble) thinkingEl.remove();
         bubble.classList.add('error');
         bubble.textContent='Something went wrong. Please try again.'; return;
       }
@@ -967,6 +1025,7 @@ I often need help with: client quotes, contract review, business Instagram posts
 
         var mi=raw.indexOf(USAGE_MARK);
         full=mi===-1?raw:raw.slice(0,mi);
+        if(full && thinkingEl && thinkingEl.parentNode===bubble){ thinkingEl.remove(); cursor.style.display=''; }
         bubble.textContent=full; bubble.appendChild(cursor);
         $('msgs').scrollTop=$('msgs').scrollHeight;
         if(mi!==-1) break;
