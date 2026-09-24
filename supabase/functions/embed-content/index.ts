@@ -79,7 +79,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "user_id required" }), {
         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
       });
-    return handleRequest(await req.clone().json().catch(() => ({})), userId, supaAdmin);
+    return handleRequest(body, userId, supaAdmin);
   }
 
   // User JWT path
@@ -188,13 +188,20 @@ async function handleRequest(
     const vecs = await embed([query]);
     if (!vecs) return ok({ results: [] });
 
-    const table = source === "documents" ? "document_chunks" : "memory_embeddings";
-    const { data, error } = await supaAdmin.rpc("match_embeddings", {
-      p_user_id: userId,
-      p_table: table,
-      p_embedding: vecs[0],
-      p_limit: Math.min(k, 10),
-    });
+    let data: any, error: any;
+    if (source === "documents") {
+      ({ data, error } = await supaAdmin.rpc("match_document_chunks", {
+        p_user_id: userId,
+        p_embedding: vecs[0],
+        p_limit: Math.min(k, 10),
+      }));
+    } else {
+      ({ data, error } = await supaAdmin.rpc("match_memory_embeddings", {
+        p_user_id: userId,
+        p_embedding: vecs[0],
+        p_limit: Math.min(k, 10),
+      }));
+    }
     if (error) return ok({ results: [] });
     return ok({ results: data || [] });
   }
