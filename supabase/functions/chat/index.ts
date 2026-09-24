@@ -1,4 +1,4 @@
-// chat v22 — model selector (haiku / sonnet / opus) with per-model credit rates
+// chat v23 — auto-memory: extract user facts post-reply and inject into system prompt
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -90,6 +90,44 @@ async function executeWebSearch(query: string): Promise<string> {
   } catch (_) {
     return "Search timed out or failed.";
   }
+}
+
+// ── Memory helpers ──────────────────────────────────────────────────────────
+
+type UserMemory = {
+  name?: string;
+  occupation?: string;
+  company?: string;
+  location?: string;
+  preferences?: string[];
+  projects?: string[];
+  facts?: string[];
+};
+
+function formatMemory(m: UserMemory): string {
+  const lines: string[] = [];
+  if (m.name) lines.push(`Name: ${m.name}`);
+  if (m.occupation) lines.push(`Occupation: ${m.occupation}`);
+  if (m.company) lines.push(`Company: ${m.company}`);
+  if (m.location) lines.push(`Location: ${m.location}`);
+  if (m.preferences?.length) lines.push(`Preferences: ${m.preferences.join(", ")}`);
+  if (m.projects?.length) lines.push(`Projects: ${m.projects.join(", ")}`);
+  if (m.facts?.length) lines.push(`Facts: ${m.facts.join("; ")}`);
+  return lines.join("\n");
+}
+
+function mergeMemory(existing: UserMemory, incoming: Partial<UserMemory>): UserMemory {
+  const merged: any = { ...existing };
+  for (const key of Object.keys(incoming) as (keyof UserMemory)[]) {
+    const val = incoming[key];
+    if (val === null || val === undefined || val === "") continue;
+    if (Array.isArray(val) && Array.isArray(merged[key])) {
+      merged[key] = [...new Set([...(merged[key] as string[]), ...(val as string[])])].slice(0, 12);
+    } else {
+      merged[key] = val;
+    }
+  }
+  return merged;
 }
 
 // ── Attachment helpers ──────────────────────────────────────────────────────
@@ -197,18 +235,24 @@ serve(async (req) => {
       headers: { ...CORS, "Content-Type": "application/json" },
     });
 
-  // System prompt + workspace context
+  // System prompt + workspace context + memory
   let systemPrompt =
     "You are Aethyro, a highly capable AI assistant." +
     (TAVILY_API_KEY
       ? " You have a web_search tool — use it proactively whenever the user asks about current events, recent news, live data, prices, sports results, release dates, or anything that may have changed since your training cutoff. For timeless knowledge, answer directly."
       : "");
+  let existingMemory: UserMemory = {};
   try {
     const { data: profile } = await supaAdmin
       .from("profiles")
-      .select("workspace_context")
+      .select("workspace_context, memory")
       .eq("id", user.id)
       .single();
+    existingMemory = (profile?.memory && typeof profile.memory === "object") ? profile.memory as UserMemory : {};
+    const memoryStr = formatMemory(existingMemory);
+    if (memoryStr) {
+      systemPrompt += `\n\n--- What I know about you ---\n${memoryStr}`;
+    }
     if (profile?.workspace_context) {
       systemPrompt += `\n\n--- User context ---\n${profile.workspace_context}`;
     }
@@ -254,7 +298,7 @@ serve(async (req) => {
   }
 
   // Helper: post-response billing + metadata
-  async function finalize(controller: ReadableStreamDefaultController, firstMsg: string) {
+  async function finalize(controller: ReadableStreamDefaultController, firstMsg: string, assistantReply = "") {
     const cost = Math.max(
       1,
       Math.ceil((inputTokens / 1000) * rates.input + (outputTokens / 1000) * rates.output)
@@ -313,6 +357,36 @@ serve(async (req) => {
       }
     } catch (_) {}
 
+    // Auto-memory extraction (fire-and-forget; response already flushed)
+    if (assistantReply) {
+      (async () => {
+        try {
+          const extractRes = await anthropic.messages.create({
+            model: TITLE_MODEL,
+            max_tokens: 300,
+            messages: [{
+              role: "user",
+              content: `You are a memory extractor for an AI assistant. Extract NEW facts about the user from this exchange.
+
+Known facts: ${JSON.stringify(existingMemory)}
+
+User said: "${firstMsg.slice(0, 600)}"
+Assistant replied: "${assistantReply.slice(0, 600)}"
+
+Return a JSON object with only NEW or UPDATED fields from: name, occupation, company, location, preferences (string[]), projects (string[]), facts (string[]). Return {} if nothing new. JSON only, no explanation.`,
+            }],
+          });
+          const raw = ((extractRes.content[0] as any).text || "").trim();
+          const match = raw.match(/\{[\s\S]*\}/);
+          if (!match) return;
+          const incoming = JSON.parse(match[0]) as Partial<UserMemory>;
+          if (!incoming || !Object.keys(incoming).length) return;
+          const merged = mergeMemory(existingMemory, incoming);
+          await supaAdmin.from("profiles").update({ memory: merged }).eq("id", user.id);
+        } catch (_) {}
+      })();
+    }
+
     controller.close();
   }
 
@@ -344,7 +418,7 @@ serve(async (req) => {
                 .map((b) => (b as any).text)
                 .join("");
               controller.enqueue(encoder.encode(text));
-              await finalize(controller, message);
+              await finalize(controller, message, text);
               return;
             }
 
@@ -405,7 +479,7 @@ serve(async (req) => {
         inputTokens += finalMsg.usage.input_tokens;
         outputTokens += finalMsg.usage.output_tokens;
 
-        await finalize(controller, message);
+        await finalize(controller, message, fullText);
       } catch (e) {
         try {
           controller.enqueue(
