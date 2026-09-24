@@ -162,6 +162,28 @@
   .context-nudge:hover{background:rgba(0,212,255,.1)}
   .context-nudge strong{color:var(--cyan)}
 
+  /* ── Referral modal ── */
+  .ref-link-row{display:flex;gap:.5rem;margin-top:1rem}
+  .ref-link-input{flex:1;background:rgba(0,0,0,.4);border:1px solid var(--b2);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:.78rem;padding:.55rem .75rem;outline:none}
+  .ref-copy-btn{padding:.55rem 1rem;background:var(--cyan);color:#000;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-family:var(--font);font-size:.82rem;transition:opacity .15s;white-space:nowrap}
+  .ref-copy-btn:hover{opacity:.85}
+  .ref-copy-btn.copied{background:var(--green);color:#fff}
+
+  /* ── Tool call cards ── */
+  .tool-cards{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.5rem}
+  .tool-card{display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .75rem;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.18);border-radius:8px;font-size:.76rem;color:var(--t2);max-width:100%}
+  .tool-card-icon{font-size:.95rem;flex-shrink:0}
+  .tool-card-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .tool-card-label em{color:var(--cyan);font-style:normal}
+
+  /* ── Attachments ── */
+  .attach-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .55rem;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);border-radius:6px;font-size:.75rem;color:var(--cyan);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .attach-chip-x{background:none;border:none;color:var(--cyan);cursor:pointer;font-size:.9rem;line-height:1;padding:0 0 0 .25rem;opacity:.7;flex-shrink:0}
+  .attach-chip-x:hover{opacity:1}
+  #attachBtn{background:none;border:none;color:var(--t3);cursor:pointer;font-size:1.1rem;padding:.2rem .4rem;border-radius:6px;line-height:1;transition:color .15s;flex-shrink:0;align-self:flex-end;margin-bottom:.3rem}
+  #attachBtn:hover{color:var(--text)}
+  #attachChips{flex-wrap:wrap;gap:.4rem;padding:.5rem .6rem 0}
+
   /* ── Responsive ── */
   @media(max-width:640px){
     .sidebar{display:none;position:fixed;inset:0 auto 0 0;z-index:40;width:80vw;max-width:280px;box-shadow:4px 0 24px rgba(0,0,0,.5)}
@@ -656,10 +678,30 @@ I often need help with: client quotes, contract review, business Instagram posts
       }
 
       var reader=resp.body.getReader(), decoder=new TextDecoder();
-      var full='', raw='';
+      var full='', raw='', toolsDiv=null, toolsParsed=false;
+      /* Insert a tool-cards container above the bubble */
+      toolsDiv=document.createElement('div');
+      toolsDiv.className='tool-cards';
+      bubble.parentNode.insertBefore(toolsDiv, bubble);
+
       while(true){
         var chunk=await reader.read(); if(chunk.done) break;
         raw+=decoder.decode(chunk.value,{stream:true});
+
+        /* Parse \x01{tool_events}\x01 prefix exactly once */
+        if(!toolsParsed){
+          if(raw.charCodeAt(0)===1){
+            var endMark=raw.indexOf('\x01',1);
+            if(endMark===-1) continue; /* wait for full prefix */
+            try{
+              var evts=JSON.parse(raw.slice(1,endMark));
+              renderToolCards(toolsDiv,evts);
+            }catch(e){}
+            raw=raw.slice(endMark+1);
+          }
+          toolsParsed=true;
+        }
+
         var mi=raw.indexOf(USAGE_MARK);
         full=mi===-1?raw:raw.slice(0,mi);
         bubble.textContent=full; bubble.appendChild(cursor);
@@ -805,6 +847,155 @@ I often need help with: client quotes, contract review, business Instagram posts
       $('wmSave').textContent = 'Save context';
     }
   });
+
+  /* ── Referral ── */
+  var userReferralCode = null;
+
+  async function tryRedeemReferral(){
+    if(!session) return;
+    var ref;
+    try{ ref=localStorage.getItem('aethyro_ref'); }catch(e){ return; }
+    if(!ref) return;
+    try{ localStorage.removeItem('aethyro_ref'); }catch(e){}
+    try{
+      var r=await fetch(window.AETHYRO_FN_URL+'/redeem-referral',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+        body:JSON.stringify({code:ref})
+      });
+      if(r.ok){ showToast('Referral redeemed — 100 bonus credits added!','ok'); await refreshBalance(); }
+    }catch(e){}
+  }
+
+  async function loadReferralCode(){
+    if(!session) return;
+    try{
+      var r=await supabase.from('referral_codes').select('code').eq('user_id',session.user.id).single();
+      if(r.data&&r.data.code) userReferralCode=r.data.code;
+    }catch(e){}
+  }
+
+  function openReferralModal(){
+    var code=userReferralCode||'…';
+    $('refLinkInput').value='https://aethyro.com/?ref='+code;
+    $('referralModal').classList.add('show');
+  }
+
+  function closeReferralModal(){ $('referralModal').classList.remove('show'); }
+
+  $('referralBtn').addEventListener('click', openReferralModal);
+  $('refClose').addEventListener('click', closeReferralModal);
+  $('referralModal').addEventListener('click',function(e){ if(e.target===this) closeReferralModal(); });
+
+  $('refCopyBtn').addEventListener('click',function(){
+    var val=$('refLinkInput').value;
+    navigator.clipboard.writeText(val).then(function(){
+      $('refCopyBtn').textContent='Copied!'; $('refCopyBtn').classList.add('copied');
+      setTimeout(function(){ $('refCopyBtn').textContent='Copy link'; $('refCopyBtn').classList.remove('copied'); },2500);
+    }).catch(function(){ $('refLinkInput').select(); document.execCommand('copy'); });
+  });
+
+  /* ── Tool call card rendering ── */
+  function renderToolCards(container, events){
+    container.innerHTML='';
+    (events||[]).forEach(function(ev){
+      var card=document.createElement('div');
+      card.className='tool-card';
+      if(ev.tool==='web_search'){
+        var q=ev.input&&ev.input.query?ev.input.query:'';
+        card.innerHTML='<span class="tool-card-icon">🔍</span><span class="tool-card-label">Searched: <em>'+
+          q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+
+          '</em></span>';
+      } else {
+        card.innerHTML='<span class="tool-card-icon">🛠</span><span class="tool-card-label">'+ev.tool+'</span>';
+      }
+      container.appendChild(card);
+    });
+  }
+
+  /* ── File attachments ── */
+  var pendingAttachments=[];
+  var MAX_FILES=3, MAX_BYTES=5*1024*1024;
+
+  if($('attachBtn')){
+    $('attachBtn').addEventListener('click',function(){
+      if(!session){ showToast('Sign in to attach files','err'); return; }
+      $('fileInput').value=''; $('fileInput').click();
+    });
+  }
+
+  if($('fileInput')){
+    $('fileInput').addEventListener('change',async function(){
+      var files=Array.from(this.files);
+      for(var fi=0;fi<files.length;fi++){
+        var f=files[fi];
+        if(pendingAttachments.length>=MAX_FILES){ showToast('Max 3 attachments per message','err'); break; }
+        if(f.size>MAX_BYTES){ showToast(f.name+' exceeds the 5 MB limit','err'); continue; }
+        var att=await readFile(f);
+        if(att){ pendingAttachments.push(att); renderChips(); }
+      }
+    });
+  }
+
+  async function readFile(f){
+    var mt=f.type, name=f.name;
+    if(mt==='application/pdf') return readPdf(f,name);
+    if(mt.startsWith('image/')) return readImage(f,name,mt);
+    return readText(f,name);
+  }
+
+  function readText(f,name){
+    return new Promise(function(res){
+      var fr=new FileReader();
+      fr.onload=function(){ res({type:'text',filename:name,content:fr.result}); };
+      fr.onerror=function(){ showToast('Could not read '+name,'err'); res(null); };
+      fr.readAsText(f);
+    });
+  }
+
+  function readImage(f,name,mediaType){
+    return new Promise(function(res){
+      var fr=new FileReader();
+      fr.onload=function(){ var b64=fr.result.split(',')[1]; res({type:'image',filename:name,mediaType:mediaType,data:b64}); };
+      fr.onerror=function(){ showToast('Could not read '+name,'err'); res(null); };
+      fr.readAsDataURL(f);
+    });
+  }
+
+  async function readPdf(f,name){
+    try{
+      if(!window.pdfjsLib){
+        await new Promise(function(res,rej){
+          var s=document.createElement('script');
+          s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          s.onload=function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(); };
+          s.onerror=rej; document.head.appendChild(s);
+        });
+      }
+      var buf=await f.arrayBuffer();
+      var pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+      var text='';
+      for(var i=1;i<=pdf.numPages;i++){
+        var page=await pdf.getPage(i);
+        var tc=await page.getTextContent();
+        text+=tc.items.map(function(it){return it.str;}).join(' ')+'\n';
+      }
+      return {type:'text',filename:name,content:text.trim()};
+    }catch(e){ showToast('Could not parse PDF: '+name,'err'); return null; }
+  }
+
+  function renderChips(){
+    var c=$('attachChips');
+    c.innerHTML='';
+    c.style.display=pendingAttachments.length?'flex':'none';
+    pendingAttachments.forEach(function(att,i){
+      var chip=document.createElement('div'); chip.className='attach-chip';
+      var label=document.createElement('span'); label.textContent=att.filename; label.title=att.filename;
+      var x=document.createElement('button'); x.type='button'; x.className='attach-chip-x'; x.textContent='×';
+      x.addEventListener('click',function(){ pendingAttachments.splice(i,1); renderChips(); });
+      chip.appendChild(label); chip.appendChild(x); c.appendChild(chip);
+    });
+  }
 
   /* ── Credit modal ── */
   function openCreditModal(){ $('creditModal').classList.add('show'); }
