@@ -93,7 +93,7 @@ async function executeStep(
   stepDesc: string,
   stepContext: string,
   modelKey: string,
-): Promise<{ result: string; toolCalls: any[]; done: boolean }> {
+): Promise<{ result: string; toolCalls: any[]; done: boolean; inputTokens: number; outputTokens: number }> {
   const model = EXECUTOR_MODEL_MAP[modelKey] || EXECUTOR_MODEL_MAP.haiku;
   const messages: Anthropic.MessageParam[] = [{
     role: "user",
@@ -103,6 +103,8 @@ async function executeStep(
   let toolCalls: any[] = [];
   let result = "";
   let done = false;
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   for (let round = 0; round < STEP_MAX_TOOLS; round++) {
     const r = await anthropic.messages.create({
@@ -112,6 +114,9 @@ async function executeStep(
       tools: AGENT_TOOLS,
       tool_choice: { type: "auto" },
     });
+
+    inputTokens += r.usage.input_tokens;
+    outputTokens += r.usage.output_tokens;
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const blk of r.content) {
@@ -145,7 +150,7 @@ async function executeStep(
     );
   }
 
-  return { result, toolCalls, done };
+  return { result, toolCalls, done, inputTokens, outputTokens };
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -252,9 +257,11 @@ serve(async (req) => {
       .eq("task_id", taskId).eq("step_index", i);
 
     try {
-      const { result, toolCalls, done } = await executeStep(
+      const { result, toolCalls, done, inputTokens: si, outputTokens: so } = await executeStep(
         anthropic, goal, stepDesc, stepContext, modelKey
       );
+      totalInput += si;
+      totalOutput += so;
 
       stepContext += `\nStep ${i + 1} (${stepDesc}):\n${result}\n`;
 
