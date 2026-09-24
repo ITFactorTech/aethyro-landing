@@ -1251,6 +1251,55 @@ patterns are well established.</div>
   </div>
 </section>
 
+<!-- ── INTELLIGENCE FEATURES ── -->
+<section style="padding:6rem 1.5rem;background:var(--bg);border-top:1px solid var(--b1)" id="intelligence">
+  <div class="container">
+    <div style="text-align:center;margin-bottom:3rem">
+      <span class="sec-eyebrow">Intelligence layer</span>
+      <h2>Beyond chat.<br/><span class="grad-cyan">A full AI system.</span></h2>
+      <p class="sec-sub" style="margin:0 auto;text-align:center">Aethyro embeds memory, retrieval, agentic execution, and live integrations — not as add-ons, but as first-class primitives wired into every conversation.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem">
+      <div class="bento-card" style="background:var(--s1);border-color:rgba(0,212,255,.15)">
+        <div class="bento-icon">🧠</div>
+        <h3>Semantic Memory</h3>
+        <p>Every conversation is embedded with Voyage AI and stored in pgvector. Claude retrieves the most relevant past context automatically — no copy-paste, no re-explaining yourself.</p>
+        <div style="margin-top:1rem;font-family:var(--mono);font-size:.68rem;color:var(--cyan)">voyage-3-lite · 512-dim · HNSW index</div>
+      </div>
+      <div class="bento-card" style="background:var(--s1);border-color:rgba(255,77,0,.15)">
+        <div class="bento-icon">📚</div>
+        <h3>Document RAG</h3>
+        <p>Upload PDFs, markdown, or CSVs. Aethyro chunks, embeds, and retrieves the exact passages Claude needs — turning your files into a searchable knowledge base.</p>
+        <div style="margin-top:1rem;font-family:var(--mono);font-size:.68rem;color:var(--orange)">800-char chunks · cosine similarity · top-5 retrieval</div>
+      </div>
+      <div class="bento-card" style="background:var(--s1);border-color:rgba(139,92,246,.15)">
+        <div class="bento-icon">⚡</div>
+        <h3>Agentic Tasks</h3>
+        <p>Give Claude a goal. It plans up to 6 steps, searches the web, synthesizes information, and delivers a structured report — all autonomously, billed to your credit balance.</p>
+        <div style="margin-top:1rem;font-family:var(--mono);font-size:.68rem;color:#c4b5fd">up to 6 steps · web search · Haiku / Sonnet / Opus</div>
+      </div>
+      <div class="bento-card" style="background:var(--s1);border-color:rgba(34,197,94,.15)">
+        <div class="bento-icon">🔁</div>
+        <h3>Scheduled Routines</h3>
+        <p>Set a cron expression. Claude runs your prompt on a schedule — daily briefings, weekly summaries, auto-monitoring — and stores the results in your history.</p>
+        <div style="margin-top:1rem;font-family:var(--mono);font-size:.68rem;color:var(--green)">pg_cron · any model · results stored</div>
+      </div>
+      <div class="bento-card" style="background:var(--s1);border-color:rgba(245,158,11,.15)">
+        <div class="bento-icon">🔗</div>
+        <h3>GitHub &amp; Notion</h3>
+        <p>Connect your GitHub or Notion with a personal access token. Claude can list repos, read issues, search code, and browse your Notion pages — in-context, without copy-pasting.</p>
+        <div style="margin-top:1rem;font-family:var(--mono);font-size:.68rem;color:#fcd34d">PAT-based · read-only · zero data stored server-side</div>
+      </div>
+      <div class="bento-card" style="background:var(--s1);border-color:rgba(0,212,255,.1);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;min-height:200px">
+        <div style="font-size:2rem;margin-bottom:.85rem">🚀</div>
+        <h3>Try it now</h3>
+        <p style="margin-bottom:1.25rem">200 free credits on signup. No card required.</p>
+        <a href="/app/signup.html" class="btn btn-orange btn-sm">Start free →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── TESTIMONIALS ── -->
 <section class="testimonials-section">
   <div class="container" style="max-width:1000px">

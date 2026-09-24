@@ -250,7 +250,27 @@
   .intel-loading{text-align:center;color:var(--t3);font-size:.82rem;padding:1.5rem;font-family:var(--mono)}
   .intel-btn-row{display:flex;gap:.5rem;justify-content:flex-end}
   .intel-divider{border:none;border-top:1px solid var(--b1);margin:.9rem 0}
-  @media(max-width:640px){.intel-panel{width:100vw}}
+  @media(max-width:640px){
+    .intel-panel{width:100vw;top:auto;bottom:0;height:85vh;border-left:none;border-top:1px solid var(--b1);border-radius:16px 16px 0 0;transform:translateY(100%)}
+    .intel-panel.open{transform:translateY(0)}
+    .intel-drag-handle{display:block!important}
+  }
+
+  /* ── Onboarding modal ── */
+  .onboard-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);align-items:center;justify-content:center;z-index:100;padding:1rem}
+  .onboard-backdrop.show{display:flex}
+  .onboard-modal{background:var(--s2);border:1px solid var(--b2);border-radius:18px;padding:2rem;max-width:420px;width:100%;text-align:center}
+  .onboard-steps{display:flex;justify-content:center;gap:.5rem;margin-bottom:1.5rem}
+  .onboard-step-dot{width:8px;height:8px;border-radius:50%;background:var(--b2);transition:background .2s}
+  .onboard-step-dot.active{background:var(--orange)}
+  .onboard-icon{font-size:2.5rem;margin-bottom:.75rem}
+  .onboard-modal h3{font-size:1.1rem;font-weight:700;margin-bottom:.4rem}
+  .onboard-modal p{font-size:.86rem;color:var(--t2);line-height:1.6;margin-bottom:1.5rem}
+  .onboard-btn{display:block;width:100%;padding:.7rem;background:var(--orange);color:#fff;font-weight:700;border:none;border-radius:10px;font-family:var(--font);font-size:.9rem;cursor:pointer;transition:background .15s}
+  .onboard-btn:hover{background:var(--orange2)}
+  .onboard-skip{margin-top:.75rem;font-size:.78rem;color:var(--t3);cursor:pointer;background:none;border:none;font-family:var(--font)}
+  .onboard-skip:hover{color:var(--text)}
+  .intel-drag-handle{display:none;width:36px;height:4px;background:var(--b3);border-radius:2px;margin:8px auto 0}
 </style>
 </head>
 <body>
@@ -372,6 +392,7 @@ I often need help with: client quotes, contract review, business Instagram posts
 
 <!-- Intelligence Panel -->
 <div class="intel-panel" id="intelPanel">
+  <div class="intel-drag-handle"></div>
   <div class="intel-header">
     <span class="intel-header-title">⚡ Intelligence</span>
     <button class="intel-close" id="intelClose">×</button>
@@ -492,6 +513,22 @@ I often need help with: client quotes, contract review, business Instagram posts
   </div>
 </div>
 <div class="intel-overlay" id="intelOverlay"></div>
+
+<!-- Onboarding modal -->
+<div class="onboard-backdrop" id="onboardBackdrop">
+  <div class="onboard-modal">
+    <div class="onboard-steps" id="onboardDots">
+      <div class="onboard-step-dot active"></div>
+      <div class="onboard-step-dot"></div>
+      <div class="onboard-step-dot"></div>
+    </div>
+    <div class="onboard-icon" id="onboardIcon">👋</div>
+    <h3 id="onboardTitle">Welcome to Aethyro</h3>
+    <p id="onboardBody">You're powered by Claude Opus 5 — the world's most capable AI. Start by typing any question below.</p>
+    <button class="onboard-btn" id="onboardNext">Next →</button>
+    <button class="onboard-skip" id="onboardSkip">Skip intro</button>
+  </div>
+</div>
 
 <script src="./vendor/supabase.js"></script>
 <script src="./config.js"></script>
@@ -1260,6 +1297,40 @@ I often need help with: client quotes, contract review, business Instagram posts
   $('intelClose').addEventListener('click', closeIntelPanel);
   $('intelOverlay').addEventListener('click', closeIntelPanel);
 
+  /* ── Onboarding ── */
+  (function(){
+    var ONBOARD_KEY='aethyro_onboarded_v1';
+    var steps=[
+      {icon:'👋',title:'Welcome to Aethyro',body:'You\'re powered by Claude Opus 5 — the world\'s most capable AI. Start by typing any question below.'},
+      {icon:'⚡',title:'Intelligence Panel',body:'Tap "Intelligence" in the sidebar to run agentic tasks, upload documents to your knowledge base, set up scheduled routines, and connect GitHub or Notion.'},
+      {icon:'🧠',title:'Semantic Memory',body:'Aethyro remembers context across conversations using vector embeddings — no need to re-explain yourself each time you open a chat.'},
+    ];
+    var step=0;
+    function showStep(i){
+      var s=steps[i];
+      $('onboardIcon').textContent=s.icon;
+      $('onboardTitle').textContent=s.title;
+      $('onboardBody').textContent=s.body;
+      var dots=$('onboardDots').children;
+      for(var j=0;j<dots.length;j++) dots[j].className='onboard-step-dot'+(j===i?' active':'');
+      $('onboardNext').textContent=i===steps.length-1?'Get started →':'Next →';
+    }
+    function dismissOnboarding(){
+      $('onboardBackdrop').classList.remove('show');
+      try{localStorage.setItem(ONBOARD_KEY,'1');}catch(e){}
+    }
+    $('onboardNext').addEventListener('click',function(){
+      if(step<steps.length-1){ step++; showStep(step); }
+      else dismissOnboarding();
+    });
+    $('onboardSkip').addEventListener('click',dismissOnboarding);
+    try{
+      if(!localStorage.getItem(ONBOARD_KEY)){
+        setTimeout(function(){ $('onboardBackdrop').classList.add('show'); },600);
+      }
+    }catch(e){}
+  })();
+
   document.querySelectorAll('.intel-tab').forEach(function(tab){
     tab.addEventListener('click',function(){
       document.querySelectorAll('.intel-tab').forEach(function(t){ t.classList.remove('active'); });
@@ -1287,7 +1358,16 @@ I often need help with: client quotes, contract review, business Instagram posts
           body:JSON.stringify({goal:goal,model:$('taskModel').value})
         });
         var d=await r.json();
-        if(!r.ok){ showToast(d.error||'Task failed','err'); return; }
+        if(!r.ok){
+          var msg=d.error||'Task failed';
+          showToast(msg,'err');
+          if(msg.toLowerCase().indexOf('credit')!==-1||msg.toLowerCase().indexOf('insufficient')!==-1){
+            var lb=$('lowBalance'); lb.style.display='';
+            lb.innerHTML='💳 '+msg+' <a href="#" class="task-buy-link" style="color:var(--orange);font-weight:700">Buy credits →</a>';
+            lb.querySelector('.task-buy-link').addEventListener('click',function(e){e.preventDefault();openCreditModal();});
+          }
+          return;
+        }
         $('taskGoal').value='';
         showToast('Task completed — '+d.credits_used+' cr used','ok');
         if(typeof d.balance==='number') setBalance(d.balance);
@@ -1525,7 +1605,10 @@ I often need help with: client quotes, contract review, business Instagram posts
       ntBadge.className='intel-conn-badge '+(notion?'connected':'disconnected');
       ntBadge.textContent=notion?('✓ '+(notion.metadata&&notion.metadata.name||'Connected')):'Not connected';
       $('ntDisconnect').style.display=notion?'':'none';
-    }catch(e){}
+    }catch(e){
+      var ghBadge=$('ghStatus'); if(ghBadge){ ghBadge.className='intel-conn-badge disconnected'; ghBadge.textContent='Error loading'; }
+      var ntBadge=$('ntStatus'); if(ntBadge){ ntBadge.className='intel-conn-badge disconnected'; ntBadge.textContent='Error loading'; }
+    }
   }
 
   /* ── Credit modal ── */
