@@ -1422,8 +1422,13 @@ I often need help with: client quotes, contract review, business Instagram posts
           showToast(msg,'err');
           if(msg.toLowerCase().indexOf('credit')!==-1||msg.toLowerCase().indexOf('insufficient')!==-1){
             var lb=$('lowBalance'); lb.style.display='';
-            lb.innerHTML='💳 '+msg+' <a href="#" class="task-buy-link" style="color:var(--orange);font-weight:700">Buy credits →</a>';
-            lb.querySelector('.task-buy-link').addEventListener('click',function(e){e.preventDefault();openCreditModal();});
+            lb.textContent='';
+            lb.appendChild(document.createTextNode('💳 '+msg+' '));
+            var lba=document.createElement('a');
+            lba.href='#'; lba.className='task-buy-link'; lba.style.cssText='color:var(--orange);font-weight:700';
+            lba.textContent='Buy credits →';
+            lba.addEventListener('click',function(e){e.preventDefault();openCreditModal();});
+            lb.appendChild(lba);
           }
           return;
         }
