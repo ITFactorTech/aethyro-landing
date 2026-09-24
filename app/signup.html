@@ -54,7 +54,7 @@
 <script>
 (function(){
   var msg=document.getElementById('msg'), btn=document.getElementById('submit'), form=document.getElementById('form');
-  function show(t,kind){ msg.textContent=t; msg.className='msg show '+kind; }
+  function show(t,kind){ msg.textContent=t; msg.className='msg show '+(kind||'err'); }
   if(!window.AETHYRO){ show(window.AETHYRO_LOADERR||'app failed to load','err'); return; }
   var supabase=window.AETHYRO.supabase;
   var nextParam = new URLSearchParams(location.search).get('next');
@@ -91,7 +91,7 @@
       if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'email', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); gtag('event','begin_checkout',{currency:'USD',value:0}); }
       if(r.data && r.data.session){ location.href=nextUrl; return; }
       show('Account created — check your email to confirm, then log in to claim your 200 free credits.','ok'); btn.textContent='Check your email ✓';
-    }catch(err){ show((err&&err.message)||String(err),'err'); btn.disabled=false; btn.textContent='Create account & start trial →'; }
+    }catch(err){ show((err&&err.message)||String(err),'err'); btn.disabled=false; btn.textContent='Create account →'; }
   });
 })();
 </script>

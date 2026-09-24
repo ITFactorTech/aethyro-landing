@@ -50,9 +50,9 @@
   (async function(){
     // Supabase processes the #access_token fragment automatically on getSession()
     var r=await supabase.auth.getSession();
+    var bar=document.getElementById('bar');
     if(r.data && r.data.session){
       // Confirmed and signed in — start countdown
-      var bar=document.getElementById('bar');
       requestAnimationFrame(function(){ bar.style.width='100%'; });
       setTimeout(redirect, 3100);
       return;
@@ -63,7 +63,6 @@
     if(code){
       var r2=await supabase.auth.exchangeCodeForSession(code);
       if(!r2.error && r2.data && r2.data.session){
-        var bar=document.getElementById('bar');
         requestAnimationFrame(function(){ bar.style.width='100%'; });
         setTimeout(redirect, 3100);
         return;

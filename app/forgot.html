@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="robots" content="noindex, nofollow"/>
-<title>Reset password — Aethyro</title>
+<title>Forgot password — Aethyro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="./style.css"/>
@@ -30,7 +30,7 @@
 <script>
 (function(){
   var msg=document.getElementById('msg'), btn=document.getElementById('submit'), form=document.getElementById('form');
-  function show(t,kind){ msg.textContent=t; msg.className='msg show '+(kind||'ok'); }
+  function show(t,kind){ msg.textContent=t; msg.className='msg show '+(kind||'err'); }
   if(!window.AETHYRO){ show(window.AETHYRO_LOADERR||'App failed to load.','err'); return; }
   var supabase=window.AETHYRO.supabase;
   form.addEventListener('submit', async function(e){

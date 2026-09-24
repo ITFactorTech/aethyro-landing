@@ -519,7 +519,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     });
     var url=new URL(location.href);
     if(id) url.searchParams.set('c',id); else url.searchParams.delete('c');
-    history.pushState(null,'',url);
+    window.history.pushState(null,'',url);
   }
 
   /* ── Load a saved conversation ── */

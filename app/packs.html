@@ -67,7 +67,7 @@
       var price=p.is_free?'Free':'$'+(p.price_cents/100).toFixed(0);
       var isOwned=owned[p.pack_key]||p.is_free;
       html+='<div class="pk"><div class="h"><div><div class="t">'+esc(p.title)+'</div><div class="s">'+esc(p.summary||'')+'</div></div><div class="price">'+price+'</div></div><div class="act">';
-      if(isOwned){ html+='<a class="btn btn-ghost" style="width:auto;margin:0;padding:.5rem 1rem" href="?p='+encodeURIComponent(p.pack_key)+'">'+(p.is_free?'Read':'Read')+' →</a>'; if(owned[p.pack_key]&&!p.is_free) html+='<span class="owned">owned</span>'; }
+      if(isOwned){ html+='<a class="btn btn-ghost" style="width:auto;margin:0;padding:.5rem 1rem" href="?p='+encodeURIComponent(p.pack_key)+'">Read →</a>'; if(owned[p.pack_key]&&!p.is_free) html+='<span class="owned">owned</span>'; }
       else { html+='<button class="btn" style="width:auto;margin:0;padding:.5rem 1.1rem" data-buy="'+p.pack_key+'">Buy '+price+' →</button>'; }
       html+='</div></div>';
     });

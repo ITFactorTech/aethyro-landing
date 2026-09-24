@@ -70,7 +70,7 @@
       if(!ses.data||!ses.data.session){ location.replace('./login.html'); return; }
       me=ses.data.session.user;
       myname=(me.email||'member').split('@')[0];
-      try{ var pr=await sb.from('profiles').select('full_name').limit(1); if(pr.data&&pr.data[0]&&pr.data[0].full_name) myname=pr.data[0].full_name; }catch(e){}
+      try{ var pr=await sb.from('profiles').select('full_name').eq('id',me.id).single(); if(pr.data&&pr.data.full_name) myname=pr.data.full_name; }catch(e){}
       var params=new URLSearchParams(location.search);
       if(params.get('t')) await openThread(params.get('t')); else await listThreads('all');
       show();
@@ -130,7 +130,7 @@
   }
   function bindActs(){
     view.querySelectorAll('[data-report]').forEach(function(el){ el.onclick=async function(){ var p=el.dataset.report.split(':'); await sb.from('forum_reports').insert({user_id:me.id,target_kind:p[0],target_id:p[1],reason:'flagged'}); el.textContent='reported'; el.style.color='var(--green)'; }; });
-    view.querySelectorAll('[data-del]').forEach(function(el){ el.onclick=async function(){ var p=el.dataset.del.split(':'); if(!confirm('Delete this?'))return; await sb.from(p[0]==='thread'?'forum_threads':'forum_posts').delete().eq('id',p[1]); location.href = p[0]==='thread' ? '/app/community.html' : location.href; location.reload(); }; });
+    view.querySelectorAll('[data-del]').forEach(function(el){ el.onclick=async function(){ var p=el.dataset.del.split(':'); if(!confirm('Delete this?'))return; await sb.from(p[0]==='thread'?'forum_threads':'forum_posts').delete().eq('id',p[1]); location.href = p[0]==='thread' ? '/app/community.html' : location.href; }; });
   }
   async function reply(threadId){
     var body=$('rbody').value.trim(), m=$('rmsg');
