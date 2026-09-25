@@ -1816,6 +1816,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     });
   }
 
+  var taskPollTimer=null;
   async function loadTasks(){
     var list=$('taskList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
@@ -1877,7 +1878,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       }
       card.appendChild(actions); list.appendChild(card);
     });
-    if(hasRunning) setTimeout(loadTasks,5000);
+    if(hasRunning){ clearTimeout(taskPollTimer); taskPollTimer=setTimeout(loadTasks,5000); }
   }
 
   async function uploadDocument(f){
@@ -2021,6 +2022,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         body:JSON.stringify({action:'list_integrations'})
       });
       var d=await r.json();
+      if(!r.ok) throw new Error(d.error||'Failed to load integrations');
       var integrations=d.integrations||[];
       var github=integrations.find(function(i){ return i.provider==='github'; });
       var notion=integrations.find(function(i){ return i.provider==='notion'; });
