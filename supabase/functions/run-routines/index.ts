@@ -98,11 +98,15 @@ serve(async (req) => {
   } catch { /* no body or non-JSON from pg_cron — fine */ }
 
   // Fetch due routines
+  // When running a specific routine on demand, skip the schedule filter.
   let query = supaAdmin
     .from("user_routines")
     .select("*")
-    .eq("enabled", true)
-    .or(`next_run_at.is.null,next_run_at.lte.${new Date().toISOString()}`);
+    .eq("enabled", true);
+
+  if (!singleRoutineId) {
+    query = query.or(`next_run_at.is.null,next_run_at.lte.${new Date().toISOString()}`);
+  }
 
   if (userFilter)      query = query.eq("user_id", userFilter);
   if (singleRoutineId) query = query.eq("id", singleRoutineId);
