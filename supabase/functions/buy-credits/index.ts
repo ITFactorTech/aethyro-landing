@@ -64,6 +64,7 @@ serve(async (req) => {
       customer: customerId,
       mode: "payment",
       line_items: [{ price: selected.priceId, quantity: 1 }],
+      allow_promotion_codes: true,
       success_url: "https://aethyro.com/app/chat.html?purchase=success",
       cancel_url: "https://aethyro.com/app/chat.html?purchase=cancelled",
       // stripe-webhook requires all three to credit the account.
