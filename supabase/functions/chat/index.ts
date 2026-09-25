@@ -1,4 +1,4 @@
-// chat v26 — extended thinking, live artifact rendering, voice, export, credit ticker
+// chat v28 — voyage-4-lite embeddings (1024-dim), all v26 features retained
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -16,7 +16,7 @@ const TAVILY_API_KEY    = Deno.env.get("TAVILY_API_KEY");
 const VOYAGE_API_KEY    = Deno.env.get("VOYAGE_API_KEY");
 
 const TITLE_MODEL         = "claude-haiku-4-5-20251001";
-const VOYAGE_MODEL        = "voyage-3-lite";
+const VOYAGE_MODEL        = "voyage-4-lite";
 const MAX_TOKENS          = 4096;
 const TITLE_TOKENS        = 80;
 const LOW_CREDIT_THRESHOLD = 30;

@@ -1,4 +1,4 @@
-// embed-content v1 — Voyage AI embedding service
+// embed-content v2 — voyage-4-lite (1024-dim), chunking + memory storage
 // Stores memory turn embeddings and document-chunk embeddings in pgvector.
 // Called fire-and-forget from chat (memory) and from the frontend (doc upload).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -14,7 +14,7 @@ const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const VOYAGE_API_KEY    = Deno.env.get("VOYAGE_API_KEY");
 
-const VOYAGE_MODEL = "voyage-3-lite"; // 512-dim embeddings
+const VOYAGE_MODEL = "voyage-4-lite"; // 1024-dim embeddings
 const CHUNK_SIZE   = 800;             // characters per chunk
 const CHUNK_OVERLAP = 100;
 
