@@ -1,4 +1,4 @@
-// run-routines v1 — Scheduled agent routine executor
+// run-routines v2 — Scheduled agent routine executor
 // Invoked by pg_cron every 15 minutes (or manually from the dashboard/frontend).
 // Queries user_routines where enabled=true and next_run_at <= now(),
 // runs each routine with Claude, stores result, advances next_run_at.
@@ -11,8 +11,8 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
@@ -28,12 +28,11 @@ const CREDIT_RATES: Record<string, { input: number; output: number }> = {
 };
 
 // ── cron-expression → next Date ──────────────────────────────────────────────
-// Minimal cron parser: minute hour dom month dow
+// Minimal 5-field cron parser: minute hour dom month dow
 // Returns next firing time at least 1 minute from now.
 function nextCronDate(expr: string, from: Date = new Date()): Date {
   const parts = expr.trim().split(/\s+/);
   if (parts.length !== 5) {
-    // Default: 1 hour from now
     return new Date(from.getTime() + 3_600_000);
   }
   const [minPart, hourPart, domPart, monPart, dowPart] = parts;
@@ -50,10 +49,9 @@ function nextCronDate(expr: string, from: Date = new Date()): Date {
     });
   }
 
-  const candidate = new Date(from.getTime() + 60_000); // at least 1 min from now
+  const candidate = new Date(from.getTime() + 60_000);
   candidate.setSeconds(0, 0);
 
-  // Try for up to 366 days (1 year) to find the next match
   for (let m = 0; m < 525_960; m++) {
     if (
       matches(candidate.getUTCMinutes(), minPart) &&
@@ -74,14 +72,15 @@ function nextCronDate(expr: string, from: Date = new Date()): Date {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method !== "POST")
+    return new Response("Method Not Allowed", { status: 405, headers: CORS });
 
-  // Accept both service-role (from pg_cron) and user JWT (from frontend trigger)
   const authHeader = req.headers.get("Authorization") || "";
   const jwt = authHeader.replace(/^Bearer\s+/, "");
 
   const supaAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // If user JWT: only run that user's due routines
+  // If user JWT (not the service-role key): only run that user's due routines
   let userFilter: string | null = null;
   if (jwt && jwt !== SERVICE_ROLE_KEY) {
     const supaUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -95,8 +94,8 @@ serve(async (req) => {
   let singleRoutineId: string | null = null;
   try {
     const body = await req.json();
-    singleRoutineId = body.routine_id || null;
-  } catch {}
+    singleRoutineId = body?.routine_id || null;
+  } catch { /* no body or non-JSON from pg_cron — fine */ }
 
   // Fetch due routines
   let query = supaAdmin
@@ -105,7 +104,7 @@ serve(async (req) => {
     .eq("enabled", true)
     .or(`next_run_at.is.null,next_run_at.lte.${new Date().toISOString()}`);
 
-  if (userFilter) query = query.eq("user_id", userFilter);
+  if (userFilter)      query = query.eq("user_id", userFilter);
   if (singleRoutineId) query = query.eq("id", singleRoutineId);
 
   const { data: routines, error } = await query;
@@ -124,15 +123,16 @@ serve(async (req) => {
     const rates = CREDIT_RATES[modelKey];
 
     try {
-      // Credit check
-      const { data: balance } = await supaAdmin.rpc("get_credit_balance", {
+      // Credit check — treat null balance (new user, no ledger rows) as 0
+      const { data: rawBalance } = await supaAdmin.rpc("get_credit_balance", {
         p_user_id: routine.user_id,
       });
-      if (typeof balance === "number" && balance <= 0) {
+      const balance = typeof rawBalance === "number" ? rawBalance : 0;
+      if (balance <= 0) {
         await supaAdmin.from("user_routines").update({
-          last_run_at: new Date().toISOString(),
-          next_run_at: nextCronDate(routine.schedule).toISOString(),
-          last_result: "⚠️ Skipped — no credits.",
+          last_run_at:  new Date().toISOString(),
+          next_run_at:  nextCronDate(routine.schedule).toISOString(),
+          last_result:  "⚠️ Skipped — no credits.",
         }).eq("id", routine.id);
         results.push({ id: routine.id, name: routine.name, status: "skipped_no_credits" });
         continue;
@@ -146,28 +146,27 @@ serve(async (req) => {
         messages: [{ role: "user", content: routine.prompt }],
       });
 
-      const result = msg.content.find(b => b.type === "text") as any;
-      const resultText = result?.text || "Routine completed.";
+      const resultBlock = msg.content.find(b => b.type === "text") as any;
+      const resultText = resultBlock?.text || "Routine completed.";
 
       // Bill credits
       const cost = Math.max(
         1,
         Math.ceil(
-          (msg.usage.input_tokens / 1000) * rates.input +
-          (msg.usage.output_tokens / 1000) * rates.output
-        )
+          (msg.usage.input_tokens  / 1000) * rates.input +
+          (msg.usage.output_tokens / 1000) * rates.output,
+        ),
       );
       await supaAdmin.from("credit_ledger").insert({
         user_id: routine.user_id,
-        delta: -cost,
-        reason: "routine",
+        delta:   -cost,
+        reason:  "routine",
       });
 
-      // Update routine
-      const nextRun = nextCronDate(routine.schedule);
+      // Advance routine schedule
       await supaAdmin.from("user_routines").update({
         last_run_at: new Date().toISOString(),
-        next_run_at: nextRun.toISOString(),
+        next_run_at: nextCronDate(routine.schedule).toISOString(),
         last_result: resultText.slice(0, 10000),
       }).eq("id", routine.id);
 
