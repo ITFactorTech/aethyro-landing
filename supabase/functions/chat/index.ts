@@ -1,4 +1,4 @@
-// chat v25 — semantic memory retrieval, document RAG, live connector tools
+// chat v26 — extended thinking, live artifact rendering, voice, export, credit ticker
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -36,6 +36,9 @@ const CREDIT_RATES: Record<string, { input: number; output: number }> = {
 
 const TOOL_MARK  = "\x01";
 const USAGE_MARK = "\x00";
+const THINK_MARK = "\x02";
+const THINKING_BUDGET = 3000;
+const MAX_TOKENS_THINKING = 8192;
 
 // ── Voyage AI embed (single text) ─────────────────────────────────────────────
 
@@ -622,18 +625,31 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
 
         emitToolPrefix(controller);
 
+        const supportsThinking = MODEL === MODEL_MAP.sonnet || MODEL === MODEL_MAP.opus;
         const finalStream = anthropic.messages.stream({
           model: MODEL,
-          max_tokens: MAX_TOKENS,
+          max_tokens: supportsThinking ? MAX_TOKENS_THINKING : MAX_TOKENS,
           system: systemPrompt,
           messages,
-        });
+          ...(supportsThinking ? { thinking: { type: "enabled", budget_tokens: THINKING_BUDGET } } : {}),
+        } as any);
 
         let fullText = "";
+        let thinkingText = "";
+        let thinkingEmitted = false;
+
         for await (const chunk of finalStream) {
-          if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
-            controller.enqueue(encoder.encode(chunk.delta.text));
-            fullText += chunk.delta.text;
+          if (chunk.type === "content_block_delta") {
+            if (chunk.delta.type === "thinking_delta") {
+              thinkingText += chunk.delta.thinking;
+            } else if (chunk.delta.type === "text_delta") {
+              if (!thinkingEmitted && thinkingText) {
+                controller.enqueue(encoder.encode(THINK_MARK + thinkingText + THINK_MARK));
+                thinkingEmitted = true;
+              }
+              controller.enqueue(encoder.encode(chunk.delta.text));
+              fullText += chunk.delta.text;
+            }
           }
         }
 

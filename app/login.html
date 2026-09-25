@@ -15,6 +15,7 @@
 .btn-oauth:hover{background:rgba(255,255,255,.09)}
 .btn-magic{background:transparent;color:var(--t2);border:1px solid var(--b2);box-shadow:none;gap:.5rem;margin-top:0;font-size:.88rem}
 .btn-magic:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.msg.show.warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#fcd34d}
 </style>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
   <!-- Google tag (gtag.js) -->
@@ -81,6 +82,25 @@
     magicBtn.textContent='Link sent ✓';
   });
 
+  async function sha1Hex(text){
+    var buf=await crypto.subtle.digest('SHA-1',new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0');}).join('').toUpperCase();
+  }
+  async function isPasswordLeaked(password){
+    try{
+      var hash=await sha1Hex(password);
+      var prefix=hash.slice(0,5), suffix=hash.slice(5);
+      var res=await fetch('https://api.pwnedpasswords.com/range/'+prefix,{headers:{'Add-Padding':'true'}});
+      if(!res.ok) return false;
+      var lines=(await res.text()).split('\r\n');
+      for(var i=0;i<lines.length;i++){
+        var parts=lines[i].split(':');
+        if(parts[0]===suffix && parseInt(parts[1],10)>0) return true;
+      }
+      return false;
+    }catch(e){ return false; }
+  }
+
   form.addEventListener('submit', async function(e){
     e.preventDefault(); btn.disabled=true; btn.textContent='Logging in…'; msg.className='msg';
     var email=document.getElementById('email').value.trim();
@@ -89,6 +109,13 @@
       var r=await supabase.auth.signInWithPassword({ email:email, password:password });
       if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Log in →'; return; }
       if(typeof gtag!=='undefined'){ gtag('event','login',{method:'email', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); }
+      try{
+        var leaked=await isPasswordLeaked(password);
+        if(leaked){
+          show('Your password appeared in a known data breach — consider changing it after logging in.','warn');
+          await new Promise(function(resolve){ setTimeout(resolve, 3000); });
+        }
+      }catch(e){}
       location.href=nextUrl;
     }catch(err){ show((err&&err.message)||String(err),'err'); btn.disabled=false; btn.textContent='Log in →'; }
   });

@@ -61,6 +61,7 @@
   .chat-top{display:flex;align-items:center;gap:.6rem;padding:.65rem 1.1rem;border-bottom:1px solid var(--b1);flex-wrap:wrap}
   .chat-title{font-size:.9rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
   .balance-pill{margin-left:auto;display:flex;align-items:center;gap:.4rem;padding:.3rem .65rem;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);border-radius:100px;font-family:var(--mono);font-size:.74rem;color:var(--cyan)}
+  .balance-pill.balance-deducting{background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.4);color:#fcd34d;transition:background .2s,border-color .2s,color .2s}
   .top-link{font-size:.8rem;color:var(--t2);text-decoration:none;padding:.35rem .65rem;border-radius:8px}
   .top-link:hover{color:var(--text);background:rgba(255,255,255,.05);text-decoration:none}
   .cloud-note{font-size:.66rem;color:var(--t3);font-family:var(--mono);text-align:center;padding:.4rem 1rem;border-bottom:1px solid var(--b1)}
@@ -138,6 +139,11 @@
   .btn-copy-code{background:none;border:1px solid var(--b3);border-radius:5px;color:var(--t2);font-family:var(--mono);font-size:.67rem;cursor:pointer;padding:.2rem .55rem;transition:all .15s}
   .btn-copy-code:hover{color:var(--text);border-color:var(--orange)}
   .btn-copy-code.copied{color:var(--green);border-color:var(--green)}
+  .btn-run-code{background:none;border:1px solid rgba(0,212,255,.35);border-radius:5px;color:var(--cyan);font-family:var(--mono);font-size:.67rem;cursor:pointer;padding:.2rem .55rem;transition:all .15s;margin-right:.3rem}
+  .btn-run-code:hover{background:rgba(0,212,255,.1)}
+  .btn-run-code.running{opacity:.6;cursor:default}
+  .code-run-output{border-top:1px solid var(--b2);background:#fff;border-radius:0 0 8px 8px;overflow:hidden}
+  .code-run-output iframe{width:100%;border:none;display:block;min-height:120px}
   .code-block pre{margin:0;padding:.75rem .85rem;overflow-x:auto}
   .code-block pre code{background:none;padding:0;font-size:.8rem;white-space:pre}
   /* ── Message copy button ── */
@@ -193,6 +199,11 @@
   .ref-copy-btn.copied{background:var(--green);color:#fff}
 
   /* ── Tool call cards ── */
+  .reasoning-panel{margin-bottom:.6rem;border:1px solid var(--b2);border-radius:8px;overflow:hidden}
+  .reasoning-panel summary{cursor:pointer;list-style:none;padding:.45rem .75rem;background:rgba(139,92,246,.08);color:#a78bfa;font-size:.76rem;font-weight:600;display:flex;align-items:center;gap:.4rem;user-select:none}
+  .reasoning-panel summary::before{content:'▶';font-size:.6rem;transition:transform .2s}
+  .reasoning-panel[open] summary::before{transform:rotate(90deg)}
+  .reasoning-body{padding:.75rem;font-family:var(--mono);font-size:.73rem;color:var(--t2);white-space:pre-wrap;line-height:1.6;max-height:320px;overflow-y:auto;background:rgba(139,92,246,.04)}
   .tool-cards{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.5rem}
   .tool-card{display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .75rem;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.18);border-radius:8px;font-size:.76rem;color:var(--t2);max-width:100%}
   .tool-card-icon{font-size:.95rem;flex-shrink:0}
@@ -407,6 +418,7 @@
       <span class="chat-title" id="chatTitle"></span>
       <span class="balance-pill" id="balancePill" style="display:none">● <span id="balanceVal">—</span> credits</span>
       <span class="balance-pill trial-badge" id="trialBadge" style="display:none">● Free preview</span>
+      <button class="top-link" id="exportBtn" title="Export chat as Markdown" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">↓ Export</button>
       <button class="top-link" id="buyBtn" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">Buy more</button>
       <a href="./signup.html?next=chat" class="top-link signup-link" id="signupLink" style="display:none">Sign up free →</a>
     </div>
@@ -446,6 +458,7 @@
       <form class="composer" id="composer">
         <button type="button" id="attachBtn" title="Attach file (txt, md, csv, pdf, image)">📎</button>
         <input type="file" id="fileInput" accept=".txt,.md,.csv,.pdf,.png,.jpg,.jpeg,.webp,.gif" multiple style="display:none"/>
+        <button type="button" id="voiceBtn" title="Voice input" style="display:none">🎙</button>
         <textarea id="input" placeholder="Message Aethyro…" rows="1" required></textarea>
         <button type="submit" id="sendBtn">Send</button>
       </form>
@@ -662,6 +675,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         <button class="intel-clear-all" id="clearMemsBtn">Clear all</button>
       </div>
       <p style="font-size:.78rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">The last few turns embedded into semantic memory — retrieved to give Claude longer context.</p>
+      <input id="memorySearch" type="search" placeholder="Search memories…" style="width:100%;box-sizing:border-box;padding:.4rem .6rem;background:rgba(255,255,255,.05);border:1px solid var(--b2);border-radius:6px;color:var(--text);font-size:.78rem;margin-bottom:.6rem;outline:none"/>
       <div id="memoryList"><p class="intel-loading">Loading…</p></div>
     </div>
 
@@ -705,7 +719,10 @@ I often need help with: client quotes, contract review, business Instagram posts
       } else {
         highlighted = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       }
-      return '<div class="code-block"><div class="code-header"><span class="code-lang">'+(langStr||'code')+'</span><button class="btn-copy-code" title="Copy code">Copy</button></div><pre><code class="hljs language-'+langStr+'">'+highlighted+'</code></pre></div>';
+      var isRunnable=/^(html|javascript|js|css)$/i.test(langStr);
+      var runBtn=isRunnable?'<button class="btn-run-code" title="Run code">▶ Run</button>':'';
+      var runOut=isRunnable?'<div class="code-run-output" style="display:none"></div>':'';
+      return '<div class="code-block"><div class="code-header"><span class="code-lang">'+(langStr||'code')+'</span>'+runBtn+'<button class="btn-copy-code" title="Copy code">Copy</button></div><pre><code class="hljs language-'+langStr+'">'+highlighted+'</code></pre>'+runOut+'</div>';
     };
     marked.use({ renderer: renderer, breaks: true, gfm: true });
   })();
@@ -727,6 +744,7 @@ I often need help with: client quotes, contract review, business Instagram posts
   var TRIAL_URL=window.AETHYRO_FN_URL+'/trial-chat';
   var currentModel=(function(){ var m=localStorage.getItem('aethyro_model'); return ['haiku','sonnet','opus'].includes(m)?m:'opus'; })();
   var USAGE_MARK='\u0000';
+  var THINK_MARK='\u0002';
 
   function track(name,params){ if(typeof gtag!=='undefined') gtag('event',name,params||{}); }
 
@@ -767,6 +785,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     $('sidebarToggle').style.display='';
     $('balancePill').style.display='flex';
     $('buyBtn').style.display='';
+    $('exportBtn').style.display='';
     initModelBar();
     await refreshBalance();
     await loadConversationList();
@@ -823,9 +842,32 @@ I often need help with: client quotes, contract review, business Instagram posts
     /* returns undefined — caller can chain .then() safely */
   }
 
+  var _prevBalance = null;
   function setBalance(n){
-    $('balanceVal').textContent=n;
-    $('balanceSm').textContent=n+' credits';
+    var pill=$('balancePill');
+    if(_prevBalance !== null && n < _prevBalance && n >= 0){
+      var diff = _prevBalance - n;
+      var start = _prevBalance, end = n, duration = 600, startTime = null;
+      pill.classList.add('balance-deducting');
+      function animateTick(ts){
+        if(!startTime) startTime=ts;
+        var p=Math.min((ts-startTime)/duration,1);
+        var cur=Math.round(start - diff*p);
+        $('balanceVal').textContent=cur;
+        $('balanceSm').textContent=cur+' credits';
+        if(p<1){ requestAnimationFrame(animateTick); }
+        else {
+          $('balanceVal').textContent=n;
+          $('balanceSm').textContent=n+' credits';
+          pill.classList.remove('balance-deducting');
+        }
+      }
+      requestAnimationFrame(animateTick);
+    } else {
+      $('balanceVal').textContent=n;
+      $('balanceSm').textContent=n+' credits';
+    }
+    _prevBalance = n;
     if(n<=0 && !depleted){ lockForDepleted(); }
     else if(n>0 && depleted){ unlockDepleted(); }
     if(n>0 && n<=30){ $('lowBalance').style.display='flex'; $('lowBalanceVal').textContent=n; }
@@ -1044,6 +1086,40 @@ I often need help with: client quotes, contract review, business Instagram posts
     });
   });
 
+  /* ── Code block run (event delegation) ── */
+  $('msgs').addEventListener('click',function(e){
+    var btn=e.target.closest('.btn-run-code');
+    if(!btn) return;
+    var cb=btn.closest('.code-block');
+    if(!cb) return;
+    var code=cb.querySelector('pre code');
+    if(!code) return;
+    var out=cb.querySelector('.code-run-output');
+    if(!out) return;
+    var langEl=cb.querySelector('.code-lang');
+    var lang=langEl?langEl.textContent.toLowerCase():'html';
+    var src=code.textContent||'';
+    /* Wrap js/css into a minimal html page */
+    if(/^(javascript|js)$/.test(lang)){
+      src='<body><script>'+src+'<\/script></body>';
+    } else if(lang==='css'){
+      src='<body><style>'+src+'</style><p style="font-family:sans-serif;padding:1rem;color:#555">CSS applied — add HTML content to preview it.</p></body>';
+    }
+    if(out.style.display==='none'){
+      var iframe=document.createElement('iframe');
+      iframe.sandbox='allow-scripts allow-forms';
+      iframe.srcdoc=src;
+      iframe.style.cssText='width:100%;border:none;display:block;min-height:200px;max-height:480px';
+      iframe.onload=function(){ try{ iframe.style.height=Math.min(iframe.contentDocument.body.scrollHeight+20,480)+'px'; }catch(e){} };
+      out.innerHTML=''; out.appendChild(iframe);
+      out.style.display='';
+      btn.textContent='▼ Hide'; btn.title='Hide output';
+    } else {
+      out.style.display='none'; out.innerHTML='';
+      btn.textContent='▶ Run'; btn.title='Run code';
+    }
+  });
+
   /* ── Send ── */
   async function send(message, attachments){
     if(busy||trialLocked) return;
@@ -1122,7 +1198,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       }
 
       var reader=resp.body.getReader(), decoder=new TextDecoder();
-      var full='', raw='', toolsDiv=null, toolsParsed=false;
+      var full='', raw='', toolsDiv=null, toolsParsed=false, thinkingParsed=false, reasoningDiv=null;
       /* Insert a tool-cards container above the bubble */
       toolsDiv=document.createElement('div');
       toolsDiv.className='tool-cards';
@@ -1144,6 +1220,23 @@ I often need help with: client quotes, contract review, business Instagram posts
             raw=raw.slice(endMark+1);
           }
           toolsParsed=true;
+        }
+
+        /* Parse \x02{thinking}\x02 block exactly once (before text) */
+        if(!thinkingParsed){
+          if(raw.charCodeAt(0)===2){
+            var thinkEnd=raw.indexOf(THINK_MARK,1);
+            if(thinkEnd===-1) continue; /* wait for full thinking block */
+            var thinkingContent=raw.slice(1,thinkEnd);
+            raw=raw.slice(thinkEnd+1);
+            if(thinkingContent){
+              reasoningDiv=document.createElement('details');
+              reasoningDiv.className='reasoning-panel';
+              reasoningDiv.innerHTML='<summary>Reasoning</summary><div class="reasoning-body">'+thinkingContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+              bubble.parentNode.insertBefore(reasoningDiv, bubble);
+            }
+          }
+          thinkingParsed=true;
         }
 
         var mi=raw.indexOf(USAGE_MARK);
@@ -1371,6 +1464,40 @@ I often need help with: client quotes, contract review, business Instagram posts
   /* ── File attachments ── */
   var pendingAttachments=[];
   var MAX_FILES=3, MAX_BYTES=5*1024*1024;
+
+  /* ── Voice input ── */
+  (function initVoice(){
+    var SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
+    var voiceBtn=$('voiceBtn');
+    if(!SpeechRec||!voiceBtn) return;
+    voiceBtn.style.display='';
+    var rec=new SpeechRec();
+    rec.continuous=false; rec.interimResults=false; rec.lang='en-US';
+    var listening=false;
+    voiceBtn.addEventListener('click',function(){
+      if(listening){ rec.stop(); return; }
+      try{
+        rec.start();
+        listening=true;
+        voiceBtn.textContent='🔴';
+        voiceBtn.title='Stop recording';
+      }catch(e){ showToast('Voice not available','err'); }
+    });
+    rec.addEventListener('result',function(e){
+      var transcript=Array.from(e.results).map(function(r){ return r[0].transcript; }).join(' ');
+      var inp=$('input');
+      inp.value=(inp.value?inp.value+' ':'')+transcript;
+      inp.style.height='auto'; inp.style.height=Math.min(inp.scrollHeight,160)+'px';
+      inp.focus();
+    });
+    rec.addEventListener('end',function(){
+      listening=false; voiceBtn.textContent='🎙'; voiceBtn.title='Voice input';
+    });
+    rec.addEventListener('error',function(e){
+      listening=false; voiceBtn.textContent='🎙'; voiceBtn.title='Voice input';
+      if(e.error!=='aborted') showToast('Voice error: '+e.error,'err');
+    });
+  })();
 
   if($('attachBtn')){
     $('attachBtn').addEventListener('click',function(){
@@ -1995,6 +2122,13 @@ I often need help with: client quotes, contract review, business Instagram posts
     });
   }
 
+  $('memorySearch').addEventListener('input', function(){
+    var q=this.value.toLowerCase().trim();
+    $('memoryList').querySelectorAll('.intel-mem-entry').forEach(function(el){
+      el.style.display=(!q||el.textContent.toLowerCase().includes(q))?'':'none';
+    });
+  });
+
   $('clearMemsBtn').addEventListener('click',async function(){
     if(!confirm('Delete all conversation memories? This cannot be undone.')) return;
     this.disabled=true;
@@ -2004,6 +2138,26 @@ I often need help with: client quotes, contract review, business Instagram posts
       loadMemories();
     }catch(e){ showToast('Error clearing memories','err'); }
     finally{ this.disabled=false; }
+  });
+
+  /* ── Chat export ── */
+  $('exportBtn').addEventListener('click', function(){
+    if(!history.length){ showToast('No messages to export','err'); return; }
+    var title=($('chatTitle').textContent||'Aethyro Chat').trim();
+    var lines=['# '+title, '', '_Exported '+new Date().toLocaleString()+'_', ''];
+    history.forEach(function(m){
+      lines.push('## '+(m.role==='user'?'You':'Aethyro'));
+      lines.push('');
+      lines.push(m.content||'');
+      lines.push('');
+    });
+    var blob=new Blob([lines.join('\n')],{type:'text/markdown'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=(title.replace(/[^a-z0-9]+/gi,'-').toLowerCase()||'chat')+'.md';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Chat exported as Markdown','ok');
   });
 
   /* ── Credit modal ── */
