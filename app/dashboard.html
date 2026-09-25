@@ -224,12 +224,15 @@
 
   function fmt(n){ return typeof n === 'number' ? n.toLocaleString() : '—'; }
 
-  // Credit packs — correct Stripe Payment Links per pack
+  // Credit packs. Purchases go through chat.html's ?buy= handler, which calls
+  // the buy-credits function — that stamps supabase_user_id into the Stripe
+  // session so the webhook can credit the account. Never link a raw Payment
+  // Link here: those carry no user id and the buyer gets charged for nothing.
   var CREDIT_PACKS = [
-    { label: '200 credits', price: '$4',  credits: 200,  stripe: 'https://buy.stripe.com/aFa7sMbl1grYd3U4CX7bW06' },
-    { label: '600 credits', price: '$10', credits: 600,  stripe: 'https://buy.stripe.com/bJe8wQ88P7Vs6Fwb1l7bW07' },
-    { label: '2,000 credits', price: '$30', credits: 2000, stripe: 'https://buy.stripe.com/eVq14o0Gna3A4xob1l7bW08' },
-    { label: '7,000 credits', price: '$90', credits: 7000, stripe: 'https://buy.stripe.com/cNieVe9cTfnUd3Uedx7bW09' },
+    { label: '200 credits',   price: '$4',  credits: 200,  pack: 'starter' },
+    { label: '600 credits',   price: '$10', credits: 600,  pack: 'value'   },
+    { label: '2,000 credits', price: '$30', credits: 2000, pack: 'power'   },
+    { label: '7,000 credits', price: '$90', credits: 7000, pack: 'pro_7k'  },
   ];
 
   (async function(){
@@ -265,7 +268,7 @@
       packRow.innerHTML = '';
       CREDIT_PACKS.slice(0,2).forEach(function(p){
         var a = document.createElement('a');
-        a.href = p.stripe; a.target = '_blank'; a.rel = 'noopener';
+        a.href = './chat.html?buy=' + encodeURIComponent(p.pack);
         a.className = 'pack-btn';
         a.textContent = p.price + ' · ' + p.label;
         packRow.appendChild(a);

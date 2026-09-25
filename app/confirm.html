@@ -39,8 +39,12 @@
   if(!window.AETHYRO){ showErr(window.AETHYRO_LOADERR||'App failed to load.'); return; }
   var supabase=window.AETHYRO.supabase;
 
-  var nextParam=new URLSearchParams(location.search).get('next');
-  var nextUrl=nextParam==='chat' ? './chat.html' : './dashboard.html';
+  var qs=new URLSearchParams(location.search);
+  var nextParam=qs.get('next'), packParam=qs.get('pack');
+  if(['starter','value','power','pro_7k'].indexOf(packParam)===-1) packParam=null;
+  var nextUrl=(nextParam==='buy' && packParam) ? './chat.html?buy='+encodeURIComponent(packParam)
+            : nextParam==='chat' ? './chat.html'
+            : './dashboard.html';
 
   function redirect(){
     if(typeof gtag!=='undefined') gtag('event','email_confirmed',{method:'email'});

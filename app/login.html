@@ -58,14 +58,20 @@
   function show(t,kind){ msg.textContent=t; msg.className='msg show '+(kind||'err'); }
   if(!window.AETHYRO){ show(window.AETHYRO_LOADERR||'app failed to load'); return; }
   var supabase=window.AETHYRO.supabase;
-  var nextParam = new URLSearchParams(location.search).get('next');
-  var nextUrl = nextParam==='chat' ? './chat.html' : './dashboard.html';
-  if(nextParam) document.getElementById('signupAlt').href='./signup.html?next='+encodeURIComponent(nextParam);
+  var qs = new URLSearchParams(location.search);
+  var nextParam = qs.get('next'), packParam = qs.get('pack');
+  // next=buy&pack=<pack> comes from the homepage price grid: finish auth, then
+  // land on chat.html, which opens the checkout for that pack.
+  if(['starter','value','power','pro_7k'].indexOf(packParam)===-1) packParam=null;
+  var nextUrl = (nextParam==='buy' && packParam) ? './chat.html?buy='+encodeURIComponent(packParam)
+              : nextParam==='chat' ? './chat.html'
+              : './dashboard.html';
+  var nextAbs = window.location.origin + nextUrl.replace('./','/app/');
+  if(nextParam) document.getElementById('signupAlt').href='./signup.html?next='+encodeURIComponent(nextParam)+(packParam?'&pack='+encodeURIComponent(packParam):'');
   supabase.auth.getSession().then(function(r){ if(r.data && r.data.session) location.href=nextUrl; });
 
   document.getElementById('githubBtn').addEventListener('click', async function(){
-    var redirectTo=window.location.origin+(nextParam==='chat' ? '/app/chat.html' : '/app/dashboard.html');
-    var r=await supabase.auth.signInWithOAuth({provider:'github',options:{redirectTo:redirectTo}});
+    var r=await supabase.auth.signInWithOAuth({provider:'github',options:{redirectTo:nextAbs}});
     if(r.error) show(r.error.message);
   });
 
@@ -74,8 +80,7 @@
     if(!email){ document.getElementById('email').focus(); show('Enter your email address above first.','err'); return; }
     var magicBtn=document.getElementById('magicBtn');
     magicBtn.disabled=true; magicBtn.textContent='Sending…'; msg.className='msg';
-    var redirectTo=window.location.origin+(nextParam==='chat' ? '/app/chat.html' : '/app/dashboard.html');
-    var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:redirectTo } });
+    var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:nextAbs } });
     if(r.error){ show(r.error.message,'err'); magicBtn.disabled=false; magicBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg> Email me a magic link'; return; }
     if(typeof gtag!=='undefined'){ gtag('event','login',{method:'magic_link'}); }
     show('Magic link sent — check your inbox and click the link to log in.','ok');
