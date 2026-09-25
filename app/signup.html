@@ -80,11 +80,33 @@
     magicBtn.textContent='Link sent ✓';
   });
 
+  async function sha1Hex(text){
+    var buf=await crypto.subtle.digest('SHA-1',new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0');}).join('').toUpperCase();
+  }
+  async function isPasswordLeaked(password){
+    try{
+      var hash=await sha1Hex(password);
+      var prefix=hash.slice(0,5), suffix=hash.slice(5);
+      var res=await fetch('https://api.pwnedpasswords.com/range/'+prefix,{headers:{'Add-Padding':'true'}});
+      if(!res.ok) return false;
+      var lines=(await res.text()).split('\r\n');
+      for(var i=0;i<lines.length;i++){
+        var parts=lines[i].split(':');
+        if(parts[0]===suffix && parseInt(parts[1],10)>0) return true;
+      }
+      return false;
+    }catch(e){ return false; }
+  }
+
   form.addEventListener('submit', async function(e){
-    e.preventDefault(); btn.disabled=true; btn.textContent='Creating…'; msg.className='msg';
+    e.preventDefault(); btn.disabled=true; btn.textContent='Checking password…'; msg.className='msg';
     var email=document.getElementById('email').value.trim();
     var password=document.getElementById('password').value;
     try{
+      var leaked=await isPasswordLeaked(password);
+      if(leaked){ show('This password has appeared in a data breach. Please choose a different password.','err'); btn.disabled=false; btn.textContent='Create account →'; return; }
+      btn.textContent='Creating…';
       var confirmUrl=window.location.origin+'/app/confirm.html'+(nextParam ? '?next='+encodeURIComponent(nextParam) : '');
       var r=await supabase.auth.signUp({ email:email, password:password, options:{ emailRedirectTo:confirmUrl } });
       if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Create account →'; return; }
