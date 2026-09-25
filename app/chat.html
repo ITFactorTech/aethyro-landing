@@ -366,7 +366,7 @@
         <textarea id="input" placeholder="Message Aethyro…" rows="1" required></textarea>
         <button type="submit" id="sendBtn">Send</button>
       </form>
-      <div class="composer-hint">Enter ↵ to send &nbsp;·&nbsp; Shift+Enter for new line</div>
+      <div class="composer-hint">⌘/Ctrl+Enter or Enter ↵ to send &nbsp;·&nbsp; Shift+Enter for new line</div>
     </div>
   </div>
 </div>
@@ -459,7 +459,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       </form>
       <hr class="intel-divider">
       <p class="intel-section-title">Recent Tasks</p>
-      <div id="taskList"></div>
+      <div id="taskList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">No tasks yet.<br/>Run a goal above and Aethyro will work autonomously — results appear here.</p></div>
     </div>
 
     <!-- Knowledge pane -->
@@ -470,7 +470,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       <button class="intel-btn" id="docUploadBtn">📄 Choose files…</button>
       <hr class="intel-divider">
       <p class="intel-section-title">Your Knowledge Base</p>
-      <div id="docList"></div>
+      <div id="docList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">No documents yet.<br/>Upload files above — Claude will reference them automatically in every conversation.</p></div>
     </div>
 
     <!-- Routines pane -->
@@ -504,7 +504,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       </form>
       <hr class="intel-divider">
       <p class="intel-section-title">Your Routines</p>
-      <div id="routineList"></div>
+      <div id="routineList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">No routines yet.<br/>Schedule a prompt above and Aethyro will run it automatically on your cron.</p></div>
     </div>
 
     <!-- Integrations pane -->
@@ -1083,7 +1083,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     send(text, atts);
   });
   $('input').addEventListener('input',function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,160)+'px'; });
-  $('input').addEventListener('keydown',function(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('composer').requestSubmit(); } });
+  $('input').addEventListener('keydown',function(e){ if(e.key==='Enter'&&((e.metaKey||e.ctrlKey)||!e.shiftKey)){ e.preventDefault(); $('composer').requestSubmit(); } });
 
   /* ── Workspace Context ── */
   var workspaceContext = null;
