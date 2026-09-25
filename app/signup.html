@@ -57,13 +57,20 @@
   function show(t,kind){ msg.textContent=t; msg.className='msg show '+(kind||'err'); }
   if(!window.AETHYRO){ show(window.AETHYRO_LOADERR||'app failed to load','err'); return; }
   var supabase=window.AETHYRO.supabase;
-  var nextParam = new URLSearchParams(location.search).get('next');
-  var nextUrl = nextParam==='chat' ? './chat.html' : './dashboard.html';
-  if(nextParam) document.getElementById('loginAlt').href='./login.html?next='+encodeURIComponent(nextParam);
+  var qs = new URLSearchParams(location.search);
+  var nextParam = qs.get('next'), packParam = qs.get('pack');
+  // next=buy&pack=<pack> comes from the homepage price grid: finish signup, then
+  // land on chat.html, which opens the checkout for that pack.
+  if(['starter','value','power','pro_7k'].indexOf(packParam)===-1) packParam=null;
+  var nextUrl = (nextParam==='buy' && packParam) ? './chat.html?buy='+encodeURIComponent(packParam)
+              : nextParam==='chat' ? './chat.html'
+              : './dashboard.html';
+  var nextAbs = window.location.origin + nextUrl.replace('./','/app/');
+  var nextQs = nextParam ? '?next='+encodeURIComponent(nextParam)+(packParam?'&pack='+encodeURIComponent(packParam):'') : '';
+  if(nextParam) document.getElementById('loginAlt').href='./login.html'+nextQs;
 
   document.getElementById('githubBtn').addEventListener('click', async function(){
-    var redirectTo=window.location.origin+(nextParam==='chat' ? '/app/chat.html' : '/app/dashboard.html');
-    var r=await supabase.auth.signInWithOAuth({provider:'github',options:{redirectTo:redirectTo}});
+    var r=await supabase.auth.signInWithOAuth({provider:'github',options:{redirectTo:nextAbs}});
     if(r.error) show(r.error.message,'err');
   });
 
@@ -72,8 +79,7 @@
     if(!email){ document.getElementById('email').focus(); show('Enter your email address above first.','err'); return; }
     var magicBtn=document.getElementById('magicBtn');
     magicBtn.disabled=true; magicBtn.textContent='Sending…'; msg.className='msg';
-    var redirectTo=window.location.origin+(nextParam==='chat' ? '/app/chat.html' : '/app/dashboard.html');
-    var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:redirectTo } });
+    var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:nextAbs } });
     if(r.error){ show(r.error.message,'err'); magicBtn.disabled=false; magicBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg> Sign up with magic link'; return; }
     if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'magic_link', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); }
     show('Magic link sent — check your inbox. Clicking it creates your account and grants 200 free credits.','ok');
@@ -107,7 +113,7 @@
       var leaked=await isPasswordLeaked(password);
       if(leaked){ show('This password has appeared in a data breach. Please choose a different password.','err'); btn.disabled=false; btn.textContent='Create account →'; return; }
       btn.textContent='Creating…';
-      var confirmUrl=window.location.origin+'/app/confirm.html'+(nextParam ? '?next='+encodeURIComponent(nextParam) : '');
+      var confirmUrl=window.location.origin+'/app/confirm.html'+nextQs;
       var r=await supabase.auth.signUp({ email:email, password:password, options:{ emailRedirectTo:confirmUrl } });
       if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Create account →'; return; }
       if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'email', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); gtag('event','begin_checkout',{currency:'USD',value:0}); }

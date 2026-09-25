@@ -478,10 +478,10 @@
     <h3>Buy credits</h3>
     <p>Credits never expire. A typical multi-message exchange costs ~10–30 credits.</p>
     <div class="pack-grid">
-      <div class="pack-btn" data-stripe="https://buy.stripe.com/4gM8wQ60HfnUbZQedx7bW00"><div class="amt">$4</div><div class="cr">200 credits</div></div>
-      <div class="pack-btn" data-stripe="https://buy.stripe.com/5kA6oI60H5Nk3ty7ss7bW01"><div class="amt">$10</div><div class="cr">600 credits</div></div>
-      <div class="pack-btn" data-stripe="https://buy.stripe.com/14A28s74L9Ze4xC3cc7bW02"><div class="amt">$30</div><div class="cr">2,000 credits</div></div>
-      <div class="pack-btn" data-stripe="https://buy.stripe.com/7sI4gA60H9ZedHY8ww7bW03"><div class="amt">$90</div><div class="cr">7,000 credits</div></div>
+      <div class="pack-btn" data-pack="starter"><div class="amt">$4</div><div class="cr">200 credits</div></div>
+      <div class="pack-btn" data-pack="value"><div class="amt">$10</div><div class="cr">600 credits</div></div>
+      <div class="pack-btn" data-pack="power"><div class="amt">$30</div><div class="cr">2,000 credits</div></div>
+      <div class="pack-btn" data-pack="pro_7k"><div class="amt">$90</div><div class="cr">7,000 credits</div></div>
     </div>
     <div class="credit-modal-close" id="creditModalClose">Cancel</div>
   </div>
@@ -794,7 +794,42 @@ I often need help with: client quotes, contract review, business Instagram posts
     loadReferralCode();
     var urlConvId=new URLSearchParams(location.search).get('c');
     if(urlConvId) await loadConversation(urlConvId);
+    await handlePurchaseReturn();
   })();
+
+  /* Stripe sends the buyer back here after checkout, and signup.html/login.html
+     forward a pending ?buy=<pack> once the user has an account. NB: `history`
+     is shadowed by the message array above, so use window.history here. */
+  var VALID_PACKS=['starter','value','power','pro_7k'];
+  async function handlePurchaseReturn(){
+    var params=new URLSearchParams(location.search);
+    var outcome=params.get('purchase'), wanted=params.get('buy');
+    if(!outcome && !wanted) return;
+    params.delete('purchase'); params.delete('buy');
+    var q=params.toString();
+    window.history.replaceState({},'',location.pathname+(q?'?'+q:''));
+
+    if(outcome==='cancelled'){ showToast('Checkout cancelled — you were not charged','err'); return; }
+    if(outcome==='success'){
+      /* The webhook credits the account asynchronously, so poll rather than
+         reading the balance once and reporting nothing. */
+      var before=parseInt($('balanceVal').textContent)||0;
+      showToast('Payment received — adding credits…','ok');
+      for(var i=0;i<10;i++){
+        await new Promise(function(r){ setTimeout(r,1500); });
+        await refreshBalance();
+        var now=parseInt($('balanceVal').textContent)||0;
+        if(now>before){
+          showToast((now-before).toLocaleString()+' credits added','ok');
+          if(depleted) unlockDepleted();
+          return;
+        }
+      }
+      showToast('Payment received. Credits can take a moment to land — reload if they have not appeared.','ok');
+      return;
+    }
+    if(wanted && VALID_PACKS.indexOf(wanted)!==-1) startCheckout(wanted);
+  }
 
   /* ── Anonymous mode ── */
   function enterAnonymousMode(){
@@ -2171,25 +2206,37 @@ I often need help with: client quotes, contract review, business Instagram posts
   $('creditModalClose').addEventListener('click',closeCreditModal);
   $('creditModal').addEventListener('click',function(e){ if(e.target===this) closeCreditModal(); });
 
+  /* Checkout must go through buy-credits: it stamps supabase_user_id into the
+     session metadata, which is what stripe-webhook needs to credit the account.
+     A raw Payment Link carries no user id, so the buyer would be charged and
+     receive nothing. Navigate in-tab — Stripe returns to ?purchase=success. */
+  var checkoutBusy=false;
+  async function startCheckout(pack){
+    if(checkoutBusy) return;
+    if(!session){ showToast('Sign in to buy credits','err'); return; }
+    checkoutBusy=true;
+    try{
+      var r=await fetch(window.AETHYRO_FN_URL+'/buy-credits',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+        body:JSON.stringify({pack:pack})
+      });
+      var d=await r.json();
+      if(!r.ok||!d.url){ showToast(d.error||'Could not start checkout','err'); checkoutBusy=false; return; }
+      location.href=d.url;
+    }catch(e){
+      showToast('Network error starting checkout','err');
+      checkoutBusy=false;
+    }
+  }
+
   document.querySelectorAll('.pack-btn').forEach(function(btn){
     btn.addEventListener('click',function(){
-      var url=btn.getAttribute('data-stripe');
-      if(!url) return;
-      var prevBal=parseInt($('balanceVal').textContent)||0;
-      window.open(url,'_blank','noopener,noreferrer');
-      closeCreditModal();
-      var refreshed=false;
-      function onFocus(){
-        if(refreshed) return;
-        refreshed=true;
-        window.removeEventListener('focus',onFocus);
-        if(session) refreshBalance().then(function(){
-          var newBal=parseInt($('balanceVal').textContent)||0;
-          if(newBal>prevBal) showToast('Payment received — '+(newBal-prevBal).toLocaleString()+' credits added!','ok');
-          if(depleted && newBal>0) unlockDepleted();
-        });
-      }
-      window.addEventListener('focus',onFocus);
+      var pack=btn.getAttribute('data-pack');
+      if(!pack) return;
+      var cr=btn.querySelector('.cr'), prev=cr?cr.textContent:'';
+      if(cr) cr.textContent='Opening checkout…';
+      startCheckout(pack).then(function(){ if(cr&&!checkoutBusy) cr.textContent=prev; });
     });
   });
 })();

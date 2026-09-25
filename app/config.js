@@ -13,27 +13,14 @@
   window.AETHYRO_ANON_KEY = SUPABASE_ANON;
   window.AETHYRO = {
     supabase: window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON),
+    // Retired subscription tiers. Aethyro Cloud sells one-time credit packs
+    // only — these remain solely to label legacy `subscriptions` rows on the
+    // dashboard. Do not re-add checkout links here.
     PLANS: {
-      personal: {
-        label: "Personal",
-        price: "$29/mo",
-        stripe_link: "https://buy.stripe.com/bJecN660H2B83tk8Td7bW02",
-      },
-      research: {
-        label: "Research",
-        price: "$199/mo",
-        stripe_link: "https://buy.stripe.com/28E9AUbl1ejQbZQc5p7bW03",
-      },
-      dev: {
-        label: "Developer",
-        price: "$299/mo",
-        stripe_link: "https://buy.stripe.com/dRmcN61Kra3A7JAglF7bW04",
-      },
-      cpa: {
-        label: "Professional",
-        price: "$499/mo",
-        stripe_link: "https://buy.stripe.com/8x2fZiagX4Jg9RI3yT7bW05",
-      },
+      personal: { label: "Personal" },
+      research: { label: "Research" },
+      dev:      { label: "Developer" },
+      cpa:      { label: "Professional" },
     },
   };
 })();
