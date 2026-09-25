@@ -162,7 +162,6 @@
           <div class="muted" id="renewLine" style="margin-top:.35rem;font-size:.8rem"></div>
         </div>
       </div>
-      <button class="btn btn-ghost" id="manageBtn" style="width:auto;margin-top:1rem;padding:.5rem 1rem;display:none">Manage billing →</button>
     </div>
 
     <!-- USAGE STATS -->
@@ -220,7 +219,6 @@
   if(!window.AETHYRO){ fail(window.AETHYRO_LOADERR||'app library failed to load'); return; }
   var supabase=window.AETHYRO.supabase;
 
-  function daysUntil(ts){ if(!ts) return null; return Math.max(0, Math.ceil((new Date(ts)-Date.now())/86400000)); }
 
   function fmt(n){ return typeof n === 'number' ? n.toLocaleString() : '—'; }
 
@@ -246,9 +244,8 @@
 
       // Fetch all data in parallel
       var now=new Date(), monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString();
-      var [balRes, subRes, ledRes, convRes, lastMsgRes, monthDebitsRes] = await Promise.all([
+      var [balRes, ledRes, convRes, lastMsgRes, monthDebitsRes] = await Promise.all([
         supabase.rpc('get_credit_balance'),
-        supabase.from('subscriptions').select('*').limit(1),
         supabase.from('credit_ledger').select('*').order('created_at',{ascending:false}).limit(20),
         supabase.from('conversations').select('id',{count:'exact',head:true}),
         supabase.from('messages').select('created_at').order('created_at',{ascending:false}).limit(1),
@@ -287,44 +284,16 @@
       var totalSpend = (ledRes.data||[]).filter(function(r){ return r.delta<0; }).reduce(function(s,r){ return s+Math.abs(r.delta); },0);
       $('creditsUsedSub').textContent = totalSpend.toLocaleString()+' credits total';
 
-      // ── Subscription ──
-      var sub = subRes.data && subRes.data[0];
-      if(sub){
-        var PLANS = (window.AETHYRO.PLANS) || {};
-        var planLabel = (PLANS[sub.plan]&&PLANS[sub.plan].label) || (sub.plan==='trial'?'Free trial':sub.plan);
-        $('planName').textContent = planLabel;
-        var pill2 = $('statusPill'); pill2.textContent = sub.status; pill2.className = 'pill '+sub.status;
-        if(sub.status==='trialing'){
-          $('timeLabel').textContent = 'Trial';
-          $('daysLeft').textContent = daysUntil(sub.trial_ends_at) != null ? daysUntil(sub.trial_ends_at) : '—';
-          $('renewLine').textContent = 'Trial ends ' + (sub.trial_ends_at ? new Date(sub.trial_ends_at).toLocaleDateString() : '');
-        } else if(sub.status==='active'){
-          $('timeLabel').textContent = 'Renews in';
-          $('daysLeft').textContent = daysUntil(sub.current_period_end) != null ? daysUntil(sub.current_period_end) : '—';
-          $('renewLine').textContent = sub.current_period_end ? 'Renews '+new Date(sub.current_period_end).toLocaleDateString() : '';
-        } else {
-          $('timeLabel').textContent = 'Status'; $('daysLeft').textContent = '0'; $('renewLine').textContent = 'Top up credits to keep access.';
-        }
-        $('manageBtn').style.display = 'inline-flex';
-        $('manageBtn').onclick = async function(){
-          $('manageBtn').textContent = 'Opening…';
-          try{
-            var r = await supabase.functions.invoke('customer-portal',{body:{}});
-            if(r.error) throw r.error;
-            if(r.data&&r.data.url){ location.href = r.data.url; return; }
-            throw new Error('no url');
-          }catch(err){
-            $('manageBtn').textContent = 'Manage billing →';
-            var um=$('upmsg'); um.className='msg show err'; um.textContent='Billing error: '+((err&&err.message)||err);
-          }
-        };
-      } else {
-        $('planName').textContent = 'Pay-as-you-go';
-        $('statusPill').textContent = 'credits only'; $('statusPill').className = 'pill trialing';
-        $('timeLabel').textContent = '—';
-        $('daysLeft').textContent = '';
-        $('renewLine').textContent = 'No recurring subscription — buy credits below.';
-      }
+      // ── Plan ──
+      // Aethyro Cloud sells one-time credit packs only. The old subscription
+      // card read the `subscriptions` table and rendered a trial/renewal state
+      // for it; rows left over from the retired tiers made it show a "Free
+      // trial" that does not exist. Every account is pay-as-you-go.
+      $('planName').textContent = 'Pay-as-you-go';
+      $('statusPill').textContent = 'credits only'; $('statusPill').className = 'pill trialing';
+      $('timeLabel').textContent = '—';
+      $('daysLeft').textContent = '';
+      $('renewLine').textContent = 'No recurring subscription — buy credits below.';
 
       // ── Credit history ──
       var ledger = ledRes.data || [];
