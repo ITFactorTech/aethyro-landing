@@ -11,16 +11,10 @@
   // whole response, so streaming callers need the raw URL + anon key instead.
   window.AETHYRO_FN_URL = SUPABASE_URL + "/functions/v1";
   window.AETHYRO_ANON_KEY = SUPABASE_ANON;
+  // Aethyro Cloud sells one-time credit packs only — there are no subscription
+  // tiers. Purchases go through the buy-credits edge function, which stamps the
+  // user id into the Stripe session; never put checkout links here.
   window.AETHYRO = {
     supabase: window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON),
-    // Retired subscription tiers. Aethyro Cloud sells one-time credit packs
-    // only — these remain solely to label legacy `subscriptions` rows on the
-    // dashboard. Do not re-add checkout links here.
-    PLANS: {
-      personal: { label: "Personal" },
-      research: { label: "Research" },
-      dev:      { label: "Developer" },
-      cpa:      { label: "Professional" },
-    },
   };
 })();
