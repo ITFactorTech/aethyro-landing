@@ -1,4 +1,4 @@
-// run-agent-task v1 — Long-horizon agentic task runner
+// run-agent-task v2 — Long-horizon agentic task runner
 // Plans a goal into steps, executes each with tool use, stores progress in DB.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
@@ -15,22 +15,54 @@ const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const TAVILY_API_KEY    = Deno.env.get("TAVILY_API_KEY");
 
-const PLANNER_MODEL  = "claude-haiku-4-5-20251001";
+const PLANNER_MODEL = "claude-haiku-4-5-20251001";
 const EXECUTOR_MODEL_MAP: Record<string, string> = {
   haiku:  "claude-haiku-4-5-20251001",
   sonnet: "claude-sonnet-5",
   opus:   "claude-opus-5-5",
 };
+// Credits charged per 1k tokens
 const CREDIT_RATES: Record<string, { input: number; output: number }> = {
-  haiku:  { input: 0.08,  output: 0.40  },
-  sonnet: { input: 0.30,  output: 1.50  },
-  opus:   { input: 1.50,  output: 7.50  },
+  haiku:  { input: 0.08,  output: 0.40 },
+  sonnet: { input: 0.30,  output: 1.50 },
+  opus:   { input: 1.50,  output: 7.50 },
 };
 const MAX_STEPS      = 6;
-const STEP_MAX_TOOLS = 3;
+const STEP_MAX_TOOLS = 4;  // tool-use rounds per step
 const STEP_MAX_TOK   = 2048;
+const MIN_CREDITS    = 50; // gate: refuse if balance below this
 
-// ── Web search tool ───────────────────────────────────────────────────────────
+// ── Tool definitions ──────────────────────────────────────────────────────────
+
+const ALL_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "web_search",
+    description: "Search the web for current information, facts, news, or research.",
+    input_schema: {
+      type: "object" as const,
+      properties: { query: { type: "string", description: "Search query" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "synthesize",
+    description: "Produce the final answer or report from gathered information. Call this to conclude the task.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        title:   { type: "string", description: "Short title for the result" },
+        content: { type: "string", description: "Full result / answer / report in markdown" },
+      },
+      required: ["title", "content"],
+    },
+  },
+];
+
+function agentTools(): Anthropic.Tool[] {
+  return TAVILY_API_KEY ? ALL_TOOLS : ALL_TOOLS.filter(t => t.name !== "web_search");
+}
+
+// ── Web search ────────────────────────────────────────────────────────────────
 
 async function webSearch(query: string): Promise<string> {
   if (!TAVILY_API_KEY) return "Web search unavailable.";
@@ -47,7 +79,7 @@ async function webSearch(query: string): Promise<string> {
       }),
       signal: AbortSignal.timeout(12000),
     });
-    if (!r.ok) return `Search error (${r.status})`;
+    if (!r.ok) return `Search error (${r.status}).`;
     const d = await r.json();
     let out = d.answer ? `Summary: ${d.answer}\n\n` : "";
     if (d.results?.length) {
@@ -61,30 +93,6 @@ async function webSearch(query: string): Promise<string> {
   }
 }
 
-const AGENT_TOOLS: Anthropic.Tool[] = [
-  ...(TAVILY_API_KEY ? [{
-    name: "web_search" as const,
-    description: "Search the web for current information. Use for facts, news, research, data.",
-    input_schema: {
-      type: "object" as const,
-      properties: { query: { type: "string", description: "Search query" } },
-      required: ["query"],
-    },
-  }] : []),
-  {
-    name: "synthesize",
-    description: "Produce a final answer or report from gathered information. Call this to conclude the task.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        title: { type: "string", description: "Short title for the result" },
-        content: { type: "string", description: "Full result / answer / report in markdown" },
-      },
-      required: ["title", "content"],
-    },
-  },
-];
-
 // ── Execute one step ──────────────────────────────────────────────────────────
 
 async function executeStep(
@@ -93,11 +101,23 @@ async function executeStep(
   stepDesc: string,
   stepContext: string,
   modelKey: string,
-): Promise<{ result: string; toolCalls: any[]; done: boolean; inputTokens: number; outputTokens: number }> {
-  const model = EXECUTOR_MODEL_MAP[modelKey] || EXECUTOR_MODEL_MAP.haiku;
+): Promise<{
+  result: string;
+  toolCalls: any[];
+  done: boolean;
+  inputTokens: number;
+  outputTokens: number;
+}> {
+  const model = EXECUTOR_MODEL_MAP[modelKey] ?? EXECUTOR_MODEL_MAP.haiku;
+  const tools = agentTools();
+
   const messages: Anthropic.MessageParam[] = [{
     role: "user",
-    content: `You are executing step "${stepDesc}" as part of the larger goal: "${goal}"\n\nContext so far:\n${stepContext}\n\nComplete this step. Use tools if needed. When you have enough information to fully answer the goal, call the synthesize tool.`,
+    content:
+      `You are executing step "${stepDesc}" as part of the larger goal: "${goal}"\n\n` +
+      `Context so far:\n${stepContext}\n\n` +
+      `Complete this step. Use tools if needed. ` +
+      `When you have enough information to fully answer the entire goal, call the synthesize tool.`,
   }];
 
   let toolCalls: any[] = [];
@@ -111,7 +131,7 @@ async function executeStep(
       model,
       max_tokens: STEP_MAX_TOK,
       messages,
-      tools: AGENT_TOOLS,
+      tools,
       tool_choice: { type: "auto" },
     });
 
@@ -119,18 +139,22 @@ async function executeStep(
     outputTokens += r.usage.output_tokens;
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
     for (const blk of r.content) {
       if (blk.type !== "tool_use") continue;
       let toolResult = "";
+
       if (blk.name === "web_search") {
-        toolResult = await webSearch((blk.input as any).query || "");
-        toolCalls.push({ tool: "web_search", query: (blk.input as any).query });
+        const q = (blk.input as any).query || "";
+        toolResult = await webSearch(q);
+        toolCalls.push({ tool: "web_search", query: q });
       } else if (blk.name === "synthesize") {
-        result = `**${(blk.input as any).title}**\n\n${(blk.input as any).content}`;
+        result = `**${(blk.input as any).title ?? "Result"}**\n\n${(blk.input as any).content ?? ""}`;
         done = true;
         toolResult = "Synthesis complete.";
         toolCalls.push({ tool: "synthesize" });
       }
+
       toolResults.push({ type: "tool_result", tool_use_id: blk.id, content: toolResult });
     }
 
@@ -146,11 +170,23 @@ async function executeStep(
 
     messages.push(
       { role: "assistant", content: r.content },
-      { role: "user", content: toolResults },
+      { role: "user",      content: toolResults },
     );
   }
 
   return { result, toolCalls, done, inputTokens, outputTokens };
+}
+
+// ── Credits helper ────────────────────────────────────────────────────────────
+
+function calcCredits(
+  totalInput: number,
+  totalOutput: number,
+  modelKey: string,
+): number {
+  const rates = CREDIT_RATES[modelKey] ?? CREDIT_RATES.haiku;
+  const raw = (totalInput / 1000) * rates.input + (totalOutput / 1000) * rates.output;
+  return Math.max(10, Math.ceil(raw));
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -182,25 +218,25 @@ serve(async (req) => {
     });
   }
 
-  const goal: string = (body.goal || "").trim();
-  const modelKey = ["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "sonnet";
-  const rates = CREDIT_RATES[modelKey];
-
+  const goal = (body.goal || "").trim();
   if (!goal)
     return new Response(JSON.stringify({ error: "goal required" }), {
       status: 400, headers: { ...CORS, "Content-Type": "application/json" },
     });
 
+  const modelKey = ["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "sonnet";
   const supaAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // Credit check (tasks use at least 50 credits minimum estimate)
+  // ── Credit gate ───────────────────────────────────────────────────────────
   const { data: balance } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
-  if (typeof balance === "number" && balance < 50)
-    return new Response(JSON.stringify({ error: "Insufficient credits for agent task (need ≥ 50)" }), {
-      status: 402, headers: { ...CORS, "Content-Type": "application/json" },
-    });
+  // balance is null for brand-new users with no ledger rows — treat as 0
+  const currentBalance = typeof balance === "number" ? balance : 0;
+  if (currentBalance < MIN_CREDITS)
+    return new Response(JSON.stringify({
+      error: `Insufficient credits — need at least ${MIN_CREDITS}, have ${currentBalance}`,
+    }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
 
-  // Create task record
+  // ── Create task record ────────────────────────────────────────────────────
   const { data: task, error: taskErr } = await supaAdmin
     .from("agent_tasks")
     .insert({ user_id: user.id, goal, status: "running" })
@@ -211,7 +247,7 @@ serve(async (req) => {
       status: 500, headers: { ...CORS, "Content-Type": "application/json" },
     });
 
-  const taskId = task.id;
+  const taskId: string = task.id;
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   let totalInput = 0, totalOutput = 0;
 
@@ -223,24 +259,23 @@ serve(async (req) => {
       max_tokens: 400,
       messages: [{
         role: "user",
-        content: `Break down this goal into ${MAX_STEPS} or fewer concrete, actionable steps. Return ONLY a JSON array of step descriptions, no explanation.\n\nGoal: ${goal}`,
+        content:
+          `Break down this goal into ${MAX_STEPS} or fewer concrete, actionable steps. ` +
+          `Return ONLY a JSON array of step description strings, no explanation.\n\nGoal: ${goal}`,
       }],
     });
-    totalInput += planRes.usage.input_tokens;
+    totalInput  += planRes.usage.input_tokens;
     totalOutput += planRes.usage.output_tokens;
     const raw = planRes.content.find(b => b.type === "text") as any;
-    const match = (raw?.text || "").match(/\[[\s\S]*\]/);
-    if (match) plan = JSON.parse(match[0]).slice(0, MAX_STEPS);
-  } catch {}
+    const match = (raw?.text || "").match(/\[[\s\S]*?\]/);
+    if (match) plan = (JSON.parse(match[0]) as string[]).slice(0, MAX_STEPS);
+  } catch { /* fall through to default plan */ }
 
-  if (!plan.length) plan = ["Research the topic", "Analyze findings", "Synthesize and report"];
+  if (!plan.length) plan = ["Research the topic", "Analyse findings", "Synthesise and report"];
 
-  // Store plan
   await supaAdmin.from("agent_tasks").update({ plan: { steps: plan } }).eq("id", taskId);
-
-  // Insert step records
   await supaAdmin.from("agent_task_steps").insert(
-    plan.map((desc, i) => ({ task_id: taskId, step_index: i, description: desc }))
+    plan.map((desc, i) => ({ task_id: taskId, step_index: i, description: desc, status: "pending" }))
   );
 
   // ── Execution phase ───────────────────────────────────────────────────────
@@ -249,35 +284,36 @@ serve(async (req) => {
   let taskFailed = false;
 
   for (let i = 0; i < plan.length; i++) {
-    const stepDesc = plan[i];
-
     // Mark step running
     await supaAdmin.from("agent_task_steps")
       .update({ status: "running" })
-      .eq("task_id", taskId).eq("step_index", i);
+      .eq("task_id", taskId)
+      .eq("step_index", i);
 
     try {
-      const { result, toolCalls, done, inputTokens: si, outputTokens: so } = await executeStep(
-        anthropic, goal, stepDesc, stepContext, modelKey
-      );
-      totalInput += si;
+      const { result, toolCalls, done, inputTokens: si, outputTokens: so } =
+        await executeStep(anthropic, goal, plan[i], stepContext, modelKey);
+
+      totalInput  += si;
       totalOutput += so;
 
-      stepContext += `\nStep ${i + 1} (${stepDesc}):\n${result}\n`;
+      stepContext += `\nStep ${i + 1} (${plan[i]}):\n${result}\n`;
 
       await supaAdmin.from("agent_task_steps").update({
-        status: "completed",
-        result: result.slice(0, 4000),
+        status:     "completed",
+        result:     result.slice(0, 4000),
         tool_calls: toolCalls,
       }).eq("task_id", taskId).eq("step_index", i);
 
       if (done) {
         finalResult = result;
-        // Mark remaining steps skipped
-        await supaAdmin.from("agent_task_steps")
-          .update({ status: "skipped" })
-          .eq("task_id", taskId)
-          .gt("step_index", i);
+        // Mark all remaining steps as skipped
+        if (i + 1 < plan.length) {
+          await supaAdmin.from("agent_task_steps")
+            .update({ status: "skipped" })
+            .eq("task_id", taskId)
+            .gt("step_index", i);
+        }
         break;
       }
     } catch (e) {
@@ -290,49 +326,46 @@ serve(async (req) => {
     }
   }
 
-  // ── Final synthesis if not already done ───────────────────────────────────
+  // ── Final synthesis if no step called synthesize ──────────────────────────
   if (!finalResult && !taskFailed) {
     try {
       const synthRes = await anthropic.messages.create({
-        model: EXECUTOR_MODEL_MAP[modelKey],
+        model:      EXECUTOR_MODEL_MAP[modelKey] ?? EXECUTOR_MODEL_MAP.haiku,
         max_tokens: 2000,
         messages: [{
-          role: "user",
-          content: `You completed research for this goal: "${goal}"\n\nWork done:\n${stepContext}\n\nWrite a comprehensive final answer/report in markdown. Be thorough and well-structured.`,
+          role:    "user",
+          content: `You completed research for this goal: "${goal}"\n\nWork done:\n${stepContext}\n\nWrite a comprehensive final answer/report in markdown.`,
         }],
       });
-      totalInput += synthRes.usage.input_tokens;
+      totalInput  += synthRes.usage.input_tokens;
       totalOutput += synthRes.usage.output_tokens;
       finalResult = (synthRes.content.find(b => b.type === "text") as any)?.text || "Task complete.";
-    } catch {}
+    } catch { finalResult = stepContext.trim() || "Task complete."; }
   }
 
   // ── Billing ───────────────────────────────────────────────────────────────
-  const cost = Math.max(
-    10,
-    Math.ceil((totalInput / 1000) * rates.input + (totalOutput / 1000) * rates.output)
-  );
+  const cost = calcCredits(totalInput, totalOutput, modelKey);
   await supaAdmin.from("credit_ledger").insert({
-    user_id: user.id, delta: -cost, reason: "agent_task",
+    user_id: user.id,
+    delta:   -cost,
+    reason:  "agent_task",
   });
 
-  // ── Finalize task ─────────────────────────────────────────────────────────
+  // ── Finalise task record ──────────────────────────────────────────────────
   await supaAdmin.from("agent_tasks").update({
-    status: taskFailed ? "failed" : "completed",
-    result: finalResult.slice(0, 20000),
+    status:       taskFailed ? "failed" : "completed",
+    result:       finalResult.slice(0, 20000),
     credits_used: cost,
-    updated_at: new Date().toISOString(),
+    updated_at:   new Date().toISOString(),
   }).eq("id", taskId);
 
   const { data: newBal } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
 
   return new Response(JSON.stringify({
-    task_id: taskId,
-    status: taskFailed ? "failed" : "completed",
-    result: finalResult,
+    task_id:      taskId,
+    status:       taskFailed ? "failed" : "completed",
+    result:       finalResult,
     credits_used: cost,
-    balance: newBal,
-  }), {
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
+    balance:      typeof newBal === "number" ? newBal : null,
+  }), { headers: { ...CORS, "Content-Type": "application/json" } });
 });
