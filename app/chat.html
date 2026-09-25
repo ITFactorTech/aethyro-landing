@@ -294,6 +294,46 @@
   .onboard-skip{margin-top:.75rem;font-size:.78rem;color:var(--t3);cursor:pointer;background:none;border:none;font-family:var(--font)}
   .onboard-skip:hover{color:var(--text)}
   .intel-drag-handle{display:none;width:36px;height:4px;background:var(--b3);border-radius:2px;margin:8px auto 0}
+
+  /* ── Intelligence stats bar ── */
+  .intel-stats-bar{display:flex;border-bottom:1px solid var(--b1);flex-shrink:0;background:rgba(0,0,0,.2)}
+  .intel-stat{flex:1;display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:.55rem .25rem;border-right:1px solid var(--b1);cursor:default}
+  .intel-stat:last-child{border-right:none}
+  .intel-stat-val{font-family:var(--mono);font-size:.95rem;font-weight:700;color:var(--text);line-height:1;font-variant-numeric:tabular-nums}
+  .intel-stat-label{font-size:.6rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em}
+  .intel-stat-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+
+  /* ── Memory tab ── */
+  .intel-fact-grid{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem}
+  .intel-fact{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .65rem;border-radius:6px;font-size:.76rem;background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.18);color:var(--t2);max-width:100%}
+  .intel-fact-key{color:var(--cyan);font-weight:600;font-family:var(--mono);font-size:.72rem;flex-shrink:0}
+  .intel-fact-val{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .intel-fact-del{background:none;border:none;color:var(--t3);cursor:pointer;font-size:.85rem;padding:0 0 0 .15rem;line-height:1;flex-shrink:0;opacity:.6}
+  .intel-fact-del:hover{color:#fca5a5;opacity:1}
+  .intel-mem-entry{padding:.6rem .75rem;border-radius:8px;border:1px solid var(--b1);margin-bottom:.4rem;background:rgba(0,0,0,.2)}
+  .intel-mem-who{display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem}
+  .intel-mem-role{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.05em}
+  .intel-mem-role.user{color:var(--cyan)}
+  .intel-mem-role.assistant{color:var(--orange)}
+  .intel-mem-time{font-size:.65rem;color:var(--t3);margin-left:auto;font-family:var(--mono)}
+  .intel-mem-text{font-size:.78rem;color:var(--t2);line-height:1.55;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+  .intel-clear-all{display:flex;align-items:center;gap:.4rem;font-size:.76rem;color:var(--t3);background:none;border:1px solid var(--b1);border-radius:7px;padding:.3rem .75rem;cursor:pointer;font-family:var(--font);transition:all .15s}
+  .intel-clear-all:hover{color:#fca5a5;border-color:rgba(239,68,68,.35)}
+
+  /* ── Task steps (expanded) ── */
+  .task-steps{margin-top:.55rem;border-top:1px solid var(--b1);padding-top:.5rem;display:flex;flex-direction:column;gap:.35rem}
+  .task-step{display:flex;align-items:flex-start;gap:.5rem;font-size:.76rem;color:var(--t2)}
+  .step-icon{font-size:.8rem;flex-shrink:0;margin-top:.05rem}
+  .step-desc{flex:1;line-height:1.5}
+  .step-status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:.35rem}
+  .step-status-dot.completed{background:var(--green)}
+  .step-status-dot.running{background:var(--cyan);box-shadow:0 0 5px var(--cyan);animation:pulse-dot 1s ease-in-out infinite}
+  .step-status-dot.failed{background:#ef4444}
+  .step-status-dot.pending,.step-status-dot.skipped{background:var(--b3)}
+  @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ── Running task indicator on sidebar button ── */
+  .intel-running-badge{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 6px var(--cyan);animation:pulse-dot 1s ease-in-out infinite;margin-left:.35rem;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -434,6 +474,25 @@ I often need help with: client quotes, contract review, business Instagram posts
     <button class="intel-tab" data-tab="knowledge">Knowledge</button>
     <button class="intel-tab" data-tab="routines">Routines</button>
     <button class="intel-tab" data-tab="integrations">Integrations</button>
+    <button class="intel-tab" data-tab="memory">Memory</button>
+  </div>
+  <div class="intel-stats-bar">
+    <div class="intel-stat">
+      <span class="intel-stat-val" id="statTasks">—</span>
+      <span class="intel-stat-label">Tasks</span>
+    </div>
+    <div class="intel-stat">
+      <span class="intel-stat-val" id="statDocs">—</span>
+      <span class="intel-stat-label">Docs</span>
+    </div>
+    <div class="intel-stat">
+      <span class="intel-stat-val" id="statRoutines">—</span>
+      <span class="intel-stat-label">Routines</span>
+    </div>
+    <div class="intel-stat">
+      <span class="intel-stat-val" id="statMems">—</span>
+      <span class="intel-stat-label">Memories</span>
+    </div>
   </div>
   <div class="intel-content">
 
@@ -540,6 +599,20 @@ I often need help with: client quotes, contract review, business Instagram posts
           <button class="intel-btn" type="submit" id="ntConnectBtn">Connect</button>
         </div>
       </form>
+    </div>
+
+    <!-- Memory pane -->
+    <div class="intel-pane" id="pane-memory" style="display:none">
+      <p class="intel-section-title">What Aethyro Knows About You</p>
+      <p style="font-size:.78rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">Facts extracted automatically from your conversations — used to personalise every response.</p>
+      <div id="memoryFactGrid" class="intel-fact-grid"><p style="font-size:.75rem;color:var(--t3)">Loading…</p></div>
+      <hr class="intel-divider">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+        <p class="intel-section-title" style="margin:0">Recent Conversation Memory</p>
+        <button class="intel-clear-all" id="clearMemsBtn">Clear all</button>
+      </div>
+      <p style="font-size:.78rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">The last few turns embedded into semantic memory — retrieved to give Claude longer context.</p>
+      <div id="memoryList"><p class="intel-loading">Loading…</p></div>
     </div>
 
   </div>
@@ -1400,10 +1473,12 @@ I often need help with: client quotes, contract review, business Instagram posts
       else if(tab.dataset.tab==='knowledge') loadDocuments();
       else if(tab.dataset.tab==='routines') loadRoutines();
       else if(tab.dataset.tab==='integrations') loadIntegrations();
+      else if(tab.dataset.tab==='memory') loadMemories();
     });
   });
 
   function initIntelPanel(){
+    loadIntelStats();
     loadTasks();
     /* Tasks form */
     $('taskForm').addEventListener('submit',async function(e){
@@ -1530,25 +1605,50 @@ I often need help with: client quotes, contract review, business Instagram posts
     var r=await supabase.from('agent_tasks').select('id,goal,status,result,credits_used,created_at').order('created_at',{ascending:false}).limit(10);
     if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty">No tasks yet. Run your first agentic task above.</div>'; return; }
     list.innerHTML='';
+    var hasRunning=r.data.some(function(t){ return t.status==='running'||t.status==='pending'; });
+    /* sidebar badge */
+    var badge=$('intelBtn').querySelector('.intel-running-badge');
+    if(hasRunning&&!badge){ var b=document.createElement('span'); b.className='intel-running-badge'; $('intelBtn').appendChild(b); }
+    else if(!hasRunning&&badge){ badge.remove(); }
     r.data.forEach(function(task){
       var card=document.createElement('div'); card.className='intel-card';
-      card.innerHTML='<div class="intel-card-title">'+intelEsc(task.goal)+'</div>'+
+      var runningDot=(task.status==='running'||task.status==='pending')?'<span class="intel-running-badge" style="display:inline-block;margin-left:.3rem"></span>':'';
+      card.innerHTML='<div class="intel-card-title">'+intelEsc(task.goal)+runningDot+'</div>'+
         '<div class="intel-card-meta"><span class="intel-status '+task.status+'">'+task.status+'</span> · '+timeAgo(new Date(task.created_at))+(task.credits_used?' · '+task.credits_used+' cr':'')+'</div>'+
-        (task.result&&task.status==='completed'?'<div class="intel-card-result">'+intelEsc(task.result.slice(0,200))+'</div>':'');
+        (task.result&&task.status==='completed'?'<div class="intel-card-result">'+renderMarkdown(task.result.slice(0,300))+'</div>':'');
+      var actions=document.createElement('div'); actions.className='intel-card-actions';
+      /* Steps toggle */
+      var stepsBtn=document.createElement('button'); stepsBtn.className='intel-btn intel-btn-sm intel-btn-ghost'; stepsBtn.textContent='Steps';
+      stepsBtn.addEventListener('click',async function(){
+        var existing=card.querySelector('.task-steps');
+        if(existing){ existing.remove(); stepsBtn.textContent='Steps'; return; }
+        stepsBtn.textContent='Loading…'; stepsBtn.disabled=true;
+        var sr=await supabase.from('agent_task_steps').select('step_index,description,status').eq('task_id',task.id).order('step_index',{ascending:true});
+        stepsBtn.disabled=false; stepsBtn.textContent='Steps ▲';
+        if(!sr.data||!sr.data.length){ return; }
+        var stepsEl=document.createElement('div'); stepsEl.className='task-steps';
+        sr.data.forEach(function(step){
+          var s=document.createElement('div'); s.className='task-step';
+          s.innerHTML='<span class="step-status-dot '+step.status+'"></span><span class="step-desc">'+intelEsc(step.description)+'</span>';
+          stepsEl.appendChild(s);
+        });
+        card.appendChild(stepsEl);
+      });
+      actions.appendChild(stepsBtn);
       if(task.result&&task.status==='completed'){
-        var actions=document.createElement('div'); actions.className='intel-card-actions';
-        var viewBtn=document.createElement('button'); viewBtn.className='intel-btn intel-btn-sm intel-btn-ghost'; viewBtn.textContent='View result';
+        var viewBtn=document.createElement('button'); viewBtn.className='intel-btn intel-btn-sm intel-btn-ghost'; viewBtn.textContent='Full result';
         viewBtn.addEventListener('click',function(){
           var old=card.querySelector('.intel-expanded');
-          if(old){ old.remove(); return; }
+          if(old){ old.remove(); viewBtn.textContent='Full result'; return; }
           var exp=document.createElement('div'); exp.className='intel-expanded';
-          exp.style.cssText='margin-top:.5rem;font-size:.8rem;color:var(--t2);line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;border-top:1px solid var(--b1);padding-top:.5rem';
-          exp.textContent=task.result; card.appendChild(exp);
+          exp.style.cssText='margin-top:.5rem;font-size:.8rem;color:var(--t2);line-height:1.6;word-break:break-word;max-height:300px;overflow-y:auto;border-top:1px solid var(--b1);padding-top:.5rem';
+          exp.innerHTML=renderMarkdown(task.result); viewBtn.textContent='Hide result'; card.appendChild(exp);
         });
-        actions.appendChild(viewBtn); card.appendChild(actions);
+        actions.appendChild(viewBtn);
       }
-      list.appendChild(card);
+      card.appendChild(actions); list.appendChild(card);
     });
+    if(hasRunning) setTimeout(loadTasks,5000);
   }
 
   async function uploadDocument(f){
@@ -1615,8 +1715,9 @@ I often need help with: client quotes, contract review, business Instagram posts
     r.data.forEach(function(rt){
       var card=document.createElement('div'); card.className='intel-card';
       var lastRun=rt.last_run_at?timeAgo(new Date(rt.last_run_at)):'Never';
+      var nextRun=rt.next_run_at?'Next: '+timeAgo(new Date(rt.next_run_at)):'Next run unscheduled';
       card.innerHTML='<div class="intel-card-title">'+intelEsc(rt.name)+'</div>'+
-        '<div class="intel-card-meta">'+intelEsc(rt.schedule)+' · Last run: '+lastRun+'</div>'+
+        '<div class="intel-card-meta">'+intelEsc(rt.schedule)+' · Last: '+lastRun+' · '+nextRun+'</div>'+
         (rt.last_result?'<div class="intel-card-result">'+intelEsc(rt.last_result.slice(0,150))+'</div>':'');
       var actions=document.createElement('div'); actions.className='intel-card-actions';
       var togBtn=document.createElement('button'); togBtn.className='intel-btn intel-btn-sm intel-btn-ghost';
@@ -1674,6 +1775,71 @@ I often need help with: client quotes, contract review, business Instagram posts
       var ntBadge=$('ntStatus'); if(ntBadge){ ntBadge.className='intel-conn-badge disconnected'; ntBadge.textContent='Error loading'; }
     }
   }
+
+  async function loadIntelStats(){
+    var results=await Promise.all([
+      supabase.from('agent_tasks').select('id',{count:'exact',head:true}),
+      supabase.from('user_documents').select('id',{count:'exact',head:true}),
+      supabase.from('user_routines').select('id',{count:'exact',head:true}).eq('enabled',true),
+      supabase.from('memory_embeddings').select('id',{count:'exact',head:true})
+    ]);
+    var t=results[0],d=results[1],r=results[2],m=results[3];
+    $('statTasks').textContent=typeof t.count==='number'?t.count:'—';
+    $('statDocs').textContent=typeof d.count==='number'?d.count:'—';
+    $('statRoutines').textContent=typeof r.count==='number'?r.count:'—';
+    $('statMems').textContent=typeof m.count==='number'?m.count:'—';
+  }
+
+  async function loadMemories(){
+    /* Profile facts */
+    var grid=$('memoryFactGrid');
+    grid.innerHTML='<p style="font-size:.75rem;color:var(--t3)">Loading…</p>';
+    var pr=await supabase.from('profiles').select('memory').eq('id',session.user.id).single();
+    var facts=(pr.data&&pr.data.memory)?pr.data.memory:{};
+    var keys=Object.keys(facts);
+    if(!keys.length){
+      grid.innerHTML='<p style="font-size:.75rem;color:var(--t3)">Nothing learned yet — start chatting and Aethyro will pick up context automatically.</p>';
+    } else {
+      grid.innerHTML='';
+      keys.forEach(function(k){
+        var chip=document.createElement('div'); chip.className='intel-fact';
+        chip.innerHTML='<span class="intel-fact-key">'+intelEsc(k)+'</span><span class="intel-fact-val">'+intelEsc(String(facts[k]))+'</span>';
+        var del=document.createElement('button'); del.className='intel-fact-del'; del.title='Forget this'; del.textContent='×';
+        del.addEventListener('click',async function(){
+          delete facts[k]; chip.remove();
+          await supabase.from('profiles').update({memory:facts}).eq('id',session.user.id);
+          if(!Object.keys(facts).length) grid.innerHTML='<p style="font-size:.75rem;color:var(--t3)">Nothing learned yet.</p>';
+        });
+        chip.appendChild(del); grid.appendChild(chip);
+      });
+    }
+    /* Recent semantic memory */
+    var list=$('memoryList');
+    list.innerHTML='<div class="intel-loading">Loading…</div>';
+    var mr=await supabase.from('memory_embeddings').select('id,role,content,created_at').order('created_at',{ascending:false}).limit(15);
+    if(mr.error||!mr.data||!mr.data.length){
+      list.innerHTML='<div class="intel-empty">No conversation memory yet — semantic embeddings appear here after your first chat.</div>';
+      return;
+    }
+    list.innerHTML='';
+    mr.data.forEach(function(mem){
+      var entry=document.createElement('div'); entry.className='intel-mem-entry';
+      entry.innerHTML='<div class="intel-mem-who"><span class="intel-mem-role '+mem.role+'">'+mem.role+'</span><span class="intel-mem-time">'+timeAgo(new Date(mem.created_at))+'</span></div>'+
+        '<div class="intel-mem-text">'+intelEsc(mem.content)+'</div>';
+      list.appendChild(entry);
+    });
+  }
+
+  $('clearMemsBtn').addEventListener('click',async function(){
+    if(!confirm('Delete all conversation memories? This cannot be undone.')) return;
+    this.disabled=true;
+    try{
+      await supabase.from('memory_embeddings').delete().eq('user_id',session.user.id);
+      $('statMems').textContent='0';
+      loadMemories();
+    }catch(e){ showToast('Error clearing memories','err'); }
+    finally{ this.disabled=false; }
+  });
 
   /* ── Credit modal ── */
   function openCreditModal(){ $('creditModal').classList.add('show'); }
