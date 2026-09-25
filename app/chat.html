@@ -334,6 +334,49 @@
 
   /* ── Running task indicator on sidebar button ── */
   .intel-running-badge{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 6px var(--cyan);animation:pulse-dot 1s ease-in-out infinite;margin-left:.35rem;flex-shrink:0}
+
+  /* ── Skeleton shimmer ── */
+  @keyframes shimmer{to{background-position:200% 0}}
+  .intel-skeleton{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.04) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;height:14px}
+
+  /* ── Cron preset chips ── */
+  .cron-presets{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem}
+  .cron-preset{background:rgba(255,255,255,.04);border:1px solid var(--b2);color:var(--t3);border-radius:5px;font-size:.68rem;padding:.2rem .5rem;cursor:pointer;font-family:var(--font);transition:all .15s;white-space:nowrap}
+  .cron-preset:hover{background:rgba(255,77,0,.1);border-color:rgba(255,77,0,.35);color:var(--orange)}
+
+  /* ── Stats bar — clickable tiles ── */
+  .intel-stat{cursor:pointer!important;transition:background .15s}
+  .intel-stat:hover{background:rgba(255,255,255,.05)}
+
+  /* ── Task running progress bar ── */
+  .task-running-bar{height:2px;background:linear-gradient(90deg,transparent 0%,var(--cyan) 50%,transparent 100%);background-size:200% 100%;animation:shimmer 1.2s linear infinite;border-radius:0 0 9px 9px;margin:-.75rem -.9rem .6rem;flex-shrink:0}
+
+  /* ── Inject result to chat button ── */
+  .intel-btn-inject{background:rgba(0,212,255,.08)!important;border:1px solid rgba(0,212,255,.2)!important;color:var(--cyan)!important}
+  .intel-btn-inject:hover{background:rgba(0,212,255,.16)!important}
+
+  /* ── Document file-type icon ── */
+  .doc-type-icon{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:7px;font-size:.65rem;font-weight:700;flex-shrink:0;font-family:var(--mono);letter-spacing:0}
+  .doc-type-pdf{background:rgba(239,68,68,.12);color:#fca5a5}
+  .doc-type-md{background:rgba(139,92,246,.12);color:#c4b5fd}
+  .doc-type-code{background:rgba(34,197,94,.12);color:#86efac}
+  .doc-type-json{background:rgba(245,158,11,.12);color:#fcd34d}
+  .doc-type-txt{background:rgba(100,116,139,.12);color:var(--t3)}
+  .intel-card-doc{display:flex;align-items:flex-start;gap:.65rem}
+  .intel-card-doc-info{flex:1;min-width:0}
+
+  /* ── Routine human-readable schedule label ── */
+  .routine-sched-human{font-size:.72rem;color:#c4b5fd;font-weight:600;font-family:var(--mono)}
+  .routine-next-badge{display:inline-flex;align-items:center;gap:.2rem;font-size:.67rem;padding:.12rem .4rem;border-radius:4px;background:rgba(139,92,246,.1);color:#c4b5fd;font-family:var(--mono);white-space:nowrap}
+
+  /* ── Toggle switch for routine enable ── */
+  .intel-toggle-wrap{display:inline-flex;align-items:center;gap:.45rem;cursor:pointer;user-select:none}
+  .intel-toggle-track{width:32px;height:17px;border-radius:10px;background:var(--b2);transition:background .2s;position:relative;flex-shrink:0}
+  .intel-toggle-track::after{content:'';position:absolute;top:2.5px;left:2.5px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  .intel-toggle-track.on{background:var(--green)}
+  .intel-toggle-track.on::after{transform:translateX(15px)}
+  .intel-toggle-label{font-size:.72rem;color:var(--t3);transition:color .2s}
+  .intel-toggle-track.on~.intel-toggle-label{color:var(--green)}
 </style>
 </head>
 <body>
@@ -547,7 +590,14 @@ I often need help with: client quotes, contract review, business Instagram posts
         <div class="intel-form-group">
           <label class="intel-label" for="routineSchedule">Schedule (cron)</label>
           <input class="intel-input" id="routineSchedule" type="text" placeholder="0 9 * * 1-5" value="0 9 * * 1-5" required/>
-          <span style="font-size:.69rem;color:var(--t3);display:block;margin-top:.25rem">Format: min hr dom mon dow · e.g. <code style="font-family:var(--mono)">0 9 * * 1-5</code> = weekdays at 9 AM UTC</span>
+          <div class="cron-presets">
+            <button type="button" class="cron-preset" data-cron="0 9 * * 1-5">Weekdays 9am</button>
+            <button type="button" class="cron-preset" data-cron="0 9 * * *">Daily 9am</button>
+            <button type="button" class="cron-preset" data-cron="0 * * * *">Hourly</button>
+            <button type="button" class="cron-preset" data-cron="0 */6 * * *">Every 6h</button>
+            <button type="button" class="cron-preset" data-cron="0 9 * * 1">Mondays</button>
+          </div>
+          <span style="font-size:.69rem;color:var(--t3);display:block;margin-top:.3rem">min hr dom mon dow (UTC) · click a preset or type your own</span>
         </div>
         <div class="intel-form-group">
           <label class="intel-label" for="routineModel">Model</label>
@@ -1412,6 +1462,39 @@ I often need help with: client quotes, contract review, business Instagram posts
     return Math.floor(h/24)+'d ago';
   }
 
+  function fmtBytes(n){
+    if(!n||n<1024) return (n||0)+' B';
+    if(n<1048576) return (n/1024).toFixed(1)+' KB';
+    return (n/1048576).toFixed(1)+' MB';
+  }
+
+  function cronHuman(expr){
+    var p=(expr||'').trim().split(/\s+/);
+    if(p.length!==5) return expr;
+    var min=p[0],hr=p[1],dom=p[2],mon=p[3],dow=p[4];
+    var days={0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'};
+    var timeStr='';
+    if(min==='0'&&hr!=='*'&&!hr.startsWith('*/')){ var h=parseInt(hr); timeStr=(h%12||12)+':00'+(h<12?'am':'pm')+' UTC'; }
+    else if(hr.startsWith('*/')){ timeStr='every '+hr.slice(2)+'h'; }
+    else if(hr==='*'&&min==='0'){ timeStr='every hour'; }
+    else { timeStr=min+' '+hr+' UTC'; }
+    if(dow==='1-5') return 'Weekdays at '+timeStr;
+    if(dow==='*'&&dom==='*') return 'Daily at '+timeStr;
+    if(dow==='1') return 'Mondays at '+timeStr;
+    if(dow!=='*'&&dom==='*'){ var d=parseInt(dow); return (days[d]||dow)+'s at '+timeStr; }
+    return expr;
+  }
+
+  function docTypeIcon(fileType,name){
+    var ext=(name||'').split('.').pop().toLowerCase();
+    var t=(fileType||'').toLowerCase();
+    if(t.includes('pdf')||ext==='pdf') return {cls:'doc-type-pdf',label:'PDF'};
+    if(ext==='md'||ext==='mdx') return {cls:'doc-type-md',label:'MD'};
+    if(ext==='json') return {cls:'doc-type-json',label:'JSON'};
+    if(['js','ts','py','rs','go','java','cpp','c','html','css','jsx','tsx'].includes(ext)) return {cls:'doc-type-code',label:ext.toUpperCase().slice(0,4)};
+    return {cls:'doc-type-txt',label:'TXT'};
+  }
+
   var intelInitialized=false;
 
   function openIntelPanel(){
@@ -1480,6 +1563,13 @@ I often need help with: client quotes, contract review, business Instagram posts
   function initIntelPanel(){
     loadIntelStats();
     loadTasks();
+    /* Cron preset chips */
+    document.querySelectorAll('.cron-preset').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        $('routineSchedule').value=btn.getAttribute('data-cron');
+        $('routineSchedule').focus();
+      });
+    });
     /* Tasks form */
     $('taskForm').addEventListener('submit',async function(e){
       e.preventDefault();
@@ -1603,7 +1693,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     var list=$('taskList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
     var r=await supabase.from('agent_tasks').select('id,goal,status,result,credits_used,created_at').order('created_at',{ascending:false}).limit(10);
-    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty">No tasks yet. Run your first agentic task above.</div>'; return; }
+    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="font-size:1.8rem;margin-bottom:.5rem">🤖</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No tasks yet</div><div style="margin-bottom:1rem">Set a goal above and Aethyro will research, plan, and execute it step by step.</div></div>'; return; }
     list.innerHTML='';
     var hasRunning=r.data.some(function(t){ return t.status==='running'||t.status==='pending'; });
     /* sidebar badge */
@@ -1611,11 +1701,15 @@ I often need help with: client quotes, contract review, business Instagram posts
     if(hasRunning&&!badge){ var b=document.createElement('span'); b.className='intel-running-badge'; $('intelBtn').appendChild(b); }
     else if(!hasRunning&&badge){ badge.remove(); }
     r.data.forEach(function(task){
-      var card=document.createElement('div'); card.className='intel-card';
-      var runningDot=(task.status==='running'||task.status==='pending')?'<span class="intel-running-badge" style="display:inline-block;margin-left:.3rem"></span>':'';
-      card.innerHTML='<div class="intel-card-title">'+intelEsc(task.goal)+runningDot+'</div>'+
-        '<div class="intel-card-meta"><span class="intel-status '+task.status+'">'+task.status+'</span> · '+timeAgo(new Date(task.created_at))+(task.credits_used?' · '+task.credits_used+' cr':'')+'</div>'+
-        (task.result&&task.status==='completed'?'<div class="intel-card-result">'+renderMarkdown(task.result.slice(0,300))+'</div>':'');
+      var isRunning=task.status==='running'||task.status==='pending';
+      var card=document.createElement('div'); card.className='intel-card'; card.style.overflow='hidden';
+      /* running shimmer bar at top */
+      var barHtml=isRunning?'<div class="task-running-bar"></div>':'';
+      var runningDot=isRunning?'<span class="intel-running-badge" style="display:inline-block;margin-left:.3rem"></span>':'';
+      card.innerHTML=barHtml+
+        '<div class="intel-card-title">'+intelEsc(task.goal)+runningDot+'</div>'+
+        '<div class="intel-card-meta"><span class="intel-status '+task.status+'">'+task.status+'</span> · '+timeAgo(new Date(task.created_at))+(task.credits_used?' · <span style="color:var(--orange)">'+task.credits_used+' cr</span>':'')+'</div>'+
+        (task.result&&task.status==='completed'?'<div class="intel-card-result">'+renderMarkdown(task.result.slice(0,250))+'</div>':'');
       var actions=document.createElement('div'); actions.className='intel-card-actions';
       /* Steps toggle */
       var stepsBtn=document.createElement('button'); stepsBtn.className='intel-btn intel-btn-sm intel-btn-ghost'; stepsBtn.textContent='Steps';
@@ -1623,13 +1717,14 @@ I often need help with: client quotes, contract review, business Instagram posts
         var existing=card.querySelector('.task-steps');
         if(existing){ existing.remove(); stepsBtn.textContent='Steps'; return; }
         stepsBtn.textContent='Loading…'; stepsBtn.disabled=true;
-        var sr=await supabase.from('agent_task_steps').select('step_index,description,status').eq('task_id',task.id).order('step_index',{ascending:true});
+        var sr=await supabase.from('agent_task_steps').select('step_index,description,status,result,tool_calls').eq('task_id',task.id).order('step_index',{ascending:true});
         stepsBtn.disabled=false; stepsBtn.textContent='Steps ▲';
-        if(!sr.data||!sr.data.length){ return; }
+        if(!sr.data||!sr.data.length){ showToast('No steps recorded yet','ok'); return; }
         var stepsEl=document.createElement('div'); stepsEl.className='task-steps';
         sr.data.forEach(function(step){
           var s=document.createElement('div'); s.className='task-step';
-          s.innerHTML='<span class="step-status-dot '+step.status+'"></span><span class="step-desc">'+intelEsc(step.description)+'</span>';
+          var tools=Array.isArray(step.tool_calls)&&step.tool_calls.length?'<span style="font-size:.65rem;color:var(--t3);margin-left:.4rem">'+step.tool_calls.map(function(tc){return '🔧 '+intelEsc(tc.tool);}).join(' ')+'</span>':'';
+          s.innerHTML='<span class="step-status-dot '+step.status+'"></span><span class="step-desc">'+intelEsc(step.description)+tools+'</span>';
           stepsEl.appendChild(s);
         });
         card.appendChild(stepsEl);
@@ -1645,6 +1740,13 @@ I often need help with: client quotes, contract review, business Instagram posts
           exp.innerHTML=renderMarkdown(task.result); viewBtn.textContent='Hide result'; card.appendChild(exp);
         });
         actions.appendChild(viewBtn);
+        /* inject into chat input */
+        var injectBtn=document.createElement('button'); injectBtn.className='intel-btn intel-btn-sm intel-btn-inject'; injectBtn.textContent='Use in chat';
+        injectBtn.addEventListener('click',function(){
+          var chatInput=$('messageInput');
+          if(chatInput){ chatInput.value='Based on the task result below, please help me with this:\n\n'+task.result; chatInput.focus(); closeIntelPanel(); }
+        });
+        actions.appendChild(injectBtn);
       }
       card.appendChild(actions); list.appendChild(card);
     });
@@ -1689,18 +1791,32 @@ I often need help with: client quotes, contract review, business Instagram posts
   async function loadDocuments(){
     var list=$('docList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
-    var r=await supabase.from('user_documents').select('id,name,file_type,chunk_count,created_at').order('created_at',{ascending:false}).limit(20);
-    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty">No documents yet. Upload files to build your knowledge base.</div>'; return; }
+    var r=await supabase.from('user_documents').select('id,name,file_type,size_bytes,chunk_count,created_at').order('created_at',{ascending:false}).limit(20);
+    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="font-size:1.8rem;margin-bottom:.5rem">📚</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No documents yet</div><div style="margin-bottom:1rem">Upload PDFs, text files, or code — Aethyro will embed them for semantic retrieval in every chat.</div></div>'; return; }
     list.innerHTML='';
     r.data.forEach(function(doc){
+      var icon=docTypeIcon(doc.file_type,doc.name);
       var card=document.createElement('div'); card.className='intel-card';
-      card.innerHTML='<div class="intel-card-title">'+intelEsc(doc.name)+'</div>'+
-        '<div class="intel-card-meta">'+intelEsc(doc.file_type||'text')+(doc.chunk_count?' · '+doc.chunk_count+' chunks':'')+'  · '+timeAgo(new Date(doc.created_at))+'</div>';
-      var actions=document.createElement('div'); actions.className='intel-card-actions';
-      var delBtn=document.createElement('button'); delBtn.className='intel-btn intel-btn-sm intel-btn-danger'; delBtn.textContent='Delete';
+      card.innerHTML='<div class="intel-card-doc">'+
+        '<div class="doc-type-icon '+icon.cls+'">'+icon.label+'</div>'+
+        '<div class="intel-card-doc-info">'+
+          '<div class="intel-card-title" style="margin-bottom:.15rem">'+intelEsc(doc.name)+'</div>'+
+          '<div class="intel-card-meta">'+
+            (doc.size_bytes?fmtBytes(doc.size_bytes)+' · ':'')+
+            (doc.chunk_count?doc.chunk_count+' chunks · ':'')+
+            timeAgo(new Date(doc.created_at))+
+          '</div>'+
+        '</div>'+
+        '</div>';
+      var actions=document.createElement('div'); actions.className='intel-card-actions'; actions.style.marginTop='.5rem';
+      var delBtn=document.createElement('button'); delBtn.className='intel-btn intel-btn-sm intel-btn-danger'; delBtn.textContent='Remove';
       delBtn.addEventListener('click',async function(){
-        if(!confirm('Delete "'+doc.name+'"?')) return;
-        await supabase.from('user_documents').delete().eq('id',doc.id); card.remove();
+        if(!confirm('Remove "'+doc.name+'" from your knowledge base?')) return;
+        delBtn.disabled=true; delBtn.textContent='Removing…';
+        var res=await supabase.from('user_documents').delete().eq('id',doc.id);
+        if(res.error){ showToast('Delete failed','err'); delBtn.disabled=false; delBtn.textContent='Remove'; return; }
+        card.style.opacity='0'; card.style.transition='opacity .25s'; setTimeout(function(){ card.remove(); },260);
+        loadIntelStats();
       });
       actions.appendChild(delBtn); card.appendChild(actions); list.appendChild(card);
     });
@@ -1710,20 +1826,36 @@ I often need help with: client quotes, contract review, business Instagram posts
     var list=$('routineList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
     var r=await supabase.from('user_routines').select('*').order('created_at',{ascending:false}).limit(20);
-    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty">No routines yet. Create your first scheduled AI task above.</div>'; return; }
+    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="font-size:1.8rem;margin-bottom:.5rem">⏰</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No routines yet</div><div>Schedule a recurring AI task above — daily briefings, weekly reports, hourly data checks, and more.</div></div>'; return; }
     list.innerHTML='';
     r.data.forEach(function(rt){
       var card=document.createElement('div'); card.className='intel-card';
-      var lastRun=rt.last_run_at?timeAgo(new Date(rt.last_run_at)):'Never';
-      var nextRun=rt.next_run_at?'Next: '+timeAgo(new Date(rt.next_run_at)):'Next run unscheduled';
-      card.innerHTML='<div class="intel-card-title">'+intelEsc(rt.name)+'</div>'+
-        '<div class="intel-card-meta">'+intelEsc(rt.schedule)+' · Last: '+lastRun+' · '+nextRun+'</div>'+
-        (rt.last_result?'<div class="intel-card-result">'+intelEsc(rt.last_result.slice(0,150))+'</div>':'');
+      var lastRun=rt.last_run_at?timeAgo(new Date(rt.last_run_at)):'Never run';
+      var nextRunStr='';
+      if(rt.next_run_at){
+        var nextDate=new Date(rt.next_run_at);
+        var diffMs=nextDate-Date.now();
+        if(diffMs<0) nextRunStr='<span class="routine-next-badge">overdue</span>';
+        else if(diffMs<3600000) nextRunStr='<span class="routine-next-badge">in '+Math.ceil(diffMs/60000)+'m</span>';
+        else nextRunStr='<span class="routine-next-badge">in '+Math.ceil(diffMs/3600000)+'h</span>';
+      }
+      card.innerHTML=
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem;margin-bottom:.2rem">'+
+          '<div class="intel-card-title" style="margin:0">'+intelEsc(rt.name)+'</div>'+
+          nextRunStr+
+        '</div>'+
+        '<div class="intel-card-meta"><span class="routine-sched-human">'+intelEsc(cronHuman(rt.schedule))+'</span> · Last: '+lastRun+'</div>'+
+        (rt.last_result?'<div class="intel-card-result" style="margin-top:.4rem">'+renderMarkdown(rt.last_result.slice(0,300))+'</div>':'');
       var actions=document.createElement('div'); actions.className='intel-card-actions';
-      var togBtn=document.createElement('button'); togBtn.className='intel-btn intel-btn-sm intel-btn-ghost';
-      togBtn.textContent=rt.enabled?'Enabled':'Disabled'; togBtn.style.color=rt.enabled?'var(--green)':'var(--t3)';
-      togBtn.addEventListener('click',async function(){
-        rt.enabled=!rt.enabled; togBtn.textContent=rt.enabled?'Enabled':'Disabled'; togBtn.style.color=rt.enabled?'var(--green)':'var(--t3)';
+      /* Toggle switch */
+      var togWrap=document.createElement('div'); togWrap.className='intel-toggle-wrap'; togWrap.title=rt.enabled?'Click to disable':'Click to enable';
+      var togTrack=document.createElement('div'); togTrack.className='intel-toggle-track'+(rt.enabled?' on':'');
+      var togLabel=document.createElement('span'); togLabel.className='intel-toggle-label'; togLabel.textContent=rt.enabled?'On':'Off'; togLabel.style.color=rt.enabled?'var(--green)':'var(--t3)';
+      togWrap.appendChild(togTrack); togWrap.appendChild(togLabel);
+      togWrap.addEventListener('click',async function(){
+        rt.enabled=!rt.enabled;
+        togTrack.className='intel-toggle-track'+(rt.enabled?' on':'');
+        togLabel.textContent=rt.enabled?'On':'Off'; togLabel.style.color=rt.enabled?'var(--green)':'var(--t3)';
         await supabase.from('user_routines').update({enabled:rt.enabled}).eq('id',rt.id);
       });
       var runBtn=document.createElement('button'); runBtn.className='intel-btn intel-btn-sm'; runBtn.textContent='Run now';
@@ -1737,16 +1869,19 @@ I often need help with: client quotes, contract review, business Instagram posts
           });
           var d=await resp.json();
           if(!resp.ok){ showToast(d.error||'Run failed','err'); return; }
-          showToast('Routine run complete','ok'); loadRoutines();
+          showToast('Routine complete','ok'); loadRoutines();
         }catch(e){ showToast('Network error','err'); }
         finally{ runBtn.disabled=false; runBtn.textContent='Run now'; }
       });
       var delBtn=document.createElement('button'); delBtn.className='intel-btn intel-btn-sm intel-btn-danger'; delBtn.textContent='Delete';
       delBtn.addEventListener('click',async function(){
         if(!confirm('Delete routine "'+rt.name+'"?')) return;
-        await supabase.from('user_routines').delete().eq('id',rt.id); card.remove();
+        delBtn.disabled=true;
+        await supabase.from('user_routines').delete().eq('id',rt.id);
+        card.style.opacity='0'; card.style.transition='opacity .25s'; setTimeout(function(){ card.remove(); },260);
+        loadIntelStats();
       });
-      actions.appendChild(togBtn); actions.appendChild(runBtn); actions.appendChild(delBtn);
+      actions.appendChild(togWrap); actions.appendChild(runBtn); actions.appendChild(delBtn);
       card.appendChild(actions); list.appendChild(card);
     });
   }
@@ -1788,6 +1923,27 @@ I often need help with: client quotes, contract review, business Instagram posts
     $('statDocs').textContent=typeof d.count==='number'?d.count:'—';
     $('statRoutines').textContent=typeof r.count==='number'?r.count:'—';
     $('statMems').textContent=typeof m.count==='number'?m.count:'—';
+    /* clickable stats → switch tab */
+    var map=[['statTasks','tasks'],['statDocs','knowledge'],['statRoutines','routines'],['statMems','memory']];
+    map.forEach(function(pair){
+      var el=$( pair[0]).closest('.intel-stat');
+      if(el&&!el.dataset.tabBound){
+        el.dataset.tabBound='1';
+        el.addEventListener('click',function(){
+          document.querySelectorAll('.intel-tab').forEach(function(tb){
+            var active=tb.dataset.tab===pair[1];
+            tb.classList.toggle('active',active);
+          });
+          document.querySelectorAll('.intel-pane').forEach(function(pn){
+            pn.style.display=pn.id==='pane-'+pair[1]?'':'none';
+          });
+          if(pair[1]==='tasks') loadTasks();
+          else if(pair[1]==='knowledge') loadDocuments();
+          else if(pair[1]==='routines') loadRoutines();
+          else if(pair[1]==='memory') loadMemories();
+        });
+      }
+    });
   }
 
   async function loadMemories(){
@@ -1803,6 +1959,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       grid.innerHTML='';
       keys.forEach(function(k){
         var chip=document.createElement('div'); chip.className='intel-fact';
+        chip.title=intelEsc(String(facts[k]));
         chip.innerHTML='<span class="intel-fact-key">'+intelEsc(k)+'</span><span class="intel-fact-val">'+intelEsc(String(facts[k]))+'</span>';
         var del=document.createElement('button'); del.className='intel-fact-del'; del.title='Forget this'; del.textContent='×';
         del.addEventListener('click',async function(){
@@ -1816,16 +1973,24 @@ I often need help with: client quotes, contract review, business Instagram posts
     /* Recent semantic memory */
     var list=$('memoryList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
-    var mr=await supabase.from('memory_embeddings').select('id,role,content,created_at').order('created_at',{ascending:false}).limit(15);
+    var mr=await supabase.from('memory_embeddings').select('id,role,content,created_at').order('created_at',{ascending:false}).limit(20);
     if(mr.error||!mr.data||!mr.data.length){
-      list.innerHTML='<div class="intel-empty">No conversation memory yet — semantic embeddings appear here after your first chat.</div>';
+      list.innerHTML='<div class="intel-empty" style="padding:2rem 1rem"><div style="font-size:1.5rem;margin-bottom:.4rem">🧠</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No memory yet</div><div>Semantic embeddings appear here after your first chat — used for long-context retrieval.</div></div>';
       return;
+    }
+    /* Count by role */
+    var userCount=mr.data.filter(function(m){return m.role==='user';}).length;
+    var asstCount=mr.data.filter(function(m){return m.role==='assistant';}).length;
+    var memHeader=list.previousElementSibling;
+    if(memHeader&&memHeader.tagName==='P'){
+      memHeader.innerHTML='Recent Conversation Memory <span style="font-size:.68rem;color:var(--t3);font-weight:400;margin-left:.35rem">'+userCount+' user · '+asstCount+' assistant (last 20)</span>';
     }
     list.innerHTML='';
     mr.data.forEach(function(mem){
       var entry=document.createElement('div'); entry.className='intel-mem-entry';
+      var shortContent=mem.content.length>200?mem.content.slice(0,200)+'…':mem.content;
       entry.innerHTML='<div class="intel-mem-who"><span class="intel-mem-role '+mem.role+'">'+mem.role+'</span><span class="intel-mem-time">'+timeAgo(new Date(mem.created_at))+'</span></div>'+
-        '<div class="intel-mem-text">'+intelEsc(mem.content)+'</div>';
+        '<div class="intel-mem-text">'+intelEsc(shortContent)+'</div>';
       list.appendChild(entry);
     });
   }
