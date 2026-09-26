@@ -65,6 +65,7 @@
   if(['starter','value','power','pro_7k'].indexOf(packParam)===-1) packParam=null;
   var nextUrl = (nextParam==='buy' && packParam) ? './chat.html?buy='+encodeURIComponent(packParam)
               : nextParam==='chat' ? './chat.html'
+              : nextParam==='admin' ? './admin.html'
               : './dashboard.html';
   var nextAbs = window.location.origin + nextUrl.replace('./','/app/');
   if(nextParam) document.getElementById('signupAlt').href='./signup.html?next='+encodeURIComponent(nextParam)+(packParam?'&pack='+encodeURIComponent(packParam):'');

@@ -657,8 +657,7 @@ async function loadStats() {
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
-    document.getElementById('loading-screen').hidden = true;
-    document.getElementById('error-screen').hidden = false;
+    window.location.href = './login.html?next=admin';
     return;
   }
   const email = session.user?.email;
