@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Claude Opus 5 in the Browser — Aethyro</title>
+<meta name="description" content="Aethyro gives you Claude Opus 5 — Anthropic's most capable model — directly in your browser with no API keys, no install, and no subscriptions. Pay only for what you use."/>
+<meta name="keywords" content="Claude Opus 5, Claude API alternative, Claude in browser, Anthropic Claude access, no API key Claude"/>
+<link rel="canonical" href="https://aethyro.com/claude-opus-alternative.html"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+<style>
+:root{
+  --bg:#0a0a0a;--s1:#111;--s2:#161616;--b1:#222;--b2:#2a2a2a;
+  --text:#f0f0f0;--t2:#a0a0a0;--t3:#666;
+  --orange:#ff4d00;--orange2:#e04400;--cyan:#00d4ff;
+  --font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  color-scheme:dark;
+}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --bg:#f8f8f6;--s1:#fff;--s2:#f3f3f0;--b1:#e0e0dc;--b2:#d0d0cc;
+  --text:#111;--t2:#444;--t3:#888;color-scheme:light;
+}}
+:root[data-theme="dark"]{color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--orange);text-decoration:none}
+a:hover{text-decoration:underline}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--b1);max-width:1000px;margin:0 auto}
+.brand{font-weight:700;font-size:1rem;color:var(--text);display:flex;align-items:center;gap:.5rem}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--orange);display:inline-block}
+.cta-btn{padding:.5rem 1.1rem;background:var(--orange);color:#fff;font-weight:700;border-radius:8px;font-size:.82rem}
+.cta-btn:hover{background:var(--orange2);text-decoration:none}
+.wrap{max-width:780px;margin:0 auto;padding:0 1rem 5rem}
+.hero{padding:4rem 0 2.5rem;text-align:center}
+.hero h1{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;line-height:1.15;margin-bottom:1rem}
+.hero p{font-size:1.05rem;color:var(--t2);max-width:560px;margin:0 auto 2rem;line-height:1.7}
+.badge{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .9rem;border-radius:20px;background:rgba(255,77,0,.1);border:1px solid rgba(255,77,0,.2);color:var(--orange);font-size:.78rem;font-weight:700;margin-bottom:1.25rem;font-family:var(--mono)}
+.btn-row{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
+.btn-primary{padding:.7rem 1.6rem;background:var(--orange);color:#fff;font-weight:700;border-radius:9px;font-size:.95rem}
+.btn-primary:hover{background:var(--orange2);text-decoration:none}
+.btn-sec{padding:.7rem 1.6rem;background:var(--s2);color:var(--text);font-weight:600;border-radius:9px;font-size:.95rem;border:1px solid var(--b2)}
+.btn-sec:hover{border-color:rgba(255,77,0,.4);text-decoration:none}
+.section{margin-top:3.5rem}
+.section h2{font-size:1.5rem;font-weight:800;margin-bottom:1rem}
+.section p{color:var(--t2);line-height:1.7;margin-bottom:.75rem}
+.compare-table{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:1rem}
+.compare-table th,.compare-table td{border:1px solid var(--b2);padding:.6rem .85rem;text-align:left}
+.compare-table th{background:var(--s2);font-weight:700;color:var(--t2);text-transform:uppercase;font-size:.7rem;letter-spacing:.06em}
+.compare-table td:first-child{color:var(--t2);font-weight:600}
+.yes{color:#22c55e;font-weight:700}
+.no{color:#ef4444;font-weight:700}
+.highlight{background:rgba(255,77,0,.06);border-color:rgba(255,77,0,.25)!important}
+.faq-list{display:flex;flex-direction:column;gap:.75rem;margin-top:1rem}
+.faq-item{background:var(--s2);border:1px solid var(--b1);border-radius:10px;padding:1.1rem 1.25rem}
+.faq-q{font-weight:700;font-size:.92rem;margin-bottom:.4rem}
+.faq-a{font-size:.87rem;color:var(--t2);line-height:1.65}
+.cta-box{margin-top:3.5rem;background:var(--s2);border:1px solid rgba(255,77,0,.25);border-radius:14px;padding:2rem;text-align:center}
+.cta-box h2{font-size:1.3rem;font-weight:800;margin-bottom:.75rem}
+.cta-box p{color:var(--t2);font-size:.88rem;margin-bottom:1.5rem;line-height:1.6}
+footer{border-top:1px solid var(--b1);padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--t3);max-width:780px;margin:0 auto}
+footer a{color:var(--t3)}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/" class="brand"><span class="dot"></span> Aethyro</a>
+  <a href="/app/signup.html?next=chat" class="cta-btn">Try free →</a>
+</nav>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="badge">⚡ Claude Opus 5 · No API key needed</div>
+    <h1>The easiest way to use<br/>Claude Opus 5</h1>
+    <p>Aethyro puts Anthropic's most capable model in your browser. No API keys, no terminal, no monthly subscription — just credits you use when you need them.</p>
+    <div class="btn-row">
+      <a href="/app/signup.html?next=chat" class="btn-primary">Start free — 200 credits →</a>
+      <a href="/app/chat.html" class="btn-sec">Try without signing up</a>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Why developers and researchers use Aethyro</h2>
+    <p>Getting Claude Opus 5 directly via the Anthropic API means managing API keys, rate limits, billing setup, and token counting. Aethyro handles all of that — you get the same model, streaming responses, and full context window with none of the setup.</p>
+    <p>It's also cheaper for sporadic use. At $4 for 200 credits you can run dozens of long-form prompts before spending what a monthly API subscription would cost.</p>
+  </div>
+
+  <div class="section">
+    <h2>Aethyro vs. the alternatives</h2>
+    <div style="overflow-x:auto">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="highlight">Aethyro</th>
+          <th>Anthropic API (direct)</th>
+          <th>Claude.ai Pro</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Model</td><td class="highlight">Claude Opus 5</td><td>Claude Opus 5</td><td>Claude Opus 5</td></tr>
+        <tr><td>Setup required</td><td class="highlight"><span class="yes">None</span></td><td><span class="no">API key + billing</span></td><td><span class="yes">None</span></td></tr>
+        <tr><td>Pricing model</td><td class="highlight"><span class="yes">Pay-per-use packs</span></td><td>Per-token</td><td>Monthly $20/mo</td></tr>
+        <tr><td>No recurring charge</td><td class="highlight"><span class="yes">✓</span></td><td>Usage-based</td><td><span class="no">Subscription</span></td></tr>
+        <tr><td>Browser-native UI</td><td class="highlight"><span class="yes">✓</span></td><td><span class="no">Build it yourself</span></td><td><span class="yes">✓</span></td></tr>
+        <tr><td>Conversation history</td><td class="highlight"><span class="yes">✓</span></td><td><span class="no">Manage yourself</span></td><td><span class="yes">✓</span></td></tr>
+        <tr><td>File / doc upload</td><td class="highlight"><span class="yes">✓</span></td><td>Build it yourself</td><td><span class="yes">✓</span></td></tr>
+        <tr><td>Share conversations</td><td class="highlight"><span class="yes">✓</span></td><td><span class="no">—</span></td><td>Limited</td></tr>
+        <tr><td>Free starter credits</td><td class="highlight"><span class="yes">200 credits</span></td><td><span class="no">None</span></td><td><span class="no">None</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Frequently asked questions</h2>
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-q">Is this the real Claude Opus 5?</div>
+        <div class="faq-a">Yes. Aethyro uses Anthropic's official API. You're talking to the same model as the direct API, with no wrapper or fine-tuning applied.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">What is a credit?</div>
+        <div class="faq-a">Credits are Aethyro's billing unit. One typical message costs 1–5 credits depending on its length and the length of the conversation history. The starter pack gives you 200 credits for $4.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Do credits expire?</div>
+        <div class="faq-a">No. Credits never expire. Buy a pack once and use it over weeks or months.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">What's the context window?</div>
+        <div class="faq-a">Claude Opus 5 supports a 200k-token context window. Aethyro passes the full conversation history up to that limit on every request.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Can I use Aethyro without an account?</div>
+        <div class="faq-a">Yes — you can send a few messages with our trial chat on the homepage or at <a href="/app/chat.html">/app/chat.html</a> without signing up. Creating a free account unlocks full conversation history and 200 starter credits.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cta-box">
+    <h2>Try Claude Opus 5 for free</h2>
+    <p>Create a free account and get 200 credits instantly. No credit card required.</p>
+    <a href="/app/signup.html?next=chat" class="btn-primary">Get started free →</a>
+  </div>
+</div>
+
+<footer>
+  <div style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:.75rem">
+    <a href="/">Home</a>
+    <a href="/pricing.html">Pricing</a>
+    <a href="/privacy.html">Privacy</a>
+    <a href="/terms.html">Terms</a>
+  </div>
+  © 2026 Aethyro · Claude Opus 5 in your browser
+</footer>
+</body>
+</html>
