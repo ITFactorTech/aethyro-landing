@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Aethyro Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0a;
+  --bg-2: #111111;
+  --bg-3: #1a1a1a;
+  --border: #222222;
+  --border-hi: #333333;
+  --text: #e8e8e8;
+  --text-muted: #777;
+  --text-dim: #444;
+  --accent: #ff4d00;
+  --accent-dim: rgba(255,77,0,.12);
+  --accent-hi: #ff6a2a;
+  --green: #22c55e;
+  --green-dim: rgba(34,197,94,.12);
+  --blue: #3b82f6;
+  --blue-dim: rgba(59,130,246,.12);
+  --amber: #f59e0b;
+  --amber-dim: rgba(245,158,11,.12);
+  --purple: #a855f7;
+  --purple-dim: rgba(168,85,247,.12);
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100%;
+}
+a { color: inherit; text-decoration: none; }
+
+/* Layout */
+#app { display: flex; min-height: 100%; }
+#sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+#main { flex: 1; min-width: 0; padding: 32px 32px 64px; }
+
+/* Sidebar */
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-logo-icon {
+  width: 28px; height: 28px;
+  background: var(--accent);
+  border-radius: 6px;
+  display: grid; place-items: center;
+  font-size: 14px; font-weight: 700; color: #fff;
+}
+.sidebar-logo-label { font-weight: 700; font-size: 15px; }
+.sidebar-logo-sub { font-size: 10px; color: var(--accent); letter-spacing: .08em; text-transform: uppercase; font-weight: 600; }
+.sidebar-nav { padding: 12px 10px; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 8px;
+  color: var(--text-muted); font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: all .15s;
+}
+.nav-item:hover { background: var(--bg-3); color: var(--text); }
+.nav-item.active { background: var(--accent-dim); color: var(--accent); }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 13px; color: var(--text-muted);
+}
+.sidebar-user { font-weight: 500; color: var(--text); font-size: 13px; }
+
+/* Header */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 28px;
+}
+.page-title { font-size: 22px; font-weight: 700; }
+.page-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.refresh-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 8px;
+  background: var(--bg-3); border: 1px solid var(--border);
+  color: var(--text-muted); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all .15s; font-family: inherit;
+}
+.refresh-btn:hover { border-color: var(--border-hi); color: var(--text); }
+.refresh-btn svg { width: 14px; height: 14px; }
+
+/* KPI tiles */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .15s;
+}
+.kpi-card:hover { border-color: var(--border-hi); }
+.kpi-icon {
+  width: 34px; height: 34px; border-radius: 8px;
+  display: grid; place-items: center;
+  margin-bottom: 14px;
+}
+.kpi-icon svg { width: 17px; height: 17px; }
+.kpi-card.orange .kpi-icon { background: var(--accent-dim); color: var(--accent); }
+.kpi-card.green  .kpi-icon { background: var(--green-dim);  color: var(--green);  }
+.kpi-card.blue   .kpi-icon { background: var(--blue-dim);   color: var(--blue);   }
+.kpi-card.amber  .kpi-icon { background: var(--amber-dim);  color: var(--amber);  }
+.kpi-card.purple .kpi-icon { background: var(--purple-dim); color: var(--purple); }
+.kpi-value { font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -.5px; }
+.kpi-label { font-size: 12px; color: var(--text-muted); margin-top: 6px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.kpi-sub { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+.kpi-sub b { color: var(--text-muted); }
+
+/* Section */
+.section { margin-bottom: 28px; }
+.section-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.section-title { font-size: 14px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+
+/* Charts row */
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-card {
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px;
+}
+.chart-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.chart-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+.chart-wrap { position: relative; height: 120px; }
+svg.sparkline { width: 100%; height: 100%; overflow: visible; }
+
+/* Drip funnel */
+.funnel-card {
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px;
+}
+.funnel-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.funnel-row:last-child { border-bottom: none; }
+.funnel-step {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.funnel-step.s1 { background: var(--blue-dim);   color: var(--blue);   }
+.funnel-step.s2 { background: var(--amber-dim);  color: var(--amber);  }
+.funnel-step.s3 { background: var(--purple-dim); color: var(--purple); }
+.funnel-info { flex: 1; }
+.funnel-name { font-size: 14px; font-weight: 500; }
+.funnel-desc { font-size: 12px; color: var(--text-muted); }
+.funnel-num { font-size: 22px; font-weight: 700; }
+.funnel-bar-wrap { height: 4px; background: var(--bg-3); border-radius: 2px; margin-top: 4px; }
+.funnel-bar { height: 100%; border-radius: 2px; transition: width .6s ease; }
+
+/* Top users table */
+.users-card {
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden;
+}
+.users-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.users-table th {
+  text-align: left; padding: 12px 16px;
+  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-3);
+}
+.users-table td { padding: 11px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.users-table tr:last-child td { border-bottom: none; }
+.users-table tr:hover td { background: var(--bg-3); }
+.user-email { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+}
+.badge-orange { background: var(--accent-dim); color: var(--accent); }
+.badge-green  { background: var(--green-dim);  color: var(--green); }
+.num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+/* Loading / error states */
+.state-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; z-index: 100;
+}
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.state-label { font-size: 14px; color: var(--text-muted); }
+.error-box {
+  background: rgba(255,77,0,.1); border: 1px solid rgba(255,77,0,.3);
+  border-radius: 10px; padding: 20px 28px; text-align: center; max-width: 340px;
+}
+.error-title { font-weight: 700; font-size: 16px; margin-bottom: 8px; color: var(--accent); }
+.error-msg { font-size: 13px; color: var(--text-muted); }
+.error-link { color: var(--accent); margin-top: 12px; display: inline-block; font-size: 13px; font-weight: 500; }
+
+/* Credits bar */
+.credit-split { display: flex; gap: 4px; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 10px; }
+.credit-issued   { background: var(--green); }
+.credit-consumed { background: var(--accent); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  #sidebar { display: none; }
+  #main { padding: 20px 16px 48px; }
+  .charts-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .kpi-value { font-size: 22px; }
+}
+
+/* Skeleton shimmer */
+.skel {
+  background: linear-gradient(90deg, var(--bg-3) 25%, var(--border) 50%, var(--bg-3) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 4px; display: inline-block;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+</style>
+</head>
+<body>
+
+<div id="loading-screen" class="state-overlay">
+  <div class="spinner"></div>
+  <div class="state-label">Loading dashboard…</div>
+</div>
+
+<div id="error-screen" class="state-overlay" hidden>
+  <div class="error-box">
+    <div class="error-title">Access Denied</div>
+    <div class="error-msg" id="error-msg">You must be signed in as the admin account to view this page.</div>
+    <a href="/app/login.html" class="error-link">← Sign in</a>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">A</div>
+      <div>
+        <div class="sidebar-logo-label">Aethyro</div>
+        <div class="sidebar-logo-sub">Admin</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" onclick="showSection('overview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Overview
+      </div>
+      <div class="nav-item" onclick="showSection('users')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Users
+      </div>
+      <div class="nav-item" onclick="showSection('drip')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        Email Drip
+      </div>
+      <div class="nav-item" onclick="showSection('credits')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Credits
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user" id="sidebar-email">—</div>
+      <div style="margin-top:4px">
+        <a href="/app/dashboard.html" style="color:var(--accent);font-size:12px;font-weight:500">← App dashboard</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main id="main">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub" id="last-updated">—</div>
+      </div>
+      <button class="refresh-btn" onclick="loadStats()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.89"/></svg>
+        Refresh
+      </button>
+    </div>
+
+    <!-- Overview section -->
+    <div id="section-overview">
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card orange">
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="kpi-value" id="kpi-users">—</div>
+          <div class="kpi-label">Total Users</div>
+          <div class="kpi-sub"><b id="kpi-users-7d">—</b> last 7 days · <b id="kpi-users-30d">—</b> last 30</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <div class="kpi-value" id="kpi-messages">—</div>
+          <div class="kpi-label">Total Messages</div>
+          <div class="kpi-sub"><b id="kpi-messages-7d">—</b> user msgs last 7 days</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </div>
+          <div class="kpi-value" id="kpi-convos">—</div>
+          <div class="kpi-label">Conversations</div>
+          <div class="kpi-sub">across all users</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div class="kpi-value" id="kpi-credits-consumed">—</div>
+          <div class="kpi-label">Credits Consumed</div>
+          <div class="kpi-sub"><b id="kpi-credits-issued">—</b> issued · <b id="kpi-credits-net">—</b> net</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <div class="kpi-value" id="kpi-drip-welcome">—</div>
+          <div class="kpi-label">Welcome Emails</div>
+          <div class="kpi-sub"><b id="kpi-drip-engagement">—</b> engaged · <b id="kpi-drip-reengagement">—</b> reengaged</div>
+        </div>
+      </div>
+
+      <!-- Sparkline charts -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Activity — last 30 days</div>
+        </div>
+        <div class="charts-row">
+          <div class="chart-card">
+            <div class="chart-title">New Signups</div>
+            <div class="chart-subtitle" id="chart-signups-total">Loading…</div>
+            <div class="chart-wrap">
+              <svg class="sparkline" id="chart-signups" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">User Messages</div>
+            <div class="chart-subtitle" id="chart-msgs-total">Loading…</div>
+            <div class="chart-wrap">
+              <svg class="sparkline" id="chart-messages" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Users section -->
+    <div id="section-users" hidden>
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Top Users by Credits Consumed</div>
+        </div>
+        <div class="users-card">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Email</th>
+                <th>Joined</th>
+                <th>Messages</th>
+                <th>Consumed</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drip section -->
+    <div id="section-drip" hidden>
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Email Drip Funnel</div>
+        </div>
+        <div class="funnel-card">
+          <div class="funnel-row">
+            <div class="funnel-step s1">1</div>
+            <div class="funnel-info">
+              <div class="funnel-name">Welcome Email</div>
+              <div class="funnel-desc">Sent on signup (day 0)</div>
+              <div class="funnel-bar-wrap">
+                <div class="funnel-bar" id="bar-welcome" style="background:var(--blue);width:0%"></div>
+              </div>
+            </div>
+            <div class="funnel-num" id="funnel-welcome">—</div>
+          </div>
+          <div class="funnel-row">
+            <div class="funnel-step s2">2</div>
+            <div class="funnel-info">
+              <div class="funnel-name">Engagement Email</div>
+              <div class="funnel-desc">Sent on day 2</div>
+              <div class="funnel-bar-wrap">
+                <div class="funnel-bar" id="bar-engagement" style="background:var(--amber);width:0%"></div>
+              </div>
+            </div>
+            <div class="funnel-num" id="funnel-engagement">—</div>
+          </div>
+          <div class="funnel-row">
+            <div class="funnel-step s3">3</div>
+            <div class="funnel-info">
+              <div class="funnel-name">Re-engagement Email</div>
+              <div class="funnel-desc">Sent on day 5 (zero-message users)</div>
+              <div class="funnel-bar-wrap">
+                <div class="funnel-bar" id="bar-reengagement" style="background:var(--purple);width:0%"></div>
+              </div>
+            </div>
+            <div class="funnel-num" id="funnel-reengagement">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Credits section -->
+    <div id="section-credits" hidden>
+      <div class="kpi-grid">
+        <div class="kpi-card green">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+          <div class="kpi-value" id="cr-issued">—</div>
+          <div class="kpi-label">Credits Issued</div>
+          <div class="kpi-sub">All time (purchases + bonuses)</div>
+        </div>
+        <div class="kpi-card orange">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg></div>
+          <div class="kpi-value" id="cr-consumed">—</div>
+          <div class="kpi-label">Credits Consumed</div>
+          <div class="kpi-sub">All time (AI usage)</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <div class="kpi-value" id="cr-net">—</div>
+          <div class="kpi-label">Net Balance</div>
+          <div class="kpi-sub">Outstanding credits held by users</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><div class="section-title">Issued vs Consumed</div></div>
+        <div class="chart-card">
+          <div class="credit-split" id="credit-split-bar">
+            <div class="credit-issued"  id="split-issued"   style="flex:0"></div>
+            <div class="credit-consumed" id="split-consumed" style="flex:0"></div>
+          </div>
+          <div style="display:flex;gap:20px;margin-top:12px;font-size:12px;color:var(--text-muted)">
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--green);margin-right:6px"></span>Issued</span>
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--accent);margin-right:6px"></span>Consumed</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://uzmdqbtflcpikjdrggqc.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6bWRxYnRmbGNwaWtqZHJnZ3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODQxOTgsImV4cCI6MjA5MTI2MDE5OH0.BwNVBJCbw9SG-ge7PfmoIW8q_33k-ZQlqpDHa2HrvHI';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const ADMIN_EMAIL = 'leer4030@gmail.com';
+
+let currentSection = 'overview';
+let statsCache = null;
+
+function fmt(n) {
+  if (n === undefined || n === null) return '—';
+  n = Number(n);
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+  return n.toLocaleString();
+}
+
+function showSection(name) {
+  ['overview','users','drip','credits'].forEach(s => {
+    document.getElementById('section-' + s).hidden = (s !== name);
+  });
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('onclick') === `showSection('${name}')`);
+  });
+  currentSection = name;
+  if (statsCache) renderSection(name, statsCache);
+}
+
+function drawSparkline(svgId, data, color) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  svg.innerHTML = '';
+  if (!data || data.length === 0) {
+    svg.innerHTML = '<text x="200" y="60" text-anchor="middle" fill="#444" font-size="28">No data yet</text>';
+    return;
+  }
+  // Fill in 30-day range with zeros
+  const today = new Date(); today.setHours(0,0,0,0);
+  const map = {};
+  data.forEach(d => { map[d.date] = +d.count; });
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0,10);
+    days.push({ date: key, count: map[key] || 0 });
+  }
+  const maxVal = Math.max(...days.map(d => d.count), 1);
+  const W = 400, H = 120, PAD = 4;
+  const pts = days.map((d, i) => {
+    const x = (i / (days.length - 1)) * W;
+    const y = H - PAD - ((d.count / maxVal) * (H - PAD * 2));
+    return [x, y];
+  });
+  const area = `M${pts[0][0]},${H} ` + pts.map(p => `L${p[0]},${p[1]}`).join(' ') + ` L${pts[pts.length-1][0]},${H} Z`;
+  const line = `M${pts[0][0]},${pts[0][1]} ` + pts.slice(1).map(p => `L${p[0]},${p[1]}`).join(' ');
+  const grad = `grad-${svgId}`;
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="${grad}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity=".25"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${area}" fill="url(#${grad})"/>
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  `;
+}
+
+function renderSection(section, s) {
+  if (section === 'overview' || section === 'all') {
+    // KPIs
+    document.getElementById('kpi-users').textContent         = fmt(s.users.total);
+    document.getElementById('kpi-users-7d').textContent      = '+' + fmt(s.users.last_7d);
+    document.getElementById('kpi-users-30d').textContent     = '+' + fmt(s.users.last_30d);
+    document.getElementById('kpi-messages').textContent      = fmt(s.messages.total);
+    document.getElementById('kpi-messages-7d').textContent   = fmt(s.messages.last_7d);
+    document.getElementById('kpi-convos').textContent        = fmt(s.conversations);
+    document.getElementById('kpi-credits-consumed').textContent = fmt(s.credits.consumed);
+    document.getElementById('kpi-credits-issued').textContent   = fmt(s.credits.issued);
+    document.getElementById('kpi-credits-net').textContent      = fmt(s.credits.net);
+    document.getElementById('kpi-drip-welcome').textContent     = fmt(s.drip.welcome);
+    document.getElementById('kpi-drip-engagement').textContent  = fmt(s.drip.engagement);
+    document.getElementById('kpi-drip-reengagement').textContent = fmt(s.drip.reengagement);
+    // Charts
+    const totalSignups = (s.signups_by_day || []).reduce((a, d) => a + +d.count, 0);
+    const totalMsgs    = (s.messages_by_day || []).reduce((a, d) => a + +d.count, 0);
+    document.getElementById('chart-signups-total').textContent = `${totalSignups} signups in last 30 days`;
+    document.getElementById('chart-msgs-total').textContent    = `${totalMsgs} user messages in last 30 days`;
+    drawSparkline('chart-signups',  s.signups_by_day,  '#ff4d00');
+    drawSparkline('chart-messages', s.messages_by_day, '#22c55e');
+  }
+  if (section === 'users' || section === 'all') {
+    const tbody = document.getElementById('users-tbody');
+    const users = s.top_users || [];
+    if (users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No data yet.</td></tr>';
+    } else {
+      tbody.innerHTML = users.map((u, i) => `
+        <tr>
+          <td class="num" style="color:var(--text-muted)">${i + 1}</td>
+          <td class="user-email">${u.email || '—'}</td>
+          <td class="num" style="color:var(--text-muted)">${u.joined || '—'}</td>
+          <td class="num">${fmt(u.messages)}</td>
+          <td><span class="badge badge-orange">${fmt(u.consumed)}</span></td>
+          <td class="num">${fmt(u.balance)}</td>
+        </tr>`).join('');
+    }
+  }
+  if (section === 'drip' || section === 'all') {
+    const w  = s.drip.welcome || 0;
+    const e  = s.drip.engagement || 0;
+    const r  = s.drip.reengagement || 0;
+    const base = Math.max(w, 1);
+    document.getElementById('funnel-welcome').textContent      = fmt(w);
+    document.getElementById('funnel-engagement').textContent   = fmt(e);
+    document.getElementById('funnel-reengagement').textContent = fmt(r);
+    document.getElementById('bar-welcome').style.width      = '100%';
+    document.getElementById('bar-engagement').style.width   = Math.round((e / base) * 100) + '%';
+    document.getElementById('bar-reengagement').style.width = Math.round((r / base) * 100) + '%';
+  }
+  if (section === 'credits' || section === 'all') {
+    document.getElementById('cr-issued').textContent   = fmt(s.credits.issued);
+    document.getElementById('cr-consumed').textContent = fmt(s.credits.consumed);
+    document.getElementById('cr-net').textContent      = fmt(s.credits.net);
+    const total = (s.credits.issued || 0) + (s.credits.consumed || 0);
+    if (total > 0) {
+      document.getElementById('split-issued').style.flex   = s.credits.issued;
+      document.getElementById('split-consumed').style.flex = s.credits.consumed;
+    }
+  }
+}
+
+async function loadStats() {
+  const { data, error } = await sb.rpc('get_admin_stats');
+  if (error) {
+    console.error(error);
+    document.getElementById('loading-screen').hidden = true;
+    document.getElementById('error-screen').hidden = false;
+    document.getElementById('error-msg').textContent = error.message || 'Failed to load stats.';
+    return;
+  }
+  statsCache = data;
+  document.getElementById('last-updated').textContent = 'Last updated ' + new Date().toLocaleTimeString();
+  renderSection('all', data);
+  document.getElementById('loading-screen').hidden = true;
+  document.getElementById('app').hidden = false;
+}
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) {
+    document.getElementById('loading-screen').hidden = true;
+    document.getElementById('error-screen').hidden = false;
+    return;
+  }
+  const email = session.user?.email;
+  if (email !== ADMIN_EMAIL) {
+    document.getElementById('loading-screen').hidden = true;
+    document.getElementById('error-screen').hidden = false;
+    document.getElementById('error-msg').textContent = `This page is restricted. You're signed in as ${email}.`;
+    return;
+  }
+  document.getElementById('sidebar-email').textContent = email;
+  await loadStats();
+}
+
+init();
+</script>
+</body>
+</html>
