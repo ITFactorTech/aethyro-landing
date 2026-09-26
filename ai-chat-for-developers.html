@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Chat for Developers — Code Review, Debugging & Architecture with Claude</title>
+<meta name="description" content="Aethyro gives developers instant access to Claude Opus 5 for code review, debugging, architecture decisions, and writing documentation — no API setup required."/>
+<meta name="keywords" content="AI code review, Claude for developers, AI debugging tool, AI pair programmer, AI architecture review"/>
+<link rel="canonical" href="https://aethyro.com/ai-chat-for-developers.html"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+<style>
+:root{
+  --bg:#0a0a0a;--s1:#111;--s2:#161616;--b1:#222;--b2:#2a2a2a;
+  --text:#f0f0f0;--t2:#a0a0a0;--t3:#666;
+  --orange:#ff4d00;--orange2:#e04400;--cyan:#00d4ff;
+  --font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  color-scheme:dark;
+}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --bg:#f8f8f6;--s1:#fff;--s2:#f3f3f0;--b1:#e0e0dc;--b2:#d0d0cc;
+  --text:#111;--t2:#444;--t3:#888;color-scheme:light;
+}}
+:root[data-theme="dark"]{color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--orange);text-decoration:none}
+a:hover{text-decoration:underline}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--b1);max-width:1000px;margin:0 auto}
+.brand{font-weight:700;font-size:1rem;color:var(--text);display:flex;align-items:center;gap:.5rem}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--orange);display:inline-block}
+.cta-btn{padding:.5rem 1.1rem;background:var(--orange);color:#fff;font-weight:700;border-radius:8px;font-size:.82rem}
+.cta-btn:hover{background:var(--orange2);text-decoration:none}
+.wrap{max-width:780px;margin:0 auto;padding:0 1rem 5rem}
+.hero{padding:4rem 0 2.5rem;text-align:center}
+.hero h1{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;line-height:1.15;margin-bottom:1rem;text-wrap:balance}
+.hero p{font-size:1.05rem;color:var(--t2);max-width:560px;margin:0 auto 2rem;line-height:1.7}
+.badge{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .9rem;border-radius:20px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);color:var(--cyan);font-size:.78rem;font-weight:700;margin-bottom:1.25rem;font-family:var(--mono)}
+.btn-row{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
+.btn-primary{padding:.7rem 1.6rem;background:var(--orange);color:#fff;font-weight:700;border-radius:9px;font-size:.95rem}
+.btn-primary:hover{background:var(--orange2);text-decoration:none}
+.section{margin-top:3.5rem}
+.section h2{font-size:1.5rem;font-weight:800;margin-bottom:1rem}
+.section p{color:var(--t2);line-height:1.7;margin-bottom:.75rem}
+.use-cases{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}
+@media(max-width:580px){.use-cases{grid-template-columns:1fr}}
+.use-card{background:var(--s2);border:1px solid var(--b1);border-radius:12px;padding:1.1rem 1.25rem}
+.use-card h3{font-size:.92rem;font-weight:700;margin-bottom:.45rem}
+.use-card p{font-size:.82rem;color:var(--t2);line-height:1.55;margin:0}
+.use-card .icon{font-size:1.4rem;margin-bottom:.5rem}
+.code-example{background:#0d0d0d;border:1px solid var(--b2);border-radius:10px;padding:1rem 1.25rem;margin-top:1rem;font-family:var(--mono);font-size:.8rem;line-height:1.7;color:#d4d4d4;overflow-x:auto}
+.code-example .comment{color:var(--t3)}
+.prompt-list{display:flex;flex-direction:column;gap:.6rem;margin-top:1rem}
+.prompt-item{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:.75rem 1rem;font-size:.85rem;color:var(--t2);line-height:1.5}
+.prompt-item strong{color:var(--text)}
+.cta-box{margin-top:3.5rem;background:var(--s2);border:1px solid rgba(255,77,0,.25);border-radius:14px;padding:2rem;text-align:center}
+.cta-box h2{font-size:1.3rem;font-weight:800;margin-bottom:.75rem}
+.cta-box p{color:var(--t2);font-size:.88rem;margin-bottom:1.5rem;line-height:1.6}
+footer{border-top:1px solid var(--b1);padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--t3);max-width:780px;margin:0 auto}
+footer a{color:var(--t3)}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/" class="brand"><span class="dot"></span> Aethyro</a>
+  <a href="/app/signup.html?next=chat" class="cta-btn">Try free →</a>
+</nav>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="badge">// Claude Opus 5 for developers</div>
+    <h1>Your AI pair programmer, code reviewer, and architecture advisor</h1>
+    <p>Aethyro gives developers instant access to Claude Opus 5 for the tasks that matter: code review, debugging, refactoring, documentation, and architectural decisions.</p>
+    <div class="btn-row">
+      <a href="/app/signup.html?next=chat" class="btn-primary">Start free — 200 credits →</a>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>What developers use Aethyro for</h2>
+    <div class="use-cases">
+      <div class="use-card">
+        <div class="icon">🔍</div>
+        <h3>Code review</h3>
+        <p>Paste a diff or a function and get a thorough review — bugs, edge cases, style issues, and performance concerns in plain English.</p>
+      </div>
+      <div class="use-card">
+        <div class="icon">🐛</div>
+        <h3>Debugging</h3>
+        <p>Share an error trace and the surrounding code. Claude reasons through the root cause and proposes the fix, not just the symptom.</p>
+      </div>
+      <div class="use-card">
+        <div class="icon">🏗️</div>
+        <h3>Architecture review</h3>
+        <p>Describe your system design and ask for trade-offs. Claude Opus 5 handles systems-level reasoning better than any other model.</p>
+      </div>
+      <div class="use-card">
+        <div class="icon">📝</div>
+        <h3>Documentation</h3>
+        <p>Turn a messy function into clear docstrings, a README, or an RFC. Paste the code and get the docs — no manual writing needed.</p>
+      </div>
+      <div class="use-card">
+        <div class="icon">🔄</div>
+        <h3>Refactoring</h3>
+        <p>Ask Claude to rewrite legacy code with modern patterns, improve readability, or migrate from one framework to another.</p>
+      </div>
+      <div class="use-card">
+        <div class="icon">📚</div>
+        <h3>Library research</h3>
+        <p>Ask deep questions about an API or library. Claude's 200k context window fits entire documentation files in a single conversation.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Prompts developers use every day</h2>
+    <div class="prompt-list">
+      <div class="prompt-item"><strong>"Review this function for edge cases and off-by-one errors:"</strong> [paste code]</div>
+      <div class="prompt-item"><strong>"I'm getting this error in production. Here's the stack trace and the relevant code. What's wrong?"</strong></div>
+      <div class="prompt-item"><strong>"Rewrite this Python class to use async/await instead of threading."</strong></div>
+      <div class="prompt-item"><strong>"What are the trade-offs between PostgreSQL and DynamoDB for this access pattern?"</strong></div>
+      <div class="prompt-item"><strong>"Write a technical RFC for this feature. Here are the requirements:"</strong></div>
+      <div class="prompt-item"><strong>"Explain this SQL query and suggest how to optimize it for a table with 50M rows."</strong></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Why Claude Opus 5, not GPT-4 or Gemini?</h2>
+    <p>Claude Opus 5 consistently outperforms other frontier models on software engineering benchmarks (SWE-bench, HumanEval, and MATH). Its large 200k context window is particularly valuable for developers who need to paste entire files, repositories, or documentation without truncation.</p>
+    <p>Claude also excels at multi-step reasoning — which matters when you need it to understand an entire codebase, trace a bug through multiple layers, or reason about complex trade-offs rather than just recall syntax.</p>
+  </div>
+
+  <div class="section">
+    <h2>No API keys. No setup. Just the model.</h2>
+    <p>Aethyro handles the Anthropic API connection, token counting, and billing infrastructure. You sign up, get 200 free credits, and start using Claude Opus 5 in under a minute. When you need more, buy a credit pack starting at $4 — credits never expire.</p>
+    <div class="code-example">
+<span class="comment"># Traditional approach (API key, billing setup, token management)</span>
+pip install anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+python -c "import anthropic; ..."  <span class="comment"># and build your own UI</span>
+
+<span class="comment"># Aethyro approach</span>
+go to aethyro.com → sign up → start chatting
+    </div>
+  </div>
+
+  <div class="cta-box">
+    <h2>Try it with your own code</h2>
+    <p>Create a free account, get 200 credits, and paste your first code review request in under a minute. No credit card required.</p>
+    <a href="/app/signup.html?next=chat" class="btn-primary">Start free →</a>
+  </div>
+</div>
+
+<footer>
+  <div style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:.75rem">
+    <a href="/">Home</a>
+    <a href="/pricing.html">Pricing</a>
+    <a href="/claude-opus-alternative.html">Claude Opus access</a>
+    <a href="/privacy.html">Privacy</a>
+  </div>
+  © 2026 Aethyro · AI chat for developers
+</footer>
+</body>
+</html>

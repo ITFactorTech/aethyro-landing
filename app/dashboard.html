@@ -104,6 +104,13 @@
   .history-amount { font-weight: 700; }
   .history-amount.credit { color: #22c55e; }
   .history-amount.debit { color: #ff4d00; }
+  .spark-panel { position: relative; }
+  .spark-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .6rem; }
+  .spark-total { font-size: .78rem; color: var(--muted, #888); font-family: var(--mono, monospace); }
+  .spark-svg { width: 100%; height: 64px; display: block; overflow: visible; }
+  .spark-line { fill: none; stroke: #ff4d00; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .spark-fill { fill: url(#sparkGrad); stroke: none; }
+  .spark-labels { display: flex; justify-content: space-between; margin-top: .35rem; font-size: .68rem; color: var(--muted, #888); font-family: var(--mono, monospace); }
 </style>
 </head>
 <body>
@@ -181,6 +188,24 @@
       </div>
     </div>
 
+    <!-- CREDIT USAGE SPARKLINE -->
+    <div class="panel spark-panel" style="margin-top:1rem">
+      <div class="spark-header">
+        <h2 style="margin:0">Daily usage — last 30 days</h2>
+        <span class="spark-total" id="sparkTotal"></span>
+      </div>
+      <svg class="spark-svg" id="sparkSvg" viewBox="0 0 300 64" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ff4d00" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#ff4d00" stop-opacity="0.02"/>
+          </linearGradient>
+        </defs>
+        <text x="150" y="36" text-anchor="middle" fill="#666" font-size="10" font-family="monospace" id="sparkEmpty">no usage data yet</text>
+      </svg>
+      <div class="spark-labels" id="sparkLabels"></div>
+    </div>
+
     <!-- CREDIT HISTORY -->
     <div class="panel" style="margin-top:1rem">
       <h2>Credit history</h2>
@@ -244,12 +269,14 @@
 
       // Fetch all data in parallel
       var now=new Date(), monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString();
-      var [balRes, ledRes, convRes, lastMsgRes, monthDebitsRes] = await Promise.all([
+      var thirtyDaysAgo=new Date(Date.now()-30*86400000).toISOString();
+      var [balRes, ledRes, convRes, lastMsgRes, monthDebitsRes, sparkRes] = await Promise.all([
         supabase.rpc('get_credit_balance'),
         supabase.from('credit_ledger').select('*').order('created_at',{ascending:false}).limit(20),
         supabase.from('conversations').select('id',{count:'exact',head:true}),
         supabase.from('messages').select('created_at').order('created_at',{ascending:false}).limit(1),
-        supabase.from('credit_ledger').select('delta').lt('delta',0).gte('created_at',monthStart)
+        supabase.from('credit_ledger').select('delta').lt('delta',0).gte('created_at',monthStart),
+        supabase.from('credit_ledger').select('delta,created_at').lt('delta',0).gte('created_at',thirtyDaysAgo)
       ]);
 
       // ── Credits ──
@@ -310,12 +337,54 @@
         }).join('');
       }
 
+      // ── Sparkline ──
+      var sparkRows = (sparkRes.data || []);
+      if(sparkRows.length){
+        // bucket by day (YYYY-MM-DD)
+        var dayMap={};
+        sparkRows.forEach(function(r){
+          var d=r.created_at.slice(0,10);
+          dayMap[d]=(dayMap[d]||0)+Math.abs(r.delta);
+        });
+        // build 30-day array
+        var days=[], vals=[];
+        for(var di=29;di>=0;di--){
+          var dd=new Date(Date.now()-di*86400000);
+          var key=dd.toISOString().slice(0,10);
+          days.push(key);
+          vals.push(dayMap[key]||0);
+        }
+        var maxVal=Math.max.apply(null,vals)||1;
+        var W=300, H=60, pad=2;
+        // polyline points
+        var pts=vals.map(function(v,i){
+          var x=pad+(W-pad*2)*i/(vals.length-1);
+          var y=H-pad-(H-pad*2)*(v/maxVal);
+          return x+','+y;
+        }).join(' ');
+        // fill area (close polygon back along baseline)
+        var firstX=pad, lastX=pad+(W-pad*2);
+        var fillPts=pts+' '+lastX+','+(H-pad)+' '+firstX+','+(H-pad);
+        var svg=$('sparkSvg');
+        $('sparkEmpty').style.display='none';
+        var fillEl=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+        fillEl.setAttribute('points',fillPts); fillEl.setAttribute('class','spark-fill');
+        var lineEl=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+        lineEl.setAttribute('points',pts); lineEl.setAttribute('class','spark-line');
+        svg.appendChild(fillEl); svg.appendChild(lineEl);
+        var totalSparkCredits=vals.reduce(function(s,v){return s+v;},0);
+        $('sparkTotal').textContent=totalSparkCredits.toLocaleString()+' credits used';
+        // labels: first & last day
+        var labels=$('sparkLabels');
+        labels.innerHTML='<span>'+days[0].slice(5)+'</span><span>today</span>';
+      }
+
       // ── Buy credits section ──
       var buyEl = $('buyCreditsList');
       buyEl.innerHTML = '';
       CREDIT_PACKS.forEach(function(p){
         var card = document.createElement('a');
-        card.href = p.stripe; card.target = '_blank'; card.rel = 'noopener';
+        card.href = './chat.html?buy='+encodeURIComponent(p.pack);
         card.className = 'action-card';
         card.innerHTML = '<div class="action-icon">⚡</div>'
           +'<div class="action-title">'+p.price+' — '+p.label+'</div>'

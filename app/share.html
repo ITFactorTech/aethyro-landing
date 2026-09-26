@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Shared conversation — Aethyro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+<style>
+:root{
+  --bg:#0a0a0a;--s1:#111;--s2:#161616;--b1:#222;--b2:#2a2a2a;
+  --text:#f0f0f0;--t2:#a0a0a0;--t3:#666;
+  --orange:#ff4d00;--orange2:#e04400;--cyan:#00d4ff;
+  --font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  color-scheme:dark;
+}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --bg:#f8f8f6;--s1:#fff;--s2:#f3f3f0;--b1:#e0e0dc;--b2:#d0d0cc;
+  --text:#111;--t2:#444;--t3:#888;color-scheme:light;
+}}
+:root[data-theme="dark"]{color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding:0 1rem 4rem}
+a{color:var(--orange);text-decoration:none}
+a:hover{text-decoration:underline}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:1rem 0;border-bottom:1px solid var(--b1);margin-bottom:2rem;max-width:740px;margin-left:auto;margin-right:auto}
+.brand{display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:1rem;color:var(--text);text-decoration:none}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--orange);display:inline-block}
+.cta-btn{padding:.45rem 1rem;background:var(--orange);color:#fff;font-weight:700;border-radius:8px;font-size:.82rem;white-space:nowrap}
+.cta-btn:hover{background:var(--orange2);text-decoration:none}
+
+.share-wrap{max-width:740px;margin:0 auto}
+.share-header{margin-bottom:1.5rem}
+.share-title{font-size:1.4rem;font-weight:700;margin-bottom:.25rem}
+.share-meta{font-size:.78rem;color:var(--t3);font-family:var(--mono)}
+.share-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;padding:.2rem .6rem;border-radius:5px;background:rgba(255,77,0,.1);border:1px solid rgba(255,77,0,.2);color:var(--orange);margin-bottom:.75rem}
+
+.msgs-list{display:flex;flex-direction:column;gap:1.25rem}
+.msg-row{display:flex;flex-direction:column;gap:.35rem}
+.msg-who{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);font-family:var(--mono)}
+.msg-row.assistant .msg-who{color:var(--orange)}
+.msg-bubble{background:var(--s2);border:1px solid var(--b1);border-radius:10px;padding:.85rem 1rem;font-size:.9rem;line-height:1.65;color:var(--text);word-break:break-word}
+.msg-row.user .msg-bubble{background:rgba(255,255,255,.04);border-color:var(--b2)}
+
+/* Markdown styles */
+.msg-bubble h1,.msg-bubble h2,.msg-bubble h3{margin:.85rem 0 .4rem;font-weight:700;line-height:1.25}
+.msg-bubble h1{font-size:1.1rem}.msg-bubble h2{font-size:1rem}.msg-bubble h3{font-size:.95rem}
+.msg-bubble p{margin:.5rem 0}.msg-bubble p:first-child{margin-top:0}.msg-bubble p:last-child{margin-bottom:0}
+.msg-bubble ul,.msg-bubble ol{padding-left:1.4rem;margin:.5rem 0}
+.msg-bubble li{margin:.2rem 0}
+.msg-bubble code{font-family:var(--mono);font-size:.82rem;background:rgba(255,255,255,.07);border-radius:3px;padding:.1em .3em}
+.msg-bubble pre{background:#0d0d0d;border:1px solid var(--b2);border-radius:8px;padding:.75rem 1rem;overflow-x:auto;margin:.5rem 0}
+.msg-bubble pre code{background:none;padding:0;font-size:.82rem}
+.msg-bubble blockquote{border-left:3px solid var(--b2);padding-left:.75rem;color:var(--t2);margin:.5rem 0;font-style:italic}
+.msg-bubble strong{font-weight:700}
+.msg-bubble em{font-style:italic}
+.msg-bubble a{color:var(--cyan)}
+.msg-bubble table{width:100%;border-collapse:collapse;margin:.5rem 0;font-size:.82rem;overflow-x:auto;display:block}
+.msg-bubble th,.msg-bubble td{border:1px solid var(--b2);padding:.4rem .6rem;text-align:left}
+.msg-bubble th{background:rgba(255,255,255,.05);font-weight:600}
+
+.loading-state,.error-state{text-align:center;padding:4rem 1rem;color:var(--t2);font-size:.9rem}
+.error-state{color:#fca5a5}
+.footer-cta{margin-top:3rem;padding:1.5rem;background:var(--s2);border:1px solid var(--b1);border-radius:12px;text-align:center}
+.footer-cta h3{font-size:1.05rem;font-weight:700;margin-bottom:.5rem}
+.footer-cta p{font-size:.83rem;color:var(--t2);margin-bottom:1rem;line-height:1.5}
+.footer-cta a{display:inline-flex;align-items:center;gap:.4rem;padding:.6rem 1.4rem;background:var(--orange);color:#fff;font-weight:700;border-radius:8px;font-size:.9rem;text-decoration:none}
+.footer-cta a:hover{background:var(--orange2)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/" class="brand"><span class="dot"></span> Aethyro</a>
+  <a href="/app/signup.html?next=chat" class="cta-btn">Try free →</a>
+</div>
+
+<div class="share-wrap">
+  <div id="loading" class="loading-state">Loading conversation…</div>
+  <div id="error" class="error-state" style="display:none">Conversation not found or no longer shared.</div>
+
+  <div id="content" style="display:none">
+    <div class="share-header">
+      <div class="share-badge">⚡ Shared via Aethyro Cloud</div>
+      <div class="share-title" id="convTitle">Conversation</div>
+      <div class="share-meta" id="convMeta"></div>
+    </div>
+
+    <div class="msgs-list" id="msgsList"></div>
+
+    <div class="footer-cta">
+      <h3>Want your own AI conversations?</h3>
+      <p>Aethyro Cloud runs Claude Opus 5 — the world's most capable model. Start free with 200 credits, no card required.</p>
+      <a href="/app/signup.html?next=chat">Start chatting free →</a>
+    </div>
+  </div>
+</div>
+
+<script src="./vendor/supabase.js"></script>
+<script src="./config.js"></script>
+<script>
+(function(){
+  if(!window.AETHYRO){ document.getElementById('loading').style.display='none'; document.getElementById('error').style.display=''; return; }
+  var supabase=window.AETHYRO.supabase;
+
+  function renderMarkdown(text){
+    if(!window.marked || !window.DOMPurify) return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    try{ return DOMPurify.sanitize(marked.parse(text||'')); }catch(e){ return text; }
+  }
+
+  var token=new URLSearchParams(location.search).get('t');
+  if(!token){ document.getElementById('loading').style.display='none'; document.getElementById('error').style.display=''; return; }
+
+  (async function(){
+    var convR=await supabase.from('conversations').select('id,title,created_at').eq('share_token',token).single();
+    if(convR.error||!convR.data){
+      document.getElementById('loading').style.display='none';
+      document.getElementById('error').style.display='';
+      return;
+    }
+    var conv=convR.data;
+    var msgR=await supabase.from('messages')
+      .select('role,content,created_at')
+      .eq('conversation_id',conv.id)
+      .order('created_at',{ascending:true});
+    if(msgR.error||!msgR.data||!msgR.data.length){
+      document.getElementById('loading').style.display='none';
+      document.getElementById('error').style.display='';
+      return;
+    }
+
+    document.getElementById('convTitle').textContent=conv.title||'Shared Conversation';
+    document.title=(conv.title||'Shared Conversation')+' — Aethyro';
+    document.getElementById('convMeta').textContent=
+      msgR.data.length+' messages · shared '+new Date(conv.created_at).toLocaleDateString();
+
+    var list=document.getElementById('msgsList');
+    msgR.data.forEach(function(m){
+      var row=document.createElement('div');
+      row.className='msg-row '+m.role;
+      var who=document.createElement('div');
+      who.className='msg-who';
+      who.textContent=m.role==='user'?'User':'Aethyro';
+      var bubble=document.createElement('div');
+      bubble.className='msg-bubble';
+      if(m.role==='assistant') bubble.innerHTML=renderMarkdown(m.content||'');
+      else bubble.textContent=m.content||'';
+      row.appendChild(who); row.appendChild(bubble);
+      list.appendChild(row);
+    });
+
+    document.getElementById('loading').style.display='none';
+    document.getElementById('content').style.display='';
+  })();
+})();
+</script>
+</body>
+</html>

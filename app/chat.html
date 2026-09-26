@@ -37,6 +37,10 @@
   .sidebar-brand .dot{width:8px;height:8px;border-radius:50%;background:var(--orange);display:inline-block}
   .sidebar-new{display:block;width:100%;padding:.55rem .85rem;background:rgba(255,77,0,.1);border:1px solid rgba(255,77,0,.25);border-radius:8px;color:var(--orange);font-weight:700;font-size:.82rem;cursor:pointer;text-align:left;font-family:var(--font);transition:background .15s}
   .sidebar-new:hover{background:rgba(255,77,0,.18)}
+  .sidebar-search{padding:.4rem .5rem .2rem;flex-shrink:0}
+  .sidebar-search-input{width:100%;box-sizing:border-box;background:rgba(255,255,255,.05);border:1px solid var(--b2);border-radius:7px;color:var(--text);font-family:var(--font);font-size:.78rem;padding:.35rem .6rem;outline:none;transition:border-color .15s}
+  .sidebar-search-input::placeholder{color:var(--t3)}
+  .sidebar-search-input:focus{border-color:rgba(255,77,0,.4)}
   .sidebar-convs{flex:1;overflow-y:auto;padding:.5rem .5rem}
   .conv-item{display:flex;align-items:center;gap:.35rem;padding:.45rem .7rem;border-radius:8px;cursor:pointer;font-size:.82rem;color:var(--t2);transition:background .12s,color .12s;min-width:0}
   .conv-item:hover{background:rgba(255,255,255,.05);color:var(--text)}
@@ -399,6 +403,7 @@
       <a href="/" class="sidebar-brand"><span class="dot"></span> Aethyro</a>
       <button class="sidebar-new" id="newChatBtn">+ New chat</button>
     </div>
+    <div class="sidebar-search"><input class="sidebar-search-input" id="convSearch" type="search" placeholder="Search conversations…" autocomplete="off"/></div>
     <div class="sidebar-convs" id="convList"></div>
     <div class="sidebar-foot">
       <a href="/app/dashboard.html">Dashboard →</a>
@@ -418,6 +423,7 @@
       <span class="chat-title" id="chatTitle"></span>
       <span class="balance-pill" id="balancePill" style="display:none">● <span id="balanceVal">—</span> credits</span>
       <span class="balance-pill trial-badge" id="trialBadge" style="display:none">● Free preview</span>
+      <button class="top-link" id="shareBtn" title="Share this conversation" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">↗ Share</button>
       <button class="top-link" id="exportBtn" title="Export chat as Markdown" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">↓ Export</button>
       <button class="top-link" id="buyBtn" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">Buy more</button>
       <a href="./signup.html?next=chat" class="top-link signup-link" id="signupLink" style="display:none">Sign up free →</a>
@@ -910,13 +916,15 @@ I often need help with: client quotes, contract review, business Instagram posts
   }
 
   /* ── Conversation list ── */
+  var _allConvs=[];
   async function loadConversationList(){
     var r=await supabase.from('conversations')
       .select('id,title,updated_at')
       .order('updated_at',{ascending:false})
-      .limit(40);
+      .limit(100);
     if(r.error||!r.data) return;
-    renderConvList(r.data);
+    _allConvs=r.data;
+    renderConvList(_allConvs);
   }
 
   function makeConvItem(c){
@@ -967,8 +975,25 @@ I often need help with: client quotes, contract review, business Instagram posts
   function renderConvList(convs){
     var list=$('convList');
     list.innerHTML='';
+    if(!convs.length){
+      list.innerHTML='<p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">No conversations yet.</p>';
+      return;
+    }
     convs.forEach(function(c){ list.appendChild(makeConvItem(c)); });
   }
+
+  /* ── Conversation search (client-side filter) ── */
+  (function initConvSearch(){
+    var inp=$('convSearch');
+    if(!inp) return;
+    inp.addEventListener('input',function(){
+      var q=inp.value.trim().toLowerCase();
+      if(!q){ renderConvList(_allConvs); return; }
+      renderConvList(_allConvs.filter(function(c){
+        return (c.title||'').toLowerCase().includes(q);
+      }));
+    });
+  })();
 
   function setActiveConv(id){
     currentConvId=id;
@@ -978,6 +1003,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     var url=new URL(location.href);
     if(id) url.searchParams.set('c',id); else url.searchParams.delete('c');
     window.history.pushState(null,'',url);
+    updateShareBtn();
   }
 
   /* ── Load a saved conversation ── */
@@ -1014,6 +1040,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     url.searchParams.delete('c');
     window.history.pushState(null,'',url);
     document.querySelectorAll('.conv-item').forEach(function(el){ el.classList.remove('active'); });
+    updateShareBtn();
     $('input').focus();
   }
 
@@ -2176,6 +2203,44 @@ I often need help with: client quotes, contract review, business Instagram posts
     }catch(e){ showToast('Error clearing memories','err'); }
     finally{ this.disabled=false; }
   });
+
+  /* ── Share conversation ── */
+  var _shareToast=null;
+  if($('shareBtn')){
+    $('shareBtn').addEventListener('click', async function(){
+      if(!currentConvId){ showToast('No conversation to share','err'); return; }
+      var btn=$('shareBtn');
+      btn.disabled=true; btn.textContent='…';
+      try{
+        /* Upsert a share_token on this conversation */
+        var token=null;
+        var existing=await supabase.from('conversations').select('share_token').eq('id',currentConvId).single();
+        if(!existing.error && existing.data && existing.data.share_token){
+          token=existing.data.share_token;
+        } else {
+          /* Generate a token: uuid via crypto */
+          token=crypto.randomUUID ? crypto.randomUUID() : ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,function(c){ return (c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16); });
+          var upd=await supabase.from('conversations').update({share_token:token}).eq('id',currentConvId);
+          if(upd.error) throw new Error(upd.error.message);
+        }
+        var shareUrl=location.origin+'/app/share.html?t='+token;
+        await navigator.clipboard.writeText(shareUrl).catch(function(){});
+        showToast('Share link copied to clipboard','ok');
+        btn.textContent='✓ Copied';
+        setTimeout(function(){ btn.textContent='↗ Share'; btn.disabled=false; },2500);
+      }catch(e){
+        showToast('Could not create share link','err');
+        btn.textContent='↗ Share'; btn.disabled=false;
+      }
+    });
+  }
+
+  /* Show share button when a conversation is loaded */
+  function updateShareBtn(){
+    var btn=$('shareBtn');
+    if(!btn) return;
+    btn.style.display=(session && currentConvId) ? '' : 'none';
+  }
 
   /* ── Chat export ── */
   $('exportBtn').addEventListener('click', function(){
