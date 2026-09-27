@@ -51,9 +51,17 @@ it to the `?buy=` pattern instead.
   added by `20260925000001_security_hardening.sql`. Don't add a second
   SELECT policy for this table; check `pg_policies` first if a referral query
   seems to return nothing (the cause is more likely a JS bug than RLS).
-- Admin RPCs (`get_admin_stats`, `get_admin_users`) are `SECURITY DEFINER`
-  and gate on `auth.jwt() ->> 'email' = 'leer4030@gmail.com'` — a hardcoded
-  string, not a role table. Known limitation, tracked as BUG-08 in the audit.
+- Admin RPCs (`get_admin_stats`, `get_admin_users`, `admin_adjust_credits`)
+  are `SECURITY DEFINER` and gate on `public.is_admin()`, which checks
+  membership in `public.admin_users` (`user_id, email, created_at`). To add
+  a second admin: `INSERT INTO admin_users (user_id, email) VALUES (...)` —
+  no code change or redeploy needed. `admin_users` has RLS enabled with zero
+  policies (unreachable from the client entirely, even by an admin's own
+  session); only `is_admin()` (SECURITY DEFINER) and direct SQL can read it.
+  `anon`'s EXECUTE grant was revoked from all three functions too — PostgREST
+  now 404s them for anon instead of letting the call reach the function body.
+  (Previously hardcoded `auth.jwt() ->> 'email' = 'leer4030@gmail.com'` —
+  fixed in `20260927020000_admin_users_table.sql`, closes audit BUG-08.)
 
 ## Pending / not yet applied
 
@@ -168,9 +176,8 @@ this list supersedes the audit artifact above where they conflict)
   detailed personas, not real users. Needs real quotes or removal.
 - P2: PWA `manifest.json` has `"screenshots": []` — empty, no install-prompt
   preview images.
-- P2: Admin access is a hardcoded email check (`auth.jwt() ->> 'email' =
-  'leer4030@gmail.com'`) in `get_admin_stats`/`get_admin_users` — no
-  `admin_users` table exists. Adding a second admin needs a migration.
+- ~~P2: Admin access is a hardcoded email check~~ — **fixed 2026-09-27**, see
+  the `admin_users`/`is_admin()` note above.
 
 **Not yet re-verified — check before acting, don't assume the audit is right:**
 email-drip cron automation, in-app nav between dashboard/chat,
