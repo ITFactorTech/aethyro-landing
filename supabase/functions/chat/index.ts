@@ -1,4 +1,17 @@
-// chat v29 — adds per-message cost breakdown (credits/tokens/rates) to USAGE_MARK, all v28 features retained
+// chat v32 — fixes every internal supaAdmin.functions.invoke() call (embed-content
+// x2, send-low-credit-email): supabase-js does NOT auto-send an Authorization
+// header derived from the client's key when that key is one of Supabase's
+// newer sb_secret_... format service-role keys (confirmed live: default invoke()
+// got a 401 from embed-content's own auth check; passing the header explicitly
+// returned 200). send-low-credit-email never worked at all — it doesn't check
+// Authorization, it checks a custom X-Internal-Key header nothing was setting.
+// Every internal function call here now passes its required header explicitly.
+// Also carries v31's EdgeRuntime.waitUntil() fix (the fire-and-forget memory
+// block could get killed mid-flight when the isolate froze right after
+// controller.close()), v30's extended-thinking fix (claude-opus-5-5/
+// claude-sonnet-5 reject {type:"enabled",budget_tokens}; switched to
+// {type:"adaptive",display:"summarized"}), and v29's per-message cost
+// breakdown (credits/tokens/rates) in USAGE_MARK.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -37,7 +50,6 @@ const CREDIT_RATES: Record<string, { input: number; output: number }> = {
 const TOOL_MARK  = "\x01";
 const USAGE_MARK = "\x00";
 const THINK_MARK = "\x02";
-const THINKING_BUDGET = 3000;
 const MAX_TOKENS_THINKING = 8192;
 
 // ── Voyage AI embed (single text) ─────────────────────────────────────────────
@@ -527,15 +539,22 @@ serve(async (req) => {
         const { data: prof } = await supaAdmin.from("profiles").select("low_credit_warned_at").eq("id", user.id).single();
         const lastWarn = prof?.low_credit_warned_at ? new Date(prof.low_credit_warned_at) : null;
         if (!lastWarn || lastWarn < new Date(Date.now() - 86_400_000)) {
-          await supaAdmin.functions.invoke("send-low-credit-email", { body: { user_id: user.id, balance: newBal } });
+          await supaAdmin.functions.invoke("send-low-credit-email", {
+            headers: { "X-Internal-Key": SERVICE_ROLE_KEY },
+            body: { user_id: user.id, balance: newBal },
+          });
           await supaAdmin.from("profiles").update({ low_credit_warned_at: new Date().toISOString() }).eq("id", user.id);
         }
       }
     } catch {}
 
-    // Parallel fire-and-forget: JSONB memory extraction + vector memory storage
+    // Parallel fire-and-forget: JSONB memory extraction + vector memory storage.
+    // Must be handed to EdgeRuntime.waitUntil() — without it, Supabase's edge
+    // runtime is free to freeze/recycle this isolate the moment controller.close()
+    // returns below, silently killing this work before the embed-content calls
+    // land (no error, nothing thrown — memory_embeddings just never gets a row).
     if (assistantReply) {
-      (async () => {
+      const backgroundMemoryWork = (async () => {
         try {
           // 1. JSONB structured memory extraction
           const extractRes = await anthropic.messages.create({
@@ -568,6 +587,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
         if (VOYAGE_API_KEY) {
           try {
             await supaAdmin.functions.invoke("embed-content", {
+              headers: { Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
               body: {
                 type: "memory",
                 role: "user",
@@ -577,6 +597,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
               },
             });
             await supaAdmin.functions.invoke("embed-content", {
+              headers: { Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
               body: {
                 type: "memory",
                 role: "assistant",
@@ -588,6 +609,15 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
           } catch {}
         }
       })();
+      // @ts-ignore — EdgeRuntime is a Supabase/Deno Deploy Edge Functions global,
+      // not part of standard Deno types. Falls back to a plain await (blocking
+      // the response) if it's ever missing, e.g. local `supabase functions serve`.
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(backgroundMemoryWork);
+      } else {
+        await backgroundMemoryWork;
+      }
     }
 
     controller.close();
@@ -642,7 +672,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
           max_tokens: supportsThinking ? MAX_TOKENS_THINKING : MAX_TOKENS,
           system: systemPrompt,
           messages,
-          ...(supportsThinking ? { thinking: { type: "enabled", budget_tokens: THINKING_BUDGET } } : {}),
+          ...(supportsThinking ? { thinking: { type: "adaptive", display: "summarized" } } : {}),
         } as any);
 
         let fullText = "";

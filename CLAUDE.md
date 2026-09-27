@@ -144,7 +144,90 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
-- **2026-09-27** — Four "rare feature" differentiators (user asked to
+- **2026-09-27** — **Root-caused and fixed why `memory_embeddings` was never
+  getting written** (flagged as an open question in the entry below). Two
+  distinct bugs, found via a `waitUntil()`-only fix that *partially* worked
+  (structured `profiles.memory` JSONB extraction started succeeding, proving
+  the isolate-freeze theory right) but still left zero rows in
+  `memory_embeddings` — meaning a second, independent bug had to exist:
+  1. **`EdgeRuntime.waitUntil()` missing** — the fire-and-forget memory block
+     in `chat`'s `finalize()` wasn't handed to `EdgeRuntime.waitUntil()`, so
+     Supabase's edge runtime could freeze/recycle the isolate the instant
+     `controller.close()` ran, killing whatever background work hadn't
+     finished yet. No error, nothing thrown.
+  2. **`supaAdmin.functions.invoke()` doesn't auto-send `Authorization`** —
+     confirmed live with a diagnostic probe: calling `embed-content` via
+     `supaAdmin.functions.invoke()` with *default* headers got a 401 from
+     `embed-content`'s own `jwt === SERVICE_ROLE_KEY` check; the identical
+     call with an explicit `headers: {Authorization: Bearer <key>}` returned
+     200. Root cause: this project's service-role key is one of Supabase's
+     newer `sb_secret_...`-format keys (confirmed via a second probe —
+     `sr_key_prefix: "sb_secre"`), and `supabase-js`'s default
+     header-injection for `.functions.invoke()` doesn't forward that format
+     the way it does a legacy JWT-format key. **Same bug, different failure
+     mode, hit `send-low-credit-email` even harder — that call was never
+     going to work regardless, since `send-low-credit-email` doesn't check
+     `Authorization` at all; it checks a custom `X-Internal-Key` header that
+     `chat` never set. That email has never been sent, ever, since it was
+     added.** Fixed: every `supaAdmin.functions.invoke()` call in
+     `chat/index.ts` now passes its target function's required header
+     explicitly (`Authorization: Bearer <service-role-key>` for
+     `embed-content`, `X-Internal-Key: <service-role-key>` for
+     `send-low-credit-email`) — deployed live as v32/v34. Verified live,
+     twice: (1) a diagnostic edge function isolated the exact
+     default-vs-explicit-header behavior difference before touching
+     production code; (2) after deploying the fix, a real chat message
+     through a throwaway account produced real `memory_embeddings` rows
+     (both `user` and `assistant` turns, `has_embedding: true`) for the
+     first time. **If you add a new `supaAdmin.functions.invoke(...)` call
+     anywhere in this codebase, pass its Authorization/internal-auth header
+     explicitly — do not rely on the client's default headers.** Also worth
+     checking: whether other Supabase projects/functions using the newer
+     `sb_secret_...` key format have the same latent bug anywhere else they
+     call `.functions.invoke()` without explicit headers.
+- **2026-09-27** — **P0 fixed: every Sonnet/Opus chat message was failing
+  live in production** with a 400 (`"thinking.type.enabled" is not supported
+  for this model. Use "thinking.type.adaptive"...`). Found while manually
+  verifying PR #77's test plan against the real site with a throwaway test
+  account (created via a temporary admin edge function, deleted after) — the
+  very first live chat send failed. Root cause: `claude-opus-5-5` and
+  `claude-sonnet-5` (this app's `opus`/`sonnet` model keys) reject the
+  deprecated `thinking: {type:"enabled", budget_tokens:N}` shape entirely;
+  only `{type:"adaptive"}` is accepted now. This had been broken since
+  whichever prior session/PR introduced `MODEL_MAP.opus = "claude-opus-5-5"`
+  — Haiku has no `thinking` param at all, so Haiku chats kept working and
+  masked it in every manual spot-check that happened to use the default
+  model. Fixed in `supabase/functions/chat/index.ts` (deployed live as v30/v32:
+  `thinking: {type:"adaptive", display:"summarized"}`, dropped the
+  now-invalid `THINKING_BUDGET` constant). Re-verified live after the fix:
+  a real message now returns a real reply with a correct cost badge (`1
+  credit · 36 in / 4 out tokens · opus`). **If you add a new model to
+  `MODEL_MAP`, check the current API's `thinking` requirements for it before
+  shipping — don't assume the existing `{enabled, budget_tokens}` shape
+  still applies.**
+- **2026-09-27** — Manually verified PR #77's test plan end-to-end against
+  the live site (not just DB/RLS-level checks): created two confirmed
+  throwaway accounts via a temporary `test-admin-setup` edge function
+  (`auth.admin.createUser({email_confirm:true})`, bypassing the normal
+  email-confirmation flow since signup.html requires a real inbox), drove
+  both through Playwright. Results: cost badge/session pill — passed after
+  the thinking-param fix above; per-entry memory delete — passed (seeded one
+  synthetic `memory_embeddings` row since the real auto-embed pipeline
+  wasn't landing rows fast enough in-test to click against, see note below);
+  routine publish → community gallery → fork → fork_count increment —
+  passed on the first try; deletion receipt (payload, HMAC signature,
+  Verify button, JSON download) — passed on the first try. Cleaned up: both
+  test accounts deleted (cascade confirmed zero leftover rows across
+  `conversations`/`user_routines`/`memory_embeddings`/`deletion_receipts`/
+  `credit_ledger`), `test-admin-setup` stubbed to 410 (no MCP tool exists to
+  actually delete an edge function). **Not yet root-caused:** a real
+  successful chat exchange did not produce a `memory_embeddings` row for the
+  test account within several seconds — either `VOYAGE_API_KEY` isn't set as
+  a project secret, or the fire-and-forget `embed-content` invocation from
+  `chat`'s `finalize()` is failing silently (it's wrapped in a bare `catch
+  {}`). Worth a real investigation; flagged here rather than chased further
+  since it's outside PR #77's scope.
+- Four "rare feature" differentiators (user asked to
   deprioritize the testimonials P0 in favor of these): (1) **Visible/editable
   memory graph** — turned out to already exist (chat.html's Intelligence →
   Memory tab: structured `profiles.memory` fact chips with per-key delete,
