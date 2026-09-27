@@ -43,6 +43,9 @@ it to the `?buy=` pattern instead.
 - **`messages`** columns: `id, conversation_id, role, content, created_at`.
   **There is no `user_id` column.** To scope by user, JOIN:
   `messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.user_id = ...`.
+- **`memory_embeddings.conversation_id`** is **`text`, not `uuid`** — it
+  isn't a foreign key to `conversations.id`. Cast when comparing:
+  `conversation_id = p_conversation_id::text`.
 - **`referral_codes`**: one row per user, 8-char unique `code`, auto-generated
   by a trigger on `profiles` INSERT.
 - **`referral_events`**: `referrer_user_id`, `referee_user_id`, UNIQUE on
@@ -141,7 +144,47 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
-- **2026-09-27** — Built referral UI in `app/dashboard.html` (code display,
+- **2026-09-27** — Four "rare feature" differentiators (user asked to
+  deprioritize the testimonials P0 in favor of these): (1) **Visible/editable
+  memory graph** — turned out to already exist (chat.html's Intelligence →
+  Memory tab: structured `profiles.memory` fact chips with per-key delete,
+  raw `memory_embeddings` log with search); only gap was per-entry delete on
+  the raw log, added. No migration needed — RLS on `memory_embeddings`
+  already permitted owner CRUD. (2) **Forkable routines** — `user_routines`
+  gained `is_public`/`fork_count`/`forked_from` columns, an additive
+  `routines_public_read` SELECT policy (OR'd with the existing owner-only
+  `routines_own` ALL policy, never narrows it), and a `fork_routine(uuid)`
+  SECURITY DEFINER RPC; chat.html's Routines tab got a Publish/Make-private
+  toggle per routine and a "Community Gallery" list with a Fork button.
+  Forked routines land disabled by default. (3) **Real-time cost
+  transparency** — the `chat` edge function (v29→v31 deployed) already
+  computed exact credit cost from real token counts in `finalize()`, it just
+  never left the server; now `USAGE_MARK`'s JSON includes
+  `cost:{credits,model,inputTokens,outputTokens,inputRate,outputRate}` and
+  chat.html renders it under each assistant bubble plus a running session
+  total pill in the topbar. No fabricated "you saved X%" claims — every
+  number shown is server-computed. (4) **Verifiable deletion receipts** —
+  new `app_secrets` table (zero RLS policies, same unreachable-from-client
+  pattern as `admin_users`; seeded with a random HMAC key via `pgcrypto`,
+  already installed) and `deletion_receipts` (owner-SELECT-only RLS); a
+  `delete_conversation_with_receipt(uuid)` RPC deletes `memory_embeddings`,
+  `messages`, and the `conversations` row explicitly (not relying on FK
+  cascade), builds a payload, signs it with `hmac(payload::text, key,
+  'sha256')`, stores and returns the receipt; a companion
+  `verify_deletion_receipt(uuid)` RPC recomputes the signature server-side
+  so a user (or anyone auditing) can confirm a receipt wasn't forged.
+  chat.html's `deleteConversation()` now calls this RPC instead of a raw
+  `.delete()` and shows a modal with the JSON payload, signature, a Verify
+  button, and a download-as-JSON button. `get_advisors` security scan run
+  after applying — only the same INFO/WARN-level findings every other table
+  in this project already has (RLS-enabled-no-policy on the new zero-policy
+  table is intentional; GraphQL-schema-visible warnings are boilerplate that
+  fires on all 25+ tables regardless of RLS; the three new SECURITY DEFINER
+  RPCs are `authenticated`-only, confirmed absent from the anon-executable
+  list). Migrations: `20260927030000_forkable_routines.sql`,
+  `20260927040000_deletion_receipts.sql`. `chat` edge function source
+  updated to v29 in `supabase/functions/chat/index.ts`.
+- Built referral UI in `app/dashboard.html` (code display,
   copy buttons, referral count, credits earned). Fixed credit-history label
   bug that read nonexistent `row.description`/`row.type` instead of
   `row.reason`. Ran a full site audit (published as the artifact linked

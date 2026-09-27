@@ -154,6 +154,11 @@
   .msg-row.assistant{position:relative}
   .msg-copy-btn{display:none;position:absolute;bottom:-.1rem;right:.4rem;background:rgba(0,0,0,.55);border:1px solid var(--b2);border-radius:6px;color:var(--t3);cursor:pointer;padding:.28rem .45rem;line-height:1;transition:all .15s;backdrop-filter:blur(4px)}
   .msg-row.assistant:hover .msg-copy-btn{display:flex;align-items:center}
+  .msg-cost{margin-top:.3rem;padding:0 .2rem;display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.66rem;color:var(--t3);opacity:0;transform:translateY(-2px);transition:opacity .25s,transform .25s}
+  .msg-cost.show{opacity:1;transform:none}
+  .msg-cost .mc-credits{color:var(--orange,#ff4d00);font-weight:700}
+  .msg-cost .mc-detail{color:var(--t3)}
+  .session-cost-badge{margin-left:.5rem;display:flex;align-items:center;gap:.35rem;padding:.3rem .6rem;background:rgba(255,77,0,.07);border:1px solid rgba(255,77,0,.18);border-radius:100px;font-family:var(--mono);font-size:.7rem;color:var(--orange,#ff4d00);white-space:nowrap}
   .msg-copy-btn:hover{color:var(--text);border-color:var(--orange)}
   .msg-copy-btn.copied{color:var(--green);border-color:var(--green)}
   /* ── Toast ── */
@@ -178,6 +183,13 @@
   .workspace-indicator{width:6px;height:6px;border-radius:50%;background:var(--cyan);flex-shrink:0;box-shadow:0 0 6px var(--cyan)}
   .workspace-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);align-items:center;justify-content:center;z-index:50;padding:1rem}
   .workspace-modal-backdrop.show{display:flex}
+  .receipt-payload{background:rgba(0,0,0,.3);border:1px solid var(--b1);border-radius:8px;padding:.75rem .9rem;font-family:var(--mono);font-size:.72rem;line-height:1.6;color:var(--t2);white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;margin:.75rem 0 0}
+  .receipt-sig-row{display:flex;flex-direction:column;gap:.25rem;margin-top:.6rem}
+  .receipt-sig-label{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--t3)}
+  .receipt-sig{font-family:var(--mono);font-size:.7rem;color:var(--orange,#ff4d00);word-break:break-all;background:rgba(255,77,0,.06);border:1px solid rgba(255,77,0,.18);border-radius:6px;padding:.5rem .6rem}
+  .receipt-verify-result{margin-top:.6rem;font-size:.78rem;font-family:var(--mono)}
+  .receipt-verify-result.valid{color:#22c55e}
+  .receipt-verify-result.invalid{color:#fca5a5}
   .workspace-modal{background:var(--s2);border:1px solid var(--b2);border-radius:16px;padding:1.75rem;max-width:520px;width:100%}
   .workspace-modal h3{font-size:1.1rem;margin-bottom:.35rem}
   .wm-sub{color:var(--t2);font-size:.83rem;margin-bottom:1.25rem;line-height:1.6}
@@ -330,6 +342,7 @@
   .intel-mem-role{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.05em}
   .intel-mem-role.user{color:var(--cyan)}
   .intel-mem-role.assistant{color:var(--orange)}
+  .intel-mem-del{margin-left:auto}
   .intel-mem-time{font-size:.65rem;color:var(--t3);margin-left:auto;font-family:var(--mono)}
   .intel-mem-text{font-size:.78rem;color:var(--t2);line-height:1.55;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
   .intel-clear-all{display:flex;align-items:center;gap:.4rem;font-size:.76rem;color:var(--t3);background:none;border:1px solid var(--b1);border-radius:7px;padding:.3rem .75rem;cursor:pointer;font-family:var(--font);transition:all .15s}
@@ -422,6 +435,7 @@
       <a href="/" class="brand" id="anonBrand" style="margin:0;display:none"><span class="dot"></span> Aethyro</a>
       <span class="chat-title" id="chatTitle"></span>
       <span class="balance-pill" id="balancePill" style="display:none">● <span id="balanceVal">—</span> credits</span>
+      <span class="session-cost-badge" id="sessionCostBadge" style="display:none" title="Real, computed credit cost of every message this session — no estimates">Σ <span id="sessionCostVal">0</span> credits this session</span>
       <span class="balance-pill trial-badge" id="trialBadge" style="display:none">● Free preview</span>
       <button class="top-link" id="shareBtn" title="Share this conversation" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">↗ Share</button>
       <button class="top-link" id="exportBtn" title="Export chat as Markdown" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">↓ Export</button>
@@ -520,6 +534,25 @@ I often need help with: client quotes, contract review, business Instagram posts
     <div class="wm-actions">
       <button class="wm-cancel" id="wmCancel">Cancel</button>
       <button class="wm-save" id="wmSave">Save context</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deletion receipt modal -->
+<div class="workspace-modal-backdrop" id="receiptModal">
+  <div class="workspace-modal">
+    <h3>🔏 Deletion Receipt</h3>
+    <p class="wm-sub">This conversation and its associated memory were permanently deleted. The receipt below is signed server-side (HMAC-SHA256) — it proves what was deleted and when, and can be independently re-verified at any time.</p>
+    <pre id="receiptPayload" class="receipt-payload"></pre>
+    <div class="receipt-sig-row">
+      <span class="receipt-sig-label">Signature</span>
+      <code id="receiptSig" class="receipt-sig"></code>
+    </div>
+    <div id="receiptVerifyResult" class="receipt-verify-result"></div>
+    <div class="wm-actions">
+      <button class="wm-cancel" id="receiptClose">Close</button>
+      <button class="wm-cancel" id="receiptVerifyBtn">Verify signature</button>
+      <button class="wm-save" id="receiptDownloadBtn">Download receipt</button>
     </div>
   </div>
 </div>
@@ -633,6 +666,9 @@ I often need help with: client quotes, contract review, business Instagram posts
       <hr class="intel-divider">
       <p class="intel-section-title">Your Routines</p>
       <div id="routineList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">No routines yet.<br/>Schedule a prompt above and Aethyro will run it automatically on your cron.</p></div>
+      <hr class="intel-divider">
+      <p class="intel-section-title">🌐 Community Gallery <span style="font-size:.68rem;color:var(--t3);font-weight:400">— fork anyone's public routine into your own</span></p>
+      <div id="communityRoutineList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">Loading…</p></div>
     </div>
 
     <!-- Integrations pane -->
@@ -883,6 +919,14 @@ I often need help with: client quotes, contract review, business Instagram posts
     /* returns undefined — caller can chain .then() safely */
   }
 
+  var sessionCostTotal = 0;
+  function addSessionCost(credits){
+    if(typeof credits!=='number'||!isFinite(credits)) return;
+    sessionCostTotal += credits;
+    var badge=$('sessionCostBadge');
+    if(badge){ badge.style.display='flex'; $('sessionCostVal').textContent=sessionCostTotal.toLocaleString(); }
+  }
+
   var _prevBalance = null;
   function setBalance(n){
     var pill=$('balancePill');
@@ -1058,14 +1102,46 @@ I often need help with: client quotes, contract review, business Instagram posts
   $('sidebarToggle').addEventListener('click', openMobileSidebar);
   $('sidebarOverlay').addEventListener('click', closeMobileSidebar);
 
-  /* ── Delete a conversation ── */
+  /* ── Delete a conversation (with a signed deletion receipt) ── */
   async function deleteConversation(convId, el){
     if(!confirm('Delete this conversation? This cannot be undone.')) return;
-    var r=await supabase.from('conversations').delete().eq('id',convId);
+    var r=await supabase.rpc('delete_conversation_with_receipt',{p_conversation_id:convId});
     if(r.error){ alert('Could not delete conversation. Please try again.'); return; }
     el.remove();
     if(currentConvId===convId) startNewChat();
+    if(r.data) showDeletionReceipt(r.data);
   }
+
+  var _lastReceipt = null;
+  function showDeletionReceipt(receipt){
+    _lastReceipt = receipt;
+    $('receiptPayload').textContent = JSON.stringify(receipt.payload, null, 2);
+    $('receiptSig').textContent = receipt.signature;
+    $('receiptVerifyResult').textContent = '';
+    $('receiptVerifyResult').className = 'receipt-verify-result';
+    $('receiptModal').classList.add('show');
+  }
+  if($('receiptClose')) $('receiptClose').addEventListener('click',function(){ $('receiptModal').classList.remove('show'); });
+  if($('receiptVerifyBtn')) $('receiptVerifyBtn').addEventListener('click',async function(){
+    if(!_lastReceipt) return;
+    var btn=$('receiptVerifyBtn'); btn.disabled=true; btn.textContent='Verifying…';
+    try{
+      var vr=await supabase.rpc('verify_deletion_receipt',{p_receipt_id:_lastReceipt.receipt_id});
+      var out=$('receiptVerifyResult');
+      if(vr.error){ out.textContent='Could not verify: '+vr.error.message; out.className='receipt-verify-result invalid'; }
+      else if(vr.data && vr.data.valid){ out.textContent='✓ Signature valid — recomputed server-side from the stored payload and matched exactly.'; out.className='receipt-verify-result valid'; }
+      else { out.textContent='✗ Signature mismatch — this receipt may have been altered.'; out.className='receipt-verify-result invalid'; }
+    } finally { btn.disabled=false; btn.textContent='Verify signature'; }
+  });
+  if($('receiptDownloadBtn')) $('receiptDownloadBtn').addEventListener('click',function(){
+    if(!_lastReceipt) return;
+    var blob=new Blob([JSON.stringify(_lastReceipt,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download='aethyro-deletion-receipt-'+_lastReceipt.receipt_id+'.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
 
   /* ── Ensure a conversation row exists ── */
   function makeTitle(text){
@@ -1329,6 +1405,18 @@ I often need help with: client quotes, contract review, business Instagram posts
         if(session){
           history.push({role:'assistant',content:full});
           if(convId) await saveMessage(convId,'assistant',full);
+        }
+        /* Real-time cost transparency: server computes the exact credit
+           cost from actual input/output token counts — no estimates. */
+        if(session && meta && meta.cost && bubble.parentNode){
+          var mc=meta.cost;
+          var costEl=document.createElement('div');
+          costEl.className='msg-cost';
+          costEl.innerHTML='<span class="mc-credits">'+mc.credits+' credit'+(mc.credits===1?'':'s')+'</span>'+
+            '<span class="mc-detail">· '+mc.inputTokens.toLocaleString()+' in / '+mc.outputTokens.toLocaleString()+' out tokens · '+mc.model+'</span>';
+          bubble.parentNode.appendChild(costEl);
+          requestAnimationFrame(function(){ costEl.classList.add('show'); });
+          addSessionCost(mc.credits);
         }
         /* Auto-title: server generates a smart title on the first exchange */
         if(session && convId && meta && meta.title){
@@ -2034,9 +2122,24 @@ I often need help with: client quotes, contract review, business Instagram posts
           '<div class="intel-card-title" style="margin:0">'+intelEsc(rt.name)+'</div>'+
           nextRunStr+
         '</div>'+
-        '<div class="intel-card-meta"><span class="routine-sched-human">'+intelEsc(cronHuman(rt.schedule))+'</span> · Last: '+lastRun+'</div>'+
+        '<div class="intel-card-meta"><span class="routine-sched-human">'+intelEsc(cronHuman(rt.schedule))+'</span> · Last: '+lastRun+
+          (rt.is_public?' · <span style="color:var(--cyan)">🌐 public'+(rt.fork_count?' · '+rt.fork_count+' fork'+(rt.fork_count===1?'':'s'):'')+'</span>':'')+
+          (rt.forked_from?' · <span style="color:var(--t3)">forked</span>':'')+
+        '</div>'+
         (rt.last_result?'<div class="intel-card-result" style="margin-top:.4rem">'+renderMarkdown(rt.last_result.slice(0,300))+'</div>':'');
       var actions=document.createElement('div'); actions.className='intel-card-actions';
+      var pubBtn=document.createElement('button'); pubBtn.className='intel-btn intel-btn-sm'; pubBtn.textContent=rt.is_public?'Make private':'Publish';
+      pubBtn.title=rt.is_public?'Remove from the community gallery':'Share this routine in the community gallery so others can fork it';
+      pubBtn.addEventListener('click',async function(){
+        pubBtn.disabled=true;
+        var next=!rt.is_public;
+        var ur=await supabase.from('user_routines').update({is_public:next}).eq('id',rt.id);
+        if(ur.error){ showToast('Could not update','err'); pubBtn.disabled=false; return; }
+        rt.is_public=next;
+        showToast(next?'Published to community gallery':'Made private','ok');
+        loadRoutines();
+      });
+      actions.appendChild(pubBtn);
       /* Toggle switch */
       var togWrap=document.createElement('div'); togWrap.className='intel-toggle-wrap'; togWrap.title=rt.enabled?'Click to disable':'Click to enable';
       var togTrack=document.createElement('div'); togTrack.className='intel-toggle-track'+(rt.enabled?' on':'');
@@ -2072,6 +2175,41 @@ I often need help with: client quotes, contract review, business Instagram posts
         loadIntelStats();
       });
       actions.appendChild(togWrap); actions.appendChild(runBtn); actions.appendChild(delBtn);
+      card.appendChild(actions); list.appendChild(card);
+    });
+    loadCommunityRoutines();
+  }
+
+  async function loadCommunityRoutines(){
+    var list=$('communityRoutineList');
+    if(!list) return;
+    list.innerHTML='<div class="intel-loading">Loading…</div>';
+    /* Public routines from ALL users, not just the caller — readable via the
+       "routines_public_read" RLS policy (is_public = true), which is additive
+       to the owner-only ALL policy and never exposes non-public rows. */
+    var r=await supabase.from('user_routines').select('id,name,prompt,schedule,model,fork_count,user_id')
+      .eq('is_public',true).neq('user_id',session.user.id).order('fork_count',{ascending:false}).limit(20);
+    if(r.error||!r.data||!r.data.length){
+      list.innerHTML='<div class="intel-empty" style="padding:2rem 1rem"><div style="font-size:1.5rem;margin-bottom:.4rem">🌐</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No public routines yet</div><div>Publish one of your own routines above to be the first in the gallery.</div></div>';
+      return;
+    }
+    list.innerHTML='';
+    r.data.forEach(function(rt){
+      var card=document.createElement('div'); card.className='intel-card';
+      card.innerHTML=
+        '<div class="intel-card-title" style="margin:0">'+intelEsc(rt.name)+'</div>'+
+        '<div class="intel-card-meta"><span class="routine-sched-human">'+intelEsc(cronHuman(rt.schedule))+'</span> · '+(rt.model||'haiku')+' · '+(rt.fork_count||0)+' fork'+(rt.fork_count===1?'':'s')+'</div>'+
+        '<div class="intel-card-result" style="margin-top:.4rem;color:var(--t2)">'+intelEsc(rt.prompt.length>160?rt.prompt.slice(0,160)+'…':rt.prompt)+'</div>';
+      var actions=document.createElement('div'); actions.className='intel-card-actions';
+      var forkBtn=document.createElement('button'); forkBtn.className='intel-btn intel-btn-sm'; forkBtn.textContent='🍴 Fork';
+      forkBtn.addEventListener('click',async function(){
+        forkBtn.disabled=true; forkBtn.textContent='Forking…';
+        var fr=await supabase.rpc('fork_routine',{p_routine_id:rt.id});
+        if(fr.error){ showToast(fr.error.message||'Could not fork routine','err'); forkBtn.disabled=false; forkBtn.textContent='🍴 Fork'; return; }
+        showToast('Forked into your routines (disabled by default)','ok');
+        loadRoutines(); loadIntelStats();
+      });
+      actions.appendChild(forkBtn);
       card.appendChild(actions); list.appendChild(card);
     });
   }
@@ -2180,8 +2318,16 @@ I often need help with: client quotes, contract review, business Instagram posts
     mr.data.forEach(function(mem){
       var entry=document.createElement('div'); entry.className='intel-mem-entry';
       var shortContent=mem.content.length>200?mem.content.slice(0,200)+'…':mem.content;
-      entry.innerHTML='<div class="intel-mem-who"><span class="intel-mem-role '+mem.role+'">'+mem.role+'</span><span class="intel-mem-time">'+timeAgo(new Date(mem.created_at))+'</span></div>'+
+      entry.innerHTML='<div class="intel-mem-who"><span class="intel-mem-role '+mem.role+'">'+mem.role+'</span><span class="intel-mem-time">'+timeAgo(new Date(mem.created_at))+'</span><button class="intel-fact-del intel-mem-del" title="Forget this memory">×</button></div>'+
         '<div class="intel-mem-text">'+intelEsc(shortContent)+'</div>';
+      entry.querySelector('.intel-mem-del').addEventListener('click',async function(){
+        entry.style.opacity='.4';
+        var dr=await supabase.from('memory_embeddings').delete().eq('id',mem.id);
+        if(dr.error){ entry.style.opacity=''; showToast('Could not delete memory','err'); return; }
+        entry.remove();
+        var cur=parseInt($('statMems').textContent,10);
+        if(!isNaN(cur)) $('statMems').textContent=Math.max(0,cur-1);
+      });
       list.appendChild(entry);
     });
   }
