@@ -161,6 +161,23 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-27** — **Hardened `trigger_welcome_email()`** (found by a
+  `site-guardian` sweep): it had no `SET search_path` (unlike every other
+  `SECURITY DEFINER` function here) and was directly callable via
+  `/rest/v1/rpc/trigger_welcome_email` by anyone, signed in or not — it's
+  meant to run only as the `on_auth_user_created_welcome` trigger (it
+  references `NEW`, which only exists in trigger context). Fixed both:
+  added `SET search_path TO ''`, and `REVOKE EXECUTE ... FROM PUBLIC`
+  (learned mid-fix that revoking from just `anon`/`authenticated` is a
+  no-op — both are implicitly members of `PUBLIC`, which still held the
+  grant; had to check `information_schema.routine_privileges` to catch
+  this). Verified live: a real throwaway signup after the fix still
+  produced a successful `net._http_response` row
+  (`{"ok":true,"type":"welcome"}`, 200) — trigger execution runs as the
+  function owner regardless of caller privileges, so the revoke doesn't
+  break it — and a direct anon RPC call now 404s, matching the
+  `admin_users` RPC pattern from `20260927020000_admin_users_table.sql`.
+  Migration: `20260927234300_harden_trigger_welcome_email.sql`.
 - **2026-09-27** — **Fixed: `referral_events`'s two FKs to `auth.users` were
   `NO ACTION`, making any account that ever sent or redeemed a referral
   permanently undeletable** (found while spot-checking `redeem-referral`,
