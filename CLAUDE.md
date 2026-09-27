@@ -65,6 +65,23 @@ it to the `?buy=` pattern instead.
   now 404s them for anon instead of letting the call reach the function body.
   (Previously hardcoded `auth.jwt() ->> 'email' = 'leer4030@gmail.com'` —
   fixed in `20260927020000_admin_users_table.sql`, closes audit BUG-08.)
+- **`auth.users` has four triggers, and not all of them are in this repo's
+  migration history.** Before assuming a signup-time behavior is fully
+  described by `grep`-ing `supabase/migrations/`, check `pg_trigger` live:
+  `on_auth_user_created` (`handle_new_user()` — creates the `profiles` row;
+  as of `20260927225844_fix_duplicate_signup_bonus.sql` that's now the
+  *only* thing it does), `on_auth_user_created_grant_bonus`
+  (`grant_signup_bonus()`, from `20260901000001_...` — the one and only
+  place the 200-credit signup bonus should be granted),
+  `on_auth_user_created_queue_emails` (`queue_onboarding_emails()`), and
+  `on_auth_user_created_welcome` (`trigger_welcome_email()`, fires
+  `send-welcome-email` via `pg_net.http_post` with a **hardcoded anon key
+  literal in the function body** — works, but means the key is baked into
+  a DB function definition, not read from a secret; worth revisiting if the
+  anon key is ever rotated). `handle_new_user()` predates this repo's
+  migration history entirely — it was never defined by a committed
+  migration, only ever edited live (dashboard/SQL editor). Don't assume a
+  trigger you can't find in `supabase/migrations/` doesn't exist.
 
 ## Pending / not yet applied
 
@@ -84,14 +101,8 @@ it to the `?buy=` pattern instead.
   the user it names). Not fixed yet — found while spot-checking
   `redeem-referral`, flagged rather than acted on since it's a schema change
   outside that function's scope.
-- **New accounts get the 200-credit `signup_bonus` twice**, not once —
-  confirmed live: two throwaway test accounts (created via
-  `auth.admin.createUser`) each show two `credit_ledger` rows with
-  `reason='signup_bonus', delta=200`. Whatever inserts that row (a DB
-  trigger on `auth.users`/`profiles` insert, most likely) is firing twice
-  per signup, or two separate mechanisms are both granting it. Not
-  root-caused — found incidentally while testing referrals, no code
-  inspected yet. Worth checking before it costs real money at scale.
+~~- New accounts get the 200-credit `signup_bonus` twice~~ — **fixed
+  2026-09-27**, see the recent-work-log entry below.
 
 ## Decommissioned: old per-plan subscription model (2026-09-27)
 
@@ -164,6 +175,34 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-27** — **Fixed: every new signup was granted the 200-credit
+  `signup_bonus` twice** (found incidentally while spot-checking
+  `redeem-referral`, see the entry below). Root cause: two independent
+  triggers on `auth.users` both grant it — `on_auth_user_created` ->
+  `handle_new_user()`, an old trigger that predates this repo's migration
+  history entirely (never defined by a committed migration, only ever
+  edited live via the dashboard/SQL editor), and
+  `on_auth_user_created_grant_bonus` -> `grant_signup_bonus()`, added later
+  by `20260901000001_auto_grant_signup_bonus.sql` — apparently without
+  whoever wrote that migration knowing `handle_new_user()` already granted
+  it, since it isn't in this repo. `handle_new_user()` was *also* writing a
+  `'trial'`/`'trialing'` row into the decommissioned `subscriptions` table
+  on every signup — see "Decommissioned: old per-plan subscription model"
+  below; that's very likely the source of the "2 stale `trialing` rows"
+  mentioned there, and it was still actively growing before this fix.
+  Checked live before writing the fix: zero real signups have happened
+  since 2026-09-01 (when the second trigger was added) — only 2 real
+  accounts exist in this project total, both predate that date, neither
+  double-credited. **No user balance needed correcting; this was a live
+  bug with no actual victims yet, caught before it hit anyone.** Fixed by
+  stripping `handle_new_user()` down to just the `profiles` insert (still
+  needed — `referral_codes` generation depends on a trigger on `profiles`
+  INSERT) — removed its duplicate `credit_ledger` insert and its
+  `subscriptions` insert. Migration:
+  `20260927225844_fix_duplicate_signup_bonus.sql`. Verified live with a
+  fresh throwaway signup: exactly one `signup_bonus` row (not two),
+  `profiles` row created correctly, `referral_codes` still auto-generated,
+  zero new `subscriptions` rows.
 - **2026-09-27** — Spot-checked `redeem-referral` (audit BUG-04: its source
   wasn't in the repo, only deployed via the Supabase dashboard). Pulled the
   live source into `supabase/functions/redeem-referral/index.ts` — it's
