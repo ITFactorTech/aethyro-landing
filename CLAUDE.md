@@ -85,22 +85,8 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
-- **`referral_events`'s two FKs to `auth.users` are `NO ACTION`, not
-  `CASCADE`** (checked `pg_constraint.confdeltype` live — every other
-  user-owned table in this schema, `profiles`/`credit_ledger`/`conversations`/
-  `referral_codes`/`memory_embeddings`/`deletion_receipts`, cascades; these
-  two don't). Confirmed live: `auth.admin.deleteUser()` hard-fails with
-  `"Database error deleting user"` for any account that has ever referred
-  someone or been referred, on either side, forever — no workaround short of
-  deleting the `referral_events` row by hand first. Given this repo just
-  built a whole "verifiable deletion" feature elsewhere in the product, this
-  is a real gap: referral participation silently makes an account
-  undeletable. Needs a migration to fix — `ON DELETE CASCADE` on both FKs is
-  the obvious choice (the row is a historical record of a payout that
-  already happened via `credit_ledger`, not something that needs to survive
-  the user it names). Not fixed yet — found while spot-checking
-  `redeem-referral`, flagged rather than acted on since it's a schema change
-  outside that function's scope.
+~~- `referral_events`'s two FKs to `auth.users` were `NO ACTION`~~ — **fixed
+  2026-09-27**, see the recent-work-log entry below.
 ~~- New accounts get the 200-credit `signup_bonus` twice~~ — **fixed
   2026-09-27**, see the recent-work-log entry below.
 
@@ -175,6 +161,22 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-27** — **Fixed: `referral_events`'s two FKs to `auth.users` were
+  `NO ACTION`, making any account that ever sent or redeemed a referral
+  permanently undeletable** (found while spot-checking `redeem-referral`,
+  see the entry below). Migration `20260927230500_referral_events_cascade_delete.sql`
+  switches both `referrer_user_id` and `referee_user_id` FKs to
+  `ON DELETE CASCADE`, matching every other user-owned table in this schema.
+  Verified live end-to-end, not just the constraint definition: created a
+  real referrer + referee throwaway pair, redeemed a real referral between
+  them via `redeem-referral` with a real password-grant session (confirmed
+  the `referral_events` row existed first), then called
+  `auth.admin.deleteUser()` on both — referee first (the `UNIQUE` side,
+  where the old bug hit hardest), then referrer. Both succeeded (`{deleted:
+  true}`, no `"Database error deleting user"`). Confirmed zero orphaned rows
+  left behind anywhere (`referral_events`, `credit_ledger`, `profiles`,
+  `referral_codes`, `auth.users` all zero for both test ids) — the cascade
+  didn't just stop erroring, it actually cleaned up correctly.
 - **2026-09-27** — **Fixed: every new signup was granted the 200-credit
   `signup_bonus` twice** (found incidentally while spot-checking
   `redeem-referral`, see the entry below). Root cause: two independent
