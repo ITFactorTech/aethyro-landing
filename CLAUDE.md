@@ -14,8 +14,13 @@ dashboard. No framework — vanilla HTML/JS served from Cloudflare Workers
 payment, Claude for the model.
 
 Full architecture/page/function/DB audit (score, roadmap, bug list):
-https://claude.ai/artifact/ViMiQvZ5Unh4AZweNAptFK — read it before doing a
-broad review again instead of re-deriving it.
+https://claude.ai/artifact/ViMiQvZ5Unh4AZweNAptFK — **treat its P0/P1 claims
+as unverified.** A spot-check on 2026-09-27 found it flatly wrong about
+several headline items (see "Open TODOs" below for the corrected list).
+It was produced by an Explore agent summarizing file excerpts rather than
+reading full files / hitting the live site, and missed root-level files
+entirely. Don't re-cite it without re-checking the specific claim against
+the actual repo/live site first.
 
 ## Hard security constraint — do not violate
 
@@ -95,17 +100,31 @@ that). Newest first.
   column names (`credit_ledger.note` → `.reason`, `messages.user_id` → join
   via `conversations`). PR #68.
 
-## Open TODOs (from the audit, ranked)
+## Open TODOs (verified against the actual repo/live site on 2026-09-27 —
+this list supersedes the audit artifact above where they conflict)
 
-P0 (do first): write real Terms/Privacy pages (footer links currently 404);
-replace fabricated testimonials with real ones. (The referral_events RLS
-item is done — see Recent work log.)
+**Already done, despite what the audit claimed — don't redo these:**
+- `terms.html` / `privacy.html` — exist, real Aethyro-specific content, live
+  (200), linked from `index.html` footer as `/terms.html` / `/privacy.html`.
+- `sitemap.xml`, `robots.txt` — exist, live (200).
+- OG tags, Twitter card, JSON-LD (Organization + WebSite schema) — all
+  present in `index.html`'s `<head>`.
+- Branded 404 page — `404.html` exists and is actually served live
+  (verified: unknown path returns Aethyro-styled 404, not a Cloudflare
+  default).
+- Blog — `blog/index.html` + real posts exist and are live.
 
-P1: wire the email-drip cron (table + functions exist, nothing triggers
-them); add `sitemap.xml`/`robots.txt`/OG+Twitter meta; add a branded 404
-page; add persistent in-app nav between dashboard/chat; verify+commit
-`redeem-referral` function source.
+**Confirmed still true — actual open work:**
+- P0: **Fabricated testimonials.** The three landing-page quotes ("Alex M."
+  CTO, "Rachel T." consultant, "Sami K." platform engineer) are invented,
+  detailed personas, not real users. Needs real quotes or removal.
+- P2: PWA `manifest.json` has `"screenshots": []` — empty, no install-prompt
+  preview images.
+- P2: Admin access is a hardcoded email check (`auth.jwt() ->> 'email' =
+  'leer4030@gmail.com'`) in `get_admin_stats`/`get_admin_users` — no
+  `admin_users` table exists. Adding a second admin needs a migration.
 
-P2/P3: see the audit artifact for the full list (skeleton loaders, admin
-role table, blog content, PWA icons, JSON-LD, rate limiting, team plans,
-API tier, affiliate program).
+**Not yet re-verified — check before acting, don't assume the audit is right:**
+email-drip cron automation, in-app nav between dashboard/chat,
+`redeem-referral` function source location, rate limiting, skeleton
+loaders, everything in the audit's P3 section.
