@@ -62,6 +62,43 @@ it to the `?buy=` pattern instead.
   directly in the Supabase dashboard. Pull it into the repo so it's
   version-controlled (audit BUG-04).
 
+## Decommissioned: old per-plan subscription model (2026-09-27)
+
+Aethyro briefly had a $29/$199/$299/$499-per-month subscription model
+(`personal`/`research`/`dev`/`cpa` plans) before pivoting to one-time credit
+packs. Confirmed with the user this subscription line was abandoned and
+should not be reachable. Found via Supabase's edge-function list and
+security advisors, not from any doc — `list_edge_functions` showed 18
+active functions when only 10 were documented anywhere.
+
+- **`create-checkout`** (the function that sold those plans) is now stubbed
+  to return 410 for any caller — it no longer creates real Stripe sessions.
+  It *was* properly secured (required auth, stamped `supabase_user_id` into
+  Stripe metadata) so this was never a raw-payment-link problem, but it was
+  a live, unlinked page (`app/packs.html`, deleted) that could still charge
+  someone real recurring money for a plan the current product has zero
+  entitlement logic for. `subscriptions`/`purchases`/`licenses` tables exist
+  but had ~0 real usage (2 stale `trialing` rows, nothing `active`, 0
+  purchases, 0 licenses) — this was a latent risk, not an active incident.
+- **`customer-portal`** function still exists and still checks
+  `profiles.stripe_customer_id` — not yet touched, since it's shared
+  plumbing with the item below and disabling it needs the same answer.
+- **`activate-license` / `validate-license` are NOT Aethyro code.**
+  `activate-license`'s own comment says *"the local GH05T3 app calls
+  this"* — a completely different, separate desktop product's
+  license-activation backend that happens to live in this same Supabase
+  project. **Do not disable, modify, or delete these (or `customer-portal`,
+  or the `licenses`/`subscriptions` tables they depend on) without first
+  asking the user whether GH05T3 is still live** — real GH05T3 devices may
+  depend on them even though nothing in this repo does.
+- `pricing.html` was checked and is fine — it's current (credit-pack
+  pricing, CTAs go to `/app/signup.html`), it just contains the word
+  "subscriptions" in a "no subscriptions" sentence, which is a false
+  positive if you're grep'ing for the old model.
+- Not yet checked: `marketplace/`, `contractors.html`, `app/community.html`
+  content for other stale references to the old model — flagged for
+  awareness, not yet acted on.
+
 ## Key config
 
 - Supabase project ref: `uzmdqbtflcpikjdrggqc`
