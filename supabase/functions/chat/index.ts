@@ -1,4 +1,4 @@
-// chat v28 — voyage-4-lite embeddings (1024-dim), all v26 features retained
+// chat v29 — adds per-message cost breakdown (credits/tokens/rates) to USAGE_MARK, all v28 features retained
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -508,7 +508,18 @@ serve(async (req) => {
       } catch {}
     }
 
-    controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({ balance: newBal, title })));
+    controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({
+      balance: newBal,
+      title,
+      cost: {
+        credits: cost,
+        model: modelKey,
+        inputTokens,
+        outputTokens,
+        inputRate: rates.input,
+        outputRate: rates.output,
+      },
+    })));
 
     // Low-credit warning (fire-and-forget)
     try {
