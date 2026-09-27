@@ -144,6 +144,24 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-27** — Verified the low-credit-warning email fix (entry below)
+  actually delivers, not just that the internal call stops 401ing. Called
+  `send-low-credit-email` directly (with the now-fixed `X-Internal-Key`
+  header) against the real admin account (`leer4030@gmail.com`, user_id
+  `422eecb9-2fb5-4e4e-9bd6-47f9433e8a56`) with a synthetic `balance: 25` —
+  no real credit data touched. Resend accepted it and returned a real
+  message id (`01a0e50b-1046-764d-87ba-a4312eb0b042`). Side effect,
+  expected and correct: this set that account's `profiles.low_credit_warned_at`
+  to the send time, starting a real 7-day cooldown — same as any genuine
+  send would. **Gotcha for next time:** before this fix, `chat`'s
+  `finalize()` called `send-low-credit-email` without checking whether the
+  invoke succeeded, then unconditionally set `low_credit_warned_at` anyway
+  — so any real user whose balance ever dropped to ≤30 credits had their
+  cooldown silently poisoned (marked "warned" while never actually
+  receiving anything). If a real user reports never getting a low-credit
+  email even now, check `profiles.low_credit_warned_at` for a stale
+  pre-fix timestamp blocking a real send — clearing it to `NULL` resets
+  their eligibility.
 - **2026-09-27** — **Root-caused and fixed why `memory_embeddings` was never
   getting written** (flagged as an open question in the entry below). Two
   distinct bugs, found via a `waitUntil()`-only fix that *partially* worked
