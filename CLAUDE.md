@@ -68,10 +68,30 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
-- `redeem-referral` edge function is called from `chat.html` but its source
-  is not in `supabase/functions/` in this repo — it may only exist deployed
-  directly in the Supabase dashboard. Pull it into the repo so it's
-  version-controlled (audit BUG-04).
+- **`referral_events`'s two FKs to `auth.users` are `NO ACTION`, not
+  `CASCADE`** (checked `pg_constraint.confdeltype` live — every other
+  user-owned table in this schema, `profiles`/`credit_ledger`/`conversations`/
+  `referral_codes`/`memory_embeddings`/`deletion_receipts`, cascades; these
+  two don't). Confirmed live: `auth.admin.deleteUser()` hard-fails with
+  `"Database error deleting user"` for any account that has ever referred
+  someone or been referred, on either side, forever — no workaround short of
+  deleting the `referral_events` row by hand first. Given this repo just
+  built a whole "verifiable deletion" feature elsewhere in the product, this
+  is a real gap: referral participation silently makes an account
+  undeletable. Needs a migration to fix — `ON DELETE CASCADE` on both FKs is
+  the obvious choice (the row is a historical record of a payout that
+  already happened via `credit_ledger`, not something that needs to survive
+  the user it names). Not fixed yet — found while spot-checking
+  `redeem-referral`, flagged rather than acted on since it's a schema change
+  outside that function's scope.
+- **New accounts get the 200-credit `signup_bonus` twice**, not once —
+  confirmed live: two throwaway test accounts (created via
+  `auth.admin.createUser`) each show two `credit_ledger` rows with
+  `reason='signup_bonus', delta=200`. Whatever inserts that row (a DB
+  trigger on `auth.users`/`profiles` insert, most likely) is firing twice
+  per signup, or two separate mechanisms are both granting it. Not
+  root-caused — found incidentally while testing referrals, no code
+  inspected yet. Worth checking before it costs real money at scale.
 
 ## Decommissioned: old per-plan subscription model (2026-09-27)
 
@@ -144,6 +164,20 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-27** — Spot-checked `redeem-referral` (audit BUG-04: its source
+  wasn't in the repo, only deployed via the Supabase dashboard). Pulled the
+  live source into `supabase/functions/redeem-referral/index.ts` — it's
+  correct and now committed. Verified live with two throwaway accounts (a
+  real referrer + referee, signed in via password grant for a real session
+  token, not just a service-role shortcut): happy path credits both sides
+  `+100 reason='referral_bonus'`; duplicate redemption → 409; self-referral
+  → 400; invalid code → 404. All four passed. Found two things while
+  testing, neither fixed yet — both written up under "Pending / not yet
+  applied" above: `referral_events`'s FKs to `auth.users` are `NO ACTION`
+  instead of `CASCADE` like every other table here, so a user who's ever
+  been on either side of a referral can never have their account deleted;
+  and new signups are getting the 200-credit `signup_bonus` **twice**, not
+  once (found incidentally, not yet root-caused).
 - **2026-09-27** — Verified the low-credit-warning email fix (entry below)
   actually delivers, not just that the internal call stops 401ing. Called
   `send-low-credit-email` directly (with the now-fixed `X-Internal-Key`
