@@ -144,6 +144,47 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-27** — **Root-caused and fixed why `memory_embeddings` was never
+  getting written** (flagged as an open question in the entry below). Two
+  distinct bugs, found via a `waitUntil()`-only fix that *partially* worked
+  (structured `profiles.memory` JSONB extraction started succeeding, proving
+  the isolate-freeze theory right) but still left zero rows in
+  `memory_embeddings` — meaning a second, independent bug had to exist:
+  1. **`EdgeRuntime.waitUntil()` missing** — the fire-and-forget memory block
+     in `chat`'s `finalize()` wasn't handed to `EdgeRuntime.waitUntil()`, so
+     Supabase's edge runtime could freeze/recycle the isolate the instant
+     `controller.close()` ran, killing whatever background work hadn't
+     finished yet. No error, nothing thrown.
+  2. **`supaAdmin.functions.invoke()` doesn't auto-send `Authorization`** —
+     confirmed live with a diagnostic probe: calling `embed-content` via
+     `supaAdmin.functions.invoke()` with *default* headers got a 401 from
+     `embed-content`'s own `jwt === SERVICE_ROLE_KEY` check; the identical
+     call with an explicit `headers: {Authorization: Bearer <key>}` returned
+     200. Root cause: this project's service-role key is one of Supabase's
+     newer `sb_secret_...`-format keys (confirmed via a second probe —
+     `sr_key_prefix: "sb_secre"`), and `supabase-js`'s default
+     header-injection for `.functions.invoke()` doesn't forward that format
+     the way it does a legacy JWT-format key. **Same bug, different failure
+     mode, hit `send-low-credit-email` even harder — that call was never
+     going to work regardless, since `send-low-credit-email` doesn't check
+     `Authorization` at all; it checks a custom `X-Internal-Key` header that
+     `chat` never set. That email has never been sent, ever, since it was
+     added.** Fixed: every `supaAdmin.functions.invoke()` call in
+     `chat/index.ts` now passes its target function's required header
+     explicitly (`Authorization: Bearer <service-role-key>` for
+     `embed-content`, `X-Internal-Key: <service-role-key>` for
+     `send-low-credit-email`) — deployed live as v32/v34. Verified live,
+     twice: (1) a diagnostic edge function isolated the exact
+     default-vs-explicit-header behavior difference before touching
+     production code; (2) after deploying the fix, a real chat message
+     through a throwaway account produced real `memory_embeddings` rows
+     (both `user` and `assistant` turns, `has_embedding: true`) for the
+     first time. **If you add a new `supaAdmin.functions.invoke(...)` call
+     anywhere in this codebase, pass its Authorization/internal-auth header
+     explicitly — do not rely on the client's default headers.** Also worth
+     checking: whether other Supabase projects/functions using the newer
+     `sb_secret_...` key format have the same latent bug anywhere else they
+     call `.functions.invoke()` without explicit headers.
 - **2026-09-27** — **P0 fixed: every Sonnet/Opus chat message was failing
   live in production** with a 400 (`"thinking.type.enabled" is not supported
   for this model. Use "thinking.type.adaptive"...`). Found while manually
