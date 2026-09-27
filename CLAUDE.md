@@ -62,6 +62,54 @@ it to the `?buy=` pattern instead.
   directly in the Supabase dashboard. Pull it into the repo so it's
   version-controlled (audit BUG-04).
 
+## Decommissioned: old per-plan subscription model (2026-09-27)
+
+Aethyro briefly had a $29/$199/$299/$499-per-month subscription model
+(`personal`/`research`/`dev`/`cpa` plans) before pivoting to one-time credit
+packs. Confirmed with the user this subscription line was abandoned and
+should not be reachable. Found via Supabase's edge-function list and
+security advisors, not from any doc — `list_edge_functions` showed 18
+active functions when only 10 were documented anywhere.
+
+- **`create-checkout`** (the function that sold those plans) is now stubbed
+  to return 410 for any caller — it no longer creates real Stripe sessions.
+  It *was* properly secured (required auth, stamped `supabase_user_id` into
+  Stripe metadata) so this was never a raw-payment-link problem, but it was
+  a live, unlinked page (`app/packs.html`, deleted) that could still charge
+  someone real recurring money for a plan the current product has zero
+  entitlement logic for. `subscriptions`/`purchases`/`licenses` tables exist
+  but had ~0 real usage (2 stale `trialing` rows, nothing `active`, 0
+  purchases, 0 licenses) — this was a latent risk, not an active incident.
+- **`activate-license` / `validate-license` / `customer-portal` are now also
+  stubbed to return 410.** These belong to GH05T3 — `activate-license`'s own
+  comment says *"the local GH05T3 app calls this"*, a completely separate
+  desktop product's license-activation backend that happened to live in this
+  same Supabase project. The user confirmed GH05T3 is dead too, and it's
+  confirmed dead by data, not just inference: `licenses` has **0 rows,
+  ever** (activate-license has never once succeeded for a real device), and
+  a direct Stripe API check (not just this DB) found exactly **one**
+  subscription in this account's entire history — a $500/mo "Pro" plan
+  (a different price than create-checkout's 4-tier grid), trialed in
+  August 2026, whose first real charge failed and was canceled for
+  `payment_failed`. Total lifetime revenue from this whole system: $0.
+  All four stub sources now live in `supabase/functions/{create-checkout,
+  activate-license,validate-license,customer-portal}/index.ts` for version
+  control. `subscriptions`/`purchases`/`licenses` tables were left in place
+  as historical record, not dropped.
+- Offline-license design note, for future reference: the (now-retired)
+  system was legitimately well-built — RS256-signed JWTs verified **offline**
+  by the desktop app via an embedded public key, 7-day offline grace period,
+  optional online re-check. Worth reusing the pattern if a licensed desktop
+  product is ever built again; the implementation just never had a paying
+  customer.
+- `pricing.html` was checked and is fine — it's current (credit-pack
+  pricing, CTAs go to `/app/signup.html`), it just contains the word
+  "subscriptions" in a "no subscriptions" sentence, which is a false
+  positive if you're grep'ing for the old model.
+- Not yet checked: `marketplace/`, `contractors.html`, `app/community.html`
+  content for other stale references to the old model — flagged for
+  awareness, not yet acted on.
+
 ## Key config
 
 - Supabase project ref: `uzmdqbtflcpikjdrggqc`
