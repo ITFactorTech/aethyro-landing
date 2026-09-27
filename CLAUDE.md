@@ -166,11 +166,15 @@ this list supersedes the audit artifact above where they conflict)
 - P0: **Fabricated testimonials.** The three landing-page quotes ("Alex M."
   CTO, "Rachel T." consultant, "Sami K." platform engineer) are invented,
   detailed personas, not real users. Needs real quotes or removal.
-- P2: PWA `manifest.json` has `"screenshots": []` — empty, no install-prompt
-  preview images.
+- ~~P2: PWA `manifest.json` had empty `screenshots: []`~~ — **fixed
+  2026-09-27**. Added real screenshots of the live site (`/screenshots/
+  wide.png` 1280x800, `/screenshots/narrow.png` 390x844 — Playwright against
+  `https://aethyro.com/`, not mockups) with `form_factor: wide/narrow`.
 - P2: Admin access is a hardcoded email check (`auth.jwt() ->> 'email' =
   'leer4030@gmail.com'`) in `get_admin_stats`/`get_admin_users` — no
   `admin_users` table exists. Adding a second admin needs a migration.
+  (Fix in progress on a separate branch/PR — check its status before
+  redoing this.)
 
 **Not yet re-verified — check before acting, don't assume the audit is right:**
 email-drip cron automation, in-app nav between dashboard/chat,
