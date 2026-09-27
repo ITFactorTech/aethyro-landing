@@ -111,6 +111,83 @@
   .spark-line { fill: none; stroke: #ff4d00; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
   .spark-fill { fill: url(#sparkGrad); stroke: none; }
   .spark-labels { display: flex; justify-content: space-between; margin-top: .35rem; font-size: .68rem; color: var(--muted, #888); font-family: var(--mono, monospace); }
+  /* ── Referral panel ── */
+  .ref-code-box {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    background: var(--surface, #141414);
+    border: 1px solid var(--border, #2a2a2a);
+    border-radius: 10px;
+    padding: .7rem 1rem;
+    margin: .75rem 0 .5rem;
+  }
+  .ref-code {
+    font-family: var(--mono, 'JetBrains Mono', monospace);
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--text, #f0f0f0);
+    flex: 1;
+  }
+  .ref-copy-btn {
+    padding: .35rem .85rem;
+    border-radius: 7px;
+    font-size: .75rem;
+    font-weight: 700;
+    border: 1px solid rgba(255,77,0,.3);
+    background: rgba(255,77,0,.08);
+    color: #ff4d00;
+    cursor: pointer;
+    transition: background .15s;
+    white-space: nowrap;
+  }
+  .ref-copy-btn:hover { background: rgba(255,77,0,.16); }
+  .ref-copy-btn.copied { background: rgba(34,197,94,.12); color: #22c55e; border-color: rgba(34,197,94,.3); }
+  .ref-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .75rem;
+    margin-top: .75rem;
+  }
+  .ref-stat-card {
+    background: var(--surface, #141414);
+    border: 1px solid var(--border, #2a2a2a);
+    border-radius: 10px;
+    padding: .85rem 1rem;
+    text-align: center;
+  }
+  .ref-stat-num {
+    font-family: var(--mono, monospace);
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--text, #f0f0f0);
+  }
+  .ref-stat-label {
+    font-size: .72rem;
+    color: var(--muted, #888);
+    margin-top: .2rem;
+  }
+  .ref-link-row {
+    margin-top: .6rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+  }
+  .ref-url {
+    font-size: .75rem;
+    font-family: var(--mono, monospace);
+    color: var(--muted, #888);
+    background: var(--surface, #141414);
+    border: 1px solid var(--border, #2a2a2a);
+    border-radius: 6px;
+    padding: .3rem .6rem;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -212,6 +289,31 @@
       <div id="historyList"><p class="muted">No transactions yet — send your first message to get started.</p></div>
     </div>
 
+    <!-- REFERRAL -->
+    <div class="panel" style="margin-top:1rem" id="referralPanel">
+      <h2>Refer friends · earn credits</h2>
+      <p class="muted" style="font-size:.83rem;margin-top:.3rem">Share your link. Each friend who signs up and uses Aethyro earns you both <strong style="color:var(--text)">100 free credits</strong>.</p>
+      <div class="ref-code-box">
+        <span class="ref-code" id="refCode">——————</span>
+        <button class="ref-copy-btn" id="refCopyCode" onclick="copyRef('code')">Copy code</button>
+      </div>
+      <div class="ref-link-row">
+        <span class="ref-url" id="refUrl">loading…</span>
+        <button class="ref-copy-btn" id="refCopyLink" onclick="copyRef('link')">Copy link</button>
+      </div>
+      <div class="ref-stats">
+        <div class="ref-stat-card">
+          <div class="ref-stat-num" id="refCount">—</div>
+          <div class="ref-stat-label">friends referred</div>
+        </div>
+        <div class="ref-stat-card">
+          <div class="ref-stat-num" id="refCredits">—</div>
+          <div class="ref-stat-label">credits earned</div>
+        </div>
+      </div>
+      <p class="muted" style="font-size:.75rem;margin-top:.75rem">Credits are added automatically after each new friend sends their first message.</p>
+    </div>
+
     <!-- BUY CREDITS CTA -->
     <div class="panel" style="margin-top:1rem;border-color:rgba(255,77,0,.2)">
       <h2>Buy more credits</h2>
@@ -247,6 +349,28 @@
 
   function fmt(n){ return typeof n === 'number' ? n.toLocaleString() : '—'; }
 
+  // Referral copy helper — called by inline onclick on ref-copy buttons
+  window.copyRef = function(which){
+    var text = which === 'link' ? (window._refUrl||'') : (window._refCode||'');
+    var btnId = which === 'link' ? 'refCopyLink' : 'refCopyCode';
+    var btn = document.getElementById(btnId);
+    if(!text || !btn) return;
+    navigator.clipboard.writeText(text).then(function(){
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function(){ btn.textContent = which==='link'?'Copy link':'Copy code'; btn.classList.remove('copied'); }, 2000);
+    }).catch(function(){
+      // fallback: select a temp textarea
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); } catch(e){}
+      document.body.removeChild(ta);
+      btn.textContent = 'Copied!'; btn.classList.add('copied');
+      setTimeout(function(){ btn.textContent = which==='link'?'Copy link':'Copy code'; btn.classList.remove('copied'); }, 2000);
+    });
+  };
+
   // Credit packs. Purchases go through chat.html's ?buy= handler, which calls
   // the buy-credits function — that stamps supabase_user_id into the Stripe
   // session so the webhook can credit the account. Never link a raw Payment
@@ -270,13 +394,16 @@
       // Fetch all data in parallel
       var now=new Date(), monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString();
       var thirtyDaysAgo=new Date(Date.now()-30*86400000).toISOString();
-      var [balRes, ledRes, convRes, lastMsgRes, monthDebitsRes, sparkRes] = await Promise.all([
+      var [balRes, ledRes, convRes, lastMsgRes, monthDebitsRes, sparkRes, refCodeRes, refEventsRes, refBonusRes] = await Promise.all([
         supabase.rpc('get_credit_balance'),
         supabase.from('credit_ledger').select('*').order('created_at',{ascending:false}).limit(20),
         supabase.from('conversations').select('id',{count:'exact',head:true}),
         supabase.from('messages').select('created_at').order('created_at',{ascending:false}).limit(1),
         supabase.from('credit_ledger').select('delta').lt('delta',0).gte('created_at',monthStart),
-        supabase.from('credit_ledger').select('delta,created_at').lt('delta',0).gte('created_at',thirtyDaysAgo)
+        supabase.from('credit_ledger').select('delta,created_at').lt('delta',0).gte('created_at',thirtyDaysAgo),
+        supabase.from('referral_codes').select('code').limit(1).maybeSingle(),
+        supabase.from('referral_events').select('id',{count:'exact',head:true}),
+        supabase.from('credit_ledger').select('delta').eq('reason','referral_bonus').gt('delta',0)
       ]);
 
       // ── Credits ──
@@ -329,8 +456,11 @@
           var isCredit = row.delta > 0;
           var d = new Date(row.created_at);
           var dateStr = d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+          var label = row.reason
+            ? row.reason.replace(/^pack:/, 'Pack — ').replace(/_/g,' ')
+            : 'transaction';
           return '<div class="history-row">'
-            +'<div><div style="font-weight:600;font-size:.83rem">'+(row.description||row.type||'transaction')+'</div>'
+            +'<div><div style="font-weight:600;font-size:.83rem">'+label+'</div>'
             +'<div class="history-type">'+dateStr+'</div></div>'
             +'<div class="history-amount '+(isCredit?'credit':'debit')+'">'+(isCredit?'+':'')+row.delta+'</div>'
             +'</div>';
@@ -391,6 +521,24 @@
           +'<div class="action-desc">'+p.credits.toLocaleString()+' credits · never expire</div>';
         buyEl.appendChild(card);
       });
+
+      // ── Referral panel ──
+      var refCode = refCodeRes && refCodeRes.data && refCodeRes.data.code;
+      var refUrl  = refCode ? 'https://aethyro.com/?ref=' + refCode : '';
+      if(refCode){
+        $('refCode').textContent = refCode;
+        $('refUrl').textContent  = refUrl;
+      } else {
+        $('refCode').textContent = '—';
+        $('refUrl').textContent  = 'code not found — try reloading';
+      }
+      var refCount   = (refEventsRes && refEventsRes.count != null) ? refEventsRes.count : 0;
+      var refCredits = (refBonusRes.data||[]).reduce(function(s,r){ return s+r.delta; }, 0);
+      $('refCount').textContent   = refCount.toLocaleString();
+      $('refCredits').textContent = refCredits > 0 ? '+'+refCredits.toLocaleString() : '0';
+
+      window._refCode = refCode;
+      window._refUrl  = refUrl;
 
       // ── Sign out ──
       $('signout').onclick = async function(){ await supabase.auth.signOut(); location.href = './login.html'; };
