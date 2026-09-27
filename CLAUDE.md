@@ -41,21 +41,17 @@ it to the `?buy=` pattern instead.
 - **`referral_codes`**: one row per user, 8-char unique `code`, auto-generated
   by a trigger on `profiles` INSERT.
 - **`referral_events`**: `referrer_user_id`, `referee_user_id`, UNIQUE on
-  `referee_user_id`. Has RLS enabled — make sure a SELECT policy exists for
-  `referrer_user_id = auth.uid()` or referral-count queries fail silently
-  (empty result, no error). See "Pending / not yet applied" below.
+  `referee_user_id`. RLS SELECT policy `referral_events_select_own`
+  (`referrer_user_id = auth.uid() OR referee_user_id = auth.uid()`) is live —
+  added by `20260925000001_security_hardening.sql`. Don't add a second
+  SELECT policy for this table; check `pg_policies` first if a referral query
+  seems to return nothing (the cause is more likely a JS bug than RLS).
 - Admin RPCs (`get_admin_stats`, `get_admin_users`) are `SECURITY DEFINER`
   and gate on `auth.jwt() ->> 'email' = 'leer4030@gmail.com'` — a hardcoded
   string, not a role table. Known limitation, tracked as BUG-08 in the audit.
 
 ## Pending / not yet applied
 
-- **Migration `supabase/migrations/20260927000001_referral_events_select_policy.sql`
-  is committed and merged but has NOT been run against the live Supabase DB.**
-  Run it manually in the Supabase SQL Editor (or via `mcp__Supabase__apply_migration`
-  once connected to the right project) before trusting the dashboard referral
-  count. Without it, `referral_events` SELECT returns nothing and the
-  dashboard shows 0 referrals even when there are some.
 - `redeem-referral` edge function is called from `chat.html` but its source
   is not in `supabase/functions/` in this repo — it may only exist deployed
   directly in the Supabase dashboard. Pull it into the repo so it's
@@ -85,20 +81,25 @@ Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
 - **2026-09-27** — Built referral UI in `app/dashboard.html` (code display,
-  copy buttons, referral count, credits earned). Added
-  `20260927000001_referral_events_select_policy.sql` migration (merged, not
-  yet applied live — see above). Fixed credit-history label bug that read
-  nonexistent `row.description`/`row.type` instead of `row.reason`. Ran a
-  full site audit (published as the artifact linked above). PR #69.
+  copy buttons, referral count, credits earned). Fixed credit-history label
+  bug that read nonexistent `row.description`/`row.type` instead of
+  `row.reason`. Ran a full site audit (published as the artifact linked
+  above). PR #69. Added a `20260927000001_referral_events_select_policy.sql`
+  migration on the assumption `referral_events` had no SELECT policy — turned
+  out wrong: `20260925000001_security_hardening.sql` (two days earlier) had
+  already added an equivalent, broader policy live. Deleted the redundant
+  migration file rather than apply it (PR #71). Lesson: check `pg_policies`
+  against the live DB before writing an RLS migration, don't infer from
+  reading migration files alone.
 - **Earlier** — Fixed admin dashboard SQL functions that referenced wrong
   column names (`credit_ledger.note` → `.reason`, `messages.user_id` → join
   via `conversations`). PR #68.
 
 ## Open TODOs (from the audit, ranked)
 
-P0 (do first): apply the referral_events migration live; write real
-Terms/Privacy pages (footer links currently 404); replace fabricated
-testimonials with real ones.
+P0 (do first): write real Terms/Privacy pages (footer links currently 404);
+replace fabricated testimonials with real ones. (The referral_events RLS
+item is done — see Recent work log.)
 
 P1: wire the email-drip cron (table + functions exist, nothing triggers
 them); add `sitemap.xml`/`robots.txt`/OG+Twitter meta; add a branded 404
