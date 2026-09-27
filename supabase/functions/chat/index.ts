@@ -1,4 +1,9 @@
-// chat v29 — adds per-message cost breakdown (credits/tokens/rates) to USAGE_MARK, all v28 features retained
+// chat v30 — fixes extended thinking: claude-opus-5-5/claude-sonnet-5 reject the
+// deprecated {type:"enabled",budget_tokens} shape (400); switched to
+// {type:"adaptive",display:"summarized"}. This had been breaking every
+// Sonnet/Opus message in production (Haiku has no thinking param, so it kept
+// working, which is why this went unnoticed). Also carries v29's per-message
+// cost breakdown (credits/tokens/rates) in USAGE_MARK.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -37,7 +42,6 @@ const CREDIT_RATES: Record<string, { input: number; output: number }> = {
 const TOOL_MARK  = "\x01";
 const USAGE_MARK = "\x00";
 const THINK_MARK = "\x02";
-const THINKING_BUDGET = 3000;
 const MAX_TOKENS_THINKING = 8192;
 
 // ── Voyage AI embed (single text) ─────────────────────────────────────────────
@@ -642,7 +646,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
           max_tokens: supportsThinking ? MAX_TOKENS_THINKING : MAX_TOKENS,
           system: systemPrompt,
           messages,
-          ...(supportsThinking ? { thinking: { type: "enabled", budget_tokens: THINKING_BUDGET } } : {}),
+          ...(supportsThinking ? { thinking: { type: "adaptive", display: "summarized" } } : {}),
         } as any);
 
         let fullText = "";

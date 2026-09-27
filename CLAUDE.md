@@ -144,7 +144,49 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
-- **2026-09-27** — Four "rare feature" differentiators (user asked to
+- **2026-09-27** — **P0 fixed: every Sonnet/Opus chat message was failing
+  live in production** with a 400 (`"thinking.type.enabled" is not supported
+  for this model. Use "thinking.type.adaptive"...`). Found while manually
+  verifying PR #77's test plan against the real site with a throwaway test
+  account (created via a temporary admin edge function, deleted after) — the
+  very first live chat send failed. Root cause: `claude-opus-5-5` and
+  `claude-sonnet-5` (this app's `opus`/`sonnet` model keys) reject the
+  deprecated `thinking: {type:"enabled", budget_tokens:N}` shape entirely;
+  only `{type:"adaptive"}` is accepted now. This had been broken since
+  whichever prior session/PR introduced `MODEL_MAP.opus = "claude-opus-5-5"`
+  — Haiku has no `thinking` param at all, so Haiku chats kept working and
+  masked it in every manual spot-check that happened to use the default
+  model. Fixed in `supabase/functions/chat/index.ts` (deployed live as v30/v32:
+  `thinking: {type:"adaptive", display:"summarized"}`, dropped the
+  now-invalid `THINKING_BUDGET` constant). Re-verified live after the fix:
+  a real message now returns a real reply with a correct cost badge (`1
+  credit · 36 in / 4 out tokens · opus`). **If you add a new model to
+  `MODEL_MAP`, check the current API's `thinking` requirements for it before
+  shipping — don't assume the existing `{enabled, budget_tokens}` shape
+  still applies.**
+- **2026-09-27** — Manually verified PR #77's test plan end-to-end against
+  the live site (not just DB/RLS-level checks): created two confirmed
+  throwaway accounts via a temporary `test-admin-setup` edge function
+  (`auth.admin.createUser({email_confirm:true})`, bypassing the normal
+  email-confirmation flow since signup.html requires a real inbox), drove
+  both through Playwright. Results: cost badge/session pill — passed after
+  the thinking-param fix above; per-entry memory delete — passed (seeded one
+  synthetic `memory_embeddings` row since the real auto-embed pipeline
+  wasn't landing rows fast enough in-test to click against, see note below);
+  routine publish → community gallery → fork → fork_count increment —
+  passed on the first try; deletion receipt (payload, HMAC signature,
+  Verify button, JSON download) — passed on the first try. Cleaned up: both
+  test accounts deleted (cascade confirmed zero leftover rows across
+  `conversations`/`user_routines`/`memory_embeddings`/`deletion_receipts`/
+  `credit_ledger`), `test-admin-setup` stubbed to 410 (no MCP tool exists to
+  actually delete an edge function). **Not yet root-caused:** a real
+  successful chat exchange did not produce a `memory_embeddings` row for the
+  test account within several seconds — either `VOYAGE_API_KEY` isn't set as
+  a project secret, or the fire-and-forget `embed-content` invocation from
+  `chat`'s `finalize()` is failing silently (it's wrapped in a bare `catch
+  {}`). Worth a real investigation; flagged here rather than chased further
+  since it's outside PR #77's scope.
+- Four "rare feature" differentiators (user asked to
   deprioritize the testimonials P0 in favor of these): (1) **Visible/editable
   memory graph** — turned out to already exist (chat.html's Intelligence →
   Memory tab: structured `profiles.memory` fact chips with per-key delete,
