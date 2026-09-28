@@ -115,6 +115,20 @@ it to the `?buy=` pattern instead.
   with no matching file in `supabase/functions/` means it was deployed
   outside this repo). Worth a `list_edge_functions` vs. `ls
   supabase/functions/` diff periodically, not just when a bug forces it.
+  **A second, opposite-direction flavor of this same failure mode, found
+  2026-09-28: committed source can be *ahead* of what's deployed, not just
+  behind it.** `git push` auto-deploys this repo's frontend (Cloudflare
+  Workers), but nothing auto-deploys a Supabase edge function — that
+  always needs an explicit `deploy_edge_function` call. A cross-PR
+  merge-conflict resolution that edits `supabase/functions/*/index.ts`
+  (as opposed to a fresh feature build, which always ends in its own
+  deploy) is easy to land in `main`'s git history without ever
+  redeploying it — see the PR #97 auto-model-routing regression in
+  recent-work-log below for exactly this happening. Don't assume a
+  function is current just because its source is correct in `main`:
+  `get_edge_function` and diff its live source against the repo,
+  especially for any function touched by a conflict resolution rather
+  than its own PR's deploy step.
 - **A `SECURITY INVOKER` (the default) aggregate function over a
   restrictively-RLS'd table silently under-counts for anyone but the row
   owner — it won't error, it'll just return a wrong number.** Found live
@@ -320,6 +334,68 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **`site-guardian` sweep after merging PRs #96-#100 found
+  and fixed a live P0: auto model routing (PR #97) was silently dead in
+  production.** Root cause was a gap this project hadn't hit before:
+  Cloudflare Workers auto-deploys the frontend on every `git push` (so
+  `chat.html`'s new "Auto" model selector — the default for any user with
+  no stored `aethyro_model` preference — went live the moment PR #97
+  merged), but **Supabase edge functions do not auto-deploy on push at
+  all** — they only update when something explicitly calls
+  `deploy_edge_function`. PR #97's `routeAutoModel()` logic was merged
+  into `main`'s `supabase/functions/chat/index.ts` (confirmed via the
+  merge-conflict resolution work that produced this file's current
+  `chat` source — see PR #97/#98/#99/#100's conflict-resolution history),
+  but nothing ever redeployed the live Supabase function afterward — PR
+  #99's and #100's own deploys were of `feat/auto-topup`/
+  `feat/team-credit-pool` branch state, which (at the time each was
+  deployed, before this session's later merge-conflict resolution)
+  predated PR #97 entirely. The result: the **live** `chat` function
+  (confirmed via `get_edge_function`, deployed version 38) still had the
+  pre-#97 `const modelKey = ["haiku","sonnet","opus"].includes(body.model)
+  ? body.model : "haiku"` line — no `routeAutoModel`, no `requestedModel`
+  anywhere in the deployed source, despite both being present in `main`'s
+  committed source and in the other three redeployed functions
+  (`stripe-webhook`, `auto-topup-charge`, both confirmed byte-for-byte
+  matching local source). Every message sent with `model:"auto"` (i.e.
+  every new/unset-preference user, by default) was silently falling back
+  to Haiku server-side — the cheapest, weakest model — while the client
+  UI showed "Auto" selected and no error appeared anywhere; nothing
+  crashed, so this had zero chance of being caught except by explicitly
+  diffing deployed-vs-committed source, which is exactly what this sweep
+  did. Fixed by redeploying `chat` from `main`'s current source (now live
+  as v39). **Verified live end-to-end** with two real throwaway accounts:
+  confirmed exactly one `signup_bonus` row each (no regression of the
+  double-bonus bug); `model:"auto"` on `"thanks!"` → haiku, a full
+  security-audit prompt → opus, a plain factual question → sonnet, all
+  three correctly reporting `requestedModel:"auto"` alongside the
+  resolved `model`; explicit `model:"sonnet"` still resolves to sonnet
+  with `requestedModel:"sonnet"` (no regression); team credit pooling
+  (PR #100) still works correctly post-redeploy — two accounts on a
+  real team saw matching pooled balances before and after a real spend
+  (100→99 on both sides); the `get_credit_balance(uuid)`-overload
+  lockdown (PR #100's second bug fix) still correctly blocks both `anon`
+  and an unrelated `authenticated` caller. Zero orphaned rows after
+  cleanup (`profiles`/`credit_ledger`/`teams` all confirmed empty for
+  both test ids, including the owned team's cascade-delete).
+  **Lesson for this repo generally: a merge-conflict resolution that
+  only touches `main`'s git history is not the same as a deploy** — for
+  any edge function whose source changes as part of resolving a
+  cross-PR conflict (not just a fresh feature build), explicitly
+  redeploy it afterward and diff `get_edge_function`'s live source
+  against the repo before trusting it's current. `get_advisors`
+  (security+performance) run and diffed against what's already
+  documented here — nothing new beyond existing accepted findings (the
+  zero-policy tables, GraphQL-exposure boilerplate, the two intentional
+  anon-executable 0-arg `SECURITY DEFINER` functions). `list_edge_functions`
+  vs. `supabase/functions/` showed no other drift — `setup-auto-topup`
+  and `team-manage` both confirmed byte-for-byte matching local source.
+  Hard security constraint re-grepped clean (zero `buy.stripe.com`
+  matches). `routines.html` and all other static pages confirmed live
+  (200) with correct titles. Diagnostic helper (`test-admin-setup`,
+  redeployed for this sweep with a session-only key since this shell had
+  no access to `SUPABASE_SERVICE_ROLE_KEY`) re-stubbed to 410 immediately
+  after, confirmed via a live curl.
 - **2026-09-28** — **Added team accounts: shared credit pool** (PR #100,
   item 5 of 5 from the "make the site significantly better, do all"
   request — items 1-4 are PRs #96-99 above; user picked "shared credit
