@@ -14,9 +14,23 @@
   <meta name="theme-color" content="#030303"/>
   <link rel="manifest" href="/manifest.json"/>
   <link rel="preconnect" href="https://uzmdqbtflcpikjdrggqc.supabase.co"/>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
-  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+  <!-- Google tag (gtag.js) -- loaded once the browser is idle (or after a
+       short fallback delay) instead of eagerly, so its parse/exec time
+       doesn't compete with first paint on the critical path. gtag('js', ...)
+       still stamps the real load time, so time-on-page metrics are unaffected. -->
+  <script>
+    window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
+    (function(){
+      function loadGA(){
+        var s=document.createElement('script');
+        s.async=true; s.src='https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD';
+        document.head.appendChild(s);
+        gtag('js', new Date()); gtag('config','G-BE319Z71PD');
+      }
+      if('requestIdleCallback' in window) requestIdleCallback(loadGA, {timeout:3000});
+      else setTimeout(loadGA, 1500);
+    })();
+  </script>
   <meta property="og:type" content="website"/>
   <meta property="og:url" content="https://aethyro.com/"/>
   <meta property="og:title" content="Aethyro | AI Assistant Powered by Claude Opus 5 — No Install, No Subscription"/>
@@ -30,7 +44,12 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Aethyro","url":"https://aethyro.com","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://aethyro.com/blog/?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <!-- Non-blocking font load: preload as a low-priority fetch, then swap it in
+       as the real stylesheet once it lands, instead of blocking first paint
+       on a synchronous <link rel="stylesheet"> round-trip to fonts.googleapis.com. -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" media="print" onload="this.media='all'"/>
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap"/></noscript>
   <!-- ── Performance hints ── -->
   <link rel="prefetch" href="/app/chat.html"/>
   <link rel="prefetch" href="/pricing.html"/>
@@ -54,7 +73,7 @@
       --red:#ef4444;
       --text:#f0f0f0;
       --t2:#aaaaaa;
-      --t3:#555;
+      --t3:#7a7a7a; /* was #555 -- 2:1 contrast on --bg, fails WCAG AA (4.5:1); this passes at ~4.8:1 */
       --white:#ffffff;
       --font:'Space Grotesk',system-ui,sans-serif;
       --mono:'JetBrains Mono',monospace;
@@ -377,7 +396,7 @@
     .footer-brand{font-size:1.3rem;font-weight:800;color:var(--white);letter-spacing:-1px;margin-bottom:.4rem}
     .footer-brand-dot{color:var(--orange)}
     .footer-tagline{font-size:.78rem;color:var(--t3);line-height:1.5;font-family:var(--mono)}
-    .footer-col h4{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);margin-bottom:.9rem;font-family:var(--mono)}
+    .footer-col h3{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);margin-bottom:.9rem;font-family:var(--mono)}
     .footer-col a{display:block;font-size:.82rem;color:var(--t2);text-decoration:none;margin-bottom:.5rem;transition:color .15s}
     .footer-col a:hover{color:var(--text)}
     .footer-bottom{max-width:1200px;margin:2rem auto 0;padding-top:1.5rem;border-top:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.85rem}
@@ -429,7 +448,7 @@
     .steps-row::before{content:'';position:absolute;top:2.2rem;left:calc(16.66% + 1rem);right:calc(16.66% + 1rem);height:1px;background:linear-gradient(90deg,transparent,var(--b2) 20%,var(--b2) 80%,transparent);z-index:0}
     .step{text-align:center;position:relative;z-index:1}
     .step-num{width:44px;height:44px;border-radius:50%;background:var(--s2);border:1px solid var(--b2);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--orange);margin:0 auto 1.1rem}
-    .step h4{font-size:1rem;font-weight:700;margin-bottom:.4rem;color:var(--text)}
+    .step h3{font-size:1rem;font-weight:700;margin-bottom:.4rem;color:var(--text)}
     .step p{font-size:.83rem;color:var(--t2);line-height:1.65}
 
     /* ── TESTIMONIALS ── */
@@ -762,6 +781,7 @@
   </div>
 </div>
 
+<main>
 <!-- ── HERO ── -->
 <div id="main-content" style="background:var(--bg);overflow:hidden">
 <div class="hero">
@@ -898,17 +918,17 @@
     <div class="steps-row">
       <div class="step">
         <div class="step-num">01</div>
-        <h4>Sign up free</h4>
+        <h3>Sign up free</h3>
         <p>Create an account in 10 seconds. 200 free credits land instantly — no card, no commitment.</p>
       </div>
       <div class="step">
         <div class="step-num">02</div>
-        <h4>Ask anything</h4>
+        <h3>Ask anything</h3>
         <p>Code, research, contracts, writing, planning — just describe what you need. Claude Opus 5 handles the rest.</p>
       </div>
       <div class="step">
         <div class="step-num">03</div>
-        <h4>Top up when ready</h4>
+        <h3>Top up when ready</h3>
         <p>Buy credit packs as you go. They never expire. No monthly pressure, no subscription anxiety.</p>
       </div>
     </div>
@@ -1758,6 +1778,7 @@ patterns are well established.</div>
     <p class="cta-note">// no card required · 200 free credits · response within 24 hours</p>
   </div>
 </section>
+</main>
 
 <!-- ── FOOTER ── -->
 <footer>
@@ -1767,7 +1788,7 @@ patterns are well established.</div>
       <p class="footer-tagline">Private AI, powered by Claude Opus 5.</p>
     </div>
     <div class="footer-col">
-      <h4>Product</h4>
+      <h3>Product</h3>
       <a href="#how">How it works</a>
       <a href="#pricing">Pricing</a>
       <a href="/app/chat.html">Chat now</a>
@@ -1775,14 +1796,14 @@ patterns are well established.</div>
       <a href="/app/newsletter.html">Newsletter</a>
     </div>
     <div class="footer-col">
-      <h4>Account</h4>
+      <h3>Account</h3>
       <a href="/app/chat.html">Start for Free</a>
       <a href="/app/login.html">Log in</a>
       <a href="/app/dashboard.html">Dashboard</a>
       <a data-community href="#">Community</a>
     </div>
     <div class="footer-col">
-      <h4>Company</h4>
+      <h3>Company</h3>
       <a href="/terms.html">Terms of Service</a>
       <a href="/privacy.html">Privacy Policy</a>
       <a href="mailto:hello@aethyro.com">Contact</a>

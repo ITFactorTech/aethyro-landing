@@ -215,6 +215,34 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Homepage performance/accessibility pass** (PR #91),
+  from a real PageSpeed Insights/Lighthouse mobile audit (Performance 83,
+  Accessibility 86-87, Best Practices/SEO 100). Fixed the specific flagged
+  items, no visual changes: (1) the Google Fonts `<link rel="stylesheet">`
+  was synchronous/render-blocking (the audit's single largest flagged
+  item, ~1s estimated) — switched to the preload + `media="print"
+  onload="this.media='all'"` swap pattern with a `<noscript>` fallback;
+  (2) `gtag.js` now loads via `requestIdleCallback` (1.5s `setTimeout`
+  fallback) instead of eagerly, so it stops competing with first paint —
+  `dataLayer`/analytics events unaffected, just deferred a beat; (3)
+  `--t3` (`#555`, used in ~40 small caption/label elements site-wide) was
+  ~2:1 contrast against `--bg`, failing WCAG AA's 4.5:1 — bumped to
+  `#7a7a7a` (~4.8:1), one token fixes all usages; (4) two `<h2>`→`<h4>`
+  heading-order skips (the "How it works" steps, the footer columns) —
+  changed both to `<h3>`, zero visual change since styling comes from
+  class selectors not tag defaults; (5) added a `<main>` landmark — the
+  page had none — wrapping the hero through the last content section.
+  Verified locally with Playwright against the real file: `<main>` count
+  and scope correct, zero remaining `<h4>` skips, `--t3` computed value
+  confirmed, fonts still load (`document.fonts.check` passes) under the
+  new preload pattern, GA `dataLayer` still receives events under the
+  deferred loader, zero console errors, full-page screenshot shows no
+  regression. Not yet addressed from the same audit (real code/behavior
+  changes, wanted a second pass first): ~73KB "unused JavaScript" (almost
+  certainly mostly `gtag.js` itself, not first-party code — this repo's
+  only JS is one inline `<script>` block, no bundled/legacy JS of its
+  own) and asset cache lifetimes for third-party resources outside this
+  repo's control (Google Fonts, GA).
 - **2026-09-28** — **Fixed: mobile nav drawer rendered fully transparent
   over page content** (user-reported, with a real Android Chrome
   screenshot showing the hero headline/CTAs and the drawer's own link
