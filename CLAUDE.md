@@ -86,8 +86,9 @@ it to the `?buy=` pattern instead.
   check `select * from cron.job` live, don't assume the trigger list above
   is the whole picture of what runs automatically. `send-onboarding-emails`
   (`*/30 * * * *`) drains `scheduled_emails` and calls `send-onboarding-email`
-  (see the stale-content finding under "Pending" — this one's live and
-  worth checking before it fires on a real signup). `cleanup-trial-usage-daily`
+  for `email_num` 1-3 (`queue_onboarding_emails()` only ever inserts 1-3, one
+  per day after signup — content fixed 2026-09-27, see recent-work-log).
+  `cleanup-trial-usage-daily`
   (`0 3 * * *`) calls `cleanup_old_trial_usage()`. `drip-engagement`
   (`5 9 * * *`) and `drip-reengagement` (`15 9 * * *`) both call
   `send-welcome-email` for users 2/5 days old respectively who haven't had
@@ -114,25 +115,8 @@ it to the `?buy=` pattern instead.
 ~~- New accounts get the 200-credit `signup_bonus` twice~~ — **fixed
   2026-09-27**, see the recent-work-log entry below.
 
-- **`send-onboarding-email`'s 5 email templates describe a completely
-  different product than the one that exists** — found during a
-  `site-guardian` sweep on 2026-09-27. The templates sell the old
-  $29/$199/$299/$499-per-month subscription plans (see "Decommissioned"
-  below), a local-Ollama-install flow, a 14-day trial, and six fictional
-  agent personas (Avery/ORACLE/FORGE/CODEX/SENTINEL/NEXUS) that don't exist
-  anywhere else in this codebase or product. None of this matches the
-  actual product (credit-pack SaaS, Claude-backed chat, no local install,
-  no named-agent personas). **This is live, not dead code**: a `pg_cron`
-  job (`send-onboarding-emails`, `*/30 * * * *`, confirmed `active`) drains
-  `public.scheduled_emails` every 30 minutes and calls this function for
-  whoever's due. Checked live: only one real signup has ever gone through
-  it (5 rows in `scheduled_emails`, all from 2026-08-02–08-14, all
-  `sent=true`) — no one is currently mid-sequence, but the very next real
-  signup would get all 5 of these stale/wrong emails on the current
-  schedule (email 1 at signup, 2 next day, 3 two days later, 4 on day 7, 5
-  on day 12, per `queue_onboarding_emails()`). This needs a real copy
-  rewrite for the actual product, not something to invent unattended —
-  flagging for a human decision rather than fabricating replacement copy.
+~~- `send-onboarding-email`'s templates described a completely different
+  product~~ — **fixed 2026-09-27**, see the recent-work-log entry below.
 - **8 tables in this Supabase project don't belong to Aethyro and aren't
   documented anywhere**: `agents`, `economy_ticks`, `agent_fitness_history`,
   `auctions`, `trades`, `agent_events`, `species`, `economy_config` — RLS
@@ -227,6 +211,27 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Rewrote `send-onboarding-email`'s content** (the
+  stale-product finding from the `site-guardian` sweep below). The old
+  templates sold the decommissioned $29–499/mo subscription plans, a
+  local-Ollama install flow, a 14-day trial, and six fictional agent
+  personas — none of it matched the real product. Also found while fixing
+  it: `queue_onboarding_emails()` (the trigger that actually schedules
+  these) only ever inserts `email_num` 1-3, one per day after signup —
+  templates 4 and 5 were dead code, unreachable by any real signup, not
+  just wrong. Removed them rather than inventing content for a path that
+  doesn't fire. Rewrote 1-3 with real facts only: the actual 200-credit
+  signup bonus (permanent, not a trial), real model names (Haiku/Sonnet/
+  Opus, not personas) and their real per-message credit costs, the actual
+  Intelligence panel features (agentic tasks, document knowledge base,
+  scheduled routines, memory, GitHub/Notion connectors), the real referral
+  bonus (100 credits each side), and real credit-pack pricing ($4/200cr up
+  to $90/7000cr, via `/#pricing`, never a bare Stripe link). Verified live:
+  deployed the function, sent all 3 real templates to the admin's own
+  inbox via direct calls to `send-onboarding-email` (never a real
+  customer), confirmed all three delivered with real Resend message ids,
+  and confirmed `email_num: 4` now returns a clean `400` instead of
+  sending stale content.
 - **2026-09-27** — First `site-guardian` sweep (see that skill). Pulled four
   more drifted edge functions into the repo verbatim, no behavior change —
   `send-newsletter`, `send-onboarding-email`, `trial-chat`,

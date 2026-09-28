@@ -4,6 +4,8 @@ const RESEND_KEY = Deno.env.get("RESEND_API_KEY")!;
 const FROM = "Robert at Aethyro <hello@aethyro.com>";
 const REPLY_TO = "leer4030@gmail.com";
 const DASH = "https://aethyro.com/app/dashboard.html";
+const CHAT = "https://aethyro.com/app/chat.html";
+const PRICING = "https://aethyro.com/#pricing";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -18,83 +20,49 @@ function btn(text: string, url: string) {
   return `<p><a href="${url}" style="display:inline-block;background:#1a1a1a;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:600">${text}</a></p>`;
 }
 
+// queue_onboarding_emails() (the on_auth_user_created_queue_emails trigger)
+// only ever schedules email_num 1-3, one per day after signup. There is no
+// trial and nothing to "upgrade" out of -- every account gets 200 free
+// credits on signup, permanently, and tops up with one-time credit packs
+// whenever they want. Only 3 templates exist now for that reason.
 const emails: Record<number, { subject: string; html: (name: string) => string }> = {
   1: {
-    subject: "Your AI is ready. Here's what to do first.",
+    subject: "Your 200 free credits are ready",
     html: (n) => wrap(`
       <p>Hey ${n},</p>
       <p>Welcome to Aethyro.</p>
-      <p>Most AI tools rent you access to someone else's computer and bill you every time you use it. You just signed up for something that runs on <em>your</em> hardware instead.</p>
-      <p>Your 14-day trial starts now. No credit card charged yet.</p>
-      <p><strong>Your first step:</strong> Open your dashboard and connect the app to your account. It takes about 4 minutes.</p>
-      ${btn("→ Go to your dashboard", DASH)}
+      <p>You started with <strong>200 free credits</strong>, automatically, no card required. That's enough for dozens of conversations right now.</p>
+      <p>Pick your model per message: <strong>Haiku</strong> for quick, everyday questions, <strong>Sonnet</strong> for balanced everyday work, or <strong>Opus</strong> when a problem is genuinely hard.</p>
+      ${btn("→ Start chatting", CHAT)}
       <p>If you hit any issues, reply to this email. I read every one.</p>
       <p>— Robert<br/>Founder, Aethyro</p>
     `),
   },
   2: {
-    subject: "What's running on your computer right now",
+    subject: "What's in the Intelligence panel",
     html: (n) => wrap(`
       <p>Hey ${n},</p>
-      <p>Yesterday you signed up. Today I want to show you what you actually have.</p>
-      <p>Inside your Aethyro install, there are 6 specialist agents:</p>
+      <p>Yesterday you sent your first message. Today, a quick tour of what else is in there.</p>
+      <p>Open <strong>Intelligence</strong> in the sidebar and you'll find:</p>
       <ul>
-        <li><strong>Avery</strong> — Your general assistant. Ask it anything.</li>
-        <li><strong>ORACLE</strong> — Business intelligence. Turns your data into decisions.</li>
-        <li><strong>FORGE</strong> — Risk analysis. Finds what's missing before it costs you.</li>
-        <li><strong>CODEX</strong> — Technical work. Code review, architecture, debugging.</li>
-        <li><strong>SENTINEL</strong> — Security. Monitors your setup and flags threats.</li>
-        <li><strong>NEXUS</strong> — Strategy. Synthesizes everything into a 48-hour action plan.</li>
+        <li><strong>Agentic tasks</strong> — hand off a multi-step goal and let it run</li>
+        <li><strong>Document knowledge base</strong> — upload files, Aethyro references them in chat</li>
+        <li><strong>Scheduled routines</strong> — a prompt that runs on a cron schedule, no babysitting</li>
+        <li><strong>Memory</strong> — what Aethyro's remembered about you, visible and editable, delete anything you don't want kept</li>
+        <li><strong>GitHub / Notion connectors</strong> — bring your own context in</li>
       </ul>
-      <p>None of them call home. Your data stays on your machine.</p>
-      <p><strong>Try this today:</strong> Open the console and ask Avery: <em>"What are the 3 biggest risks in my current business?"</em></p>
-      ${btn("→ Open your console", DASH)}
+      ${btn("→ Open Intelligence", CHAT)}
     `),
   },
   3: {
-    subject: 'Why "$0 per query" changes everything',
+    subject: "How credits actually work",
     html: (n) => wrap(`
       <p>Hey ${n},</p>
-      <p>If you've used ChatGPT or Claude for work, you've paid per query — even if it's buried in a subscription.</p>
-      <p>At 50 queries/day × $0.02/query = $1/day = <strong>$365/year</strong>. For one person.</p>
-      <p>Aethyro runs locally. After setup, each query costs <strong>$0.00</strong>. You own the compute.</p>
-      <p>For a 5-person team: that's potentially $1,800/year back in your pocket — at the Personal plan price of $29/month ($348/year), you're ahead by over $1,400.</p>
-      <p><strong>This week's challenge:</strong> Run 10 real tasks through Aethyro that you'd normally pay for. Track the time saved.</p>
-      ${btn("→ Your dashboard", DASH)}
-    `),
-  },
-  4: {
-    subject: "7 days in — are you getting value?",
-    html: (n) => wrap(`
-      <p>Hey ${n},</p>
-      <p>You're halfway through your trial. Honest question: are you getting value?</p>
-      <p>If yes — great. Upgrade before your trial ends to keep everything running.</p>
-      <p>If no — I want to know why. Reply to this email. Every piece of feedback shapes what we build next.</p>
-      <p><strong>Most common setup issues:</strong></p>
-      <ol>
-        <li>Ollama isn't running → run <code>ollama serve</code> in a terminal</li>
-        <li>No model downloaded → run <code>ollama pull llama3</code> first</li>
-        <li>Console shows offline → restart the app</li>
-      </ol>
-      <p>Plans start at $29/month. Less than a dinner out. Cancel anytime.</p>
-      ${btn("→ See plans and upgrade", DASH)}
-    `),
-  },
-  5: {
-    subject: "Your trial ends in 2 days",
-    html: (n) => wrap(`
-      <p>Hey ${n},</p>
-      <p>Your 14-day free trial ends in 2 days.</p>
-      <p>After that, access pauses. Everything you've set up — your agents, your workflows, your local model — stays on your machine, but the platform goes dark until you subscribe.</p>
-      <table style="width:100%;border-collapse:collapse;margin:20px 0">
-        <tr style="background:#f5f5f5"><th style="padding:10px;text-align:left">Plan</th><th style="padding:10px;text-align:left">Price</th><th style="padding:10px;text-align:left">Best for</th></tr>
-        <tr><td style="padding:10px;border-top:1px solid #eee">Personal</td><td style="padding:10px;border-top:1px solid #eee">$29/mo</td><td style="padding:10px;border-top:1px solid #eee">Individuals, freelancers</td></tr>
-        <tr><td style="padding:10px;border-top:1px solid #eee">Research</td><td style="padding:10px;border-top:1px solid #eee">$199/mo</td><td style="padding:10px;border-top:1px solid #eee">Analysts, academics</td></tr>
-        <tr><td style="padding:10px;border-top:1px solid #eee">Developer</td><td style="padding:10px;border-top:1px solid #eee">$299/mo</td><td style="padding:10px;border-top:1px solid #eee">Builders, engineering teams</td></tr>
-        <tr><td style="padding:10px;border-top:1px solid #eee">Professional</td><td style="padding:10px;border-top:1px solid #eee">$499/mo</td><td style="padding:10px;border-top:1px solid #eee">CPA firms, legal, consulting</td></tr>
-      </table>
-      <p>All plans include: unlimited local queries, all 6 agents, full console access, and email support.</p>
-      ${btn("→ Pick a plan and keep going", DASH)}
+      <p>Every reply shows you exactly what it cost — no guessing. Roughly: <strong>Haiku ~1 credit</strong>, <strong>Sonnet ~4 credits</strong>, <strong>Opus ~15 credits</strong> per message (1 credit ≈ $0.02). Credits never expire.</p>
+      <p>Two ways to get more, free:</p>
+      <p><strong>Refer a friend</strong> — you both get 100 credits the moment they sign up. Your link is on your <a href="${DASH}">dashboard</a>.</p>
+      <p>Or top up directly whenever you want, starting at $4 for 200 credits, no subscription:</p>
+      ${btn("→ See credit packs", PRICING)}
       <p>Questions? Reply here.<br/>— Robert</p>
     `),
   },
