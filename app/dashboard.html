@@ -111,6 +111,13 @@
   .spark-line { fill: none; stroke: #ff4d00; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
   .spark-fill { fill: url(#sparkGrad); stroke: none; }
   .spark-labels { display: flex; justify-content: space-between; margin-top: .35rem; font-size: .68rem; color: var(--muted, #888); font-family: var(--mono, monospace); }
+  /* ── Model mix panel ── */
+  .modelmix-row { display: flex; align-items: center; gap: .6rem; margin-bottom: .55rem; }
+  .modelmix-row:last-child { margin-bottom: 0; }
+  .modelmix-label { width: 56px; flex-shrink: 0; font-size: .76rem; font-weight: 700; font-family: var(--mono, monospace); }
+  .modelmix-track { flex: 1; height: 8px; background: var(--surface, #141414); border-radius: 5px; overflow: hidden; }
+  .modelmix-fill { height: 100%; border-radius: 5px; transition: width .3s ease; }
+  .modelmix-pct { width: 60px; flex-shrink: 0; text-align: right; font-size: .74rem; color: var(--muted, #888); font-family: var(--mono, monospace); }
   /* ── Referral panel ── */
   .ref-code-box {
     display: flex;
@@ -283,6 +290,12 @@
       <div class="spark-labels" id="sparkLabels"></div>
     </div>
 
+    <!-- MODEL MIX -->
+    <div class="panel" style="margin-top:1rem" id="modelMixPanel">
+      <h2>Model mix — last 30 days</h2>
+      <div id="modelMixBody"><p class="muted" style="font-size:.78rem">Loading…</p></div>
+    </div>
+
     <!-- CREDIT HISTORY -->
     <div class="panel" style="margin-top:1rem">
       <h2>Credit history</h2>
@@ -394,13 +407,14 @@
       // Fetch all data in parallel
       var now=new Date(), monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString();
       var thirtyDaysAgo=new Date(Date.now()-30*86400000).toISOString();
-      var [balRes, ledRes, convRes, lastMsgRes, monthDebitsRes, sparkRes, refCodeRes, refEventsRes, refBonusRes] = await Promise.all([
+      var [balRes, ledRes, convRes, lastMsgRes, monthDebitsRes, sparkRes, modelMixRes, refCodeRes, refEventsRes, refBonusRes] = await Promise.all([
         supabase.rpc('get_credit_balance'),
         supabase.from('credit_ledger').select('*').order('created_at',{ascending:false}).limit(20),
         supabase.from('conversations').select('id',{count:'exact',head:true}),
         supabase.from('messages').select('created_at').order('created_at',{ascending:false}).limit(1),
         supabase.from('credit_ledger').select('delta').lt('delta',0).gte('created_at',monthStart),
         supabase.from('credit_ledger').select('delta,created_at').lt('delta',0).gte('created_at',thirtyDaysAgo),
+        supabase.from('credit_ledger').select('delta,metadata').eq('reason','chat_usage').gte('created_at',thirtyDaysAgo),
         supabase.from('referral_codes').select('code').limit(1).maybeSingle(),
         supabase.from('referral_events').select('id',{count:'exact',head:true}),
         supabase.from('credit_ledger').select('delta').eq('reason','referral_bonus').gt('delta',0)
@@ -507,6 +521,35 @@
         // labels: first & last day
         var labels=$('sparkLabels');
         labels.innerHTML='<span>'+days[0].slice(5)+'</span><span>today</span>';
+      }
+
+      // ── Model mix ──
+      // metadata.model was only added to chat_usage rows going forward (see
+      // supabase/functions/chat/index.ts finalize()) -- rows from before that
+      // deploy have metadata: null and are skipped here, not counted as an
+      // "unknown" model, so the mix only reflects what's actually known.
+      var MODEL_COLORS = { haiku: '#00d4ff', sonnet: '#ff4d00', opus: '#8b5cf6' };
+      var MODEL_LABELS = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' };
+      var mixRows = (modelMixRes.data || []).filter(function(r){ return r.metadata && r.metadata.model; });
+      var mixBody = $('modelMixBody');
+      if(mixRows.length){
+        var byModel = {};
+        mixRows.forEach(function(r){
+          var m = r.metadata.model;
+          byModel[m] = (byModel[m]||0) + Math.abs(r.delta);
+        });
+        var mixTotal = Object.keys(byModel).reduce(function(s,k){ return s+byModel[k]; },0) || 1;
+        var order = ['opus','sonnet','haiku'].filter(function(m){ return byModel[m]; });
+        mixBody.innerHTML = order.map(function(m){
+          var pct = Math.round(byModel[m]/mixTotal*100);
+          return '<div class="modelmix-row">'
+            +'<div class="modelmix-label" style="color:'+MODEL_COLORS[m]+'">'+MODEL_LABELS[m]+'</div>'
+            +'<div class="modelmix-track"><div class="modelmix-fill" style="width:'+pct+'%;background:'+MODEL_COLORS[m]+'"></div></div>'
+            +'<div class="modelmix-pct">'+pct+'% · '+byModel[m].toLocaleString()+'cr</div>'
+            +'</div>';
+        }).join('');
+      } else {
+        mixBody.innerHTML = '<p class="muted" style="font-size:.78rem">No model data yet — this tracks new usage going forward, so it fills in as you chat.</p>';
       }
 
       // ── Buy credits section ──

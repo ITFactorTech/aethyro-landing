@@ -1,4 +1,9 @@
-// chat v32 — fixes every internal supaAdmin.functions.invoke() call (embed-content
+// chat v33 — chat_usage credit_ledger inserts now carry metadata: {model,
+// input_tokens, output_tokens}, so a per-model cost-mix breakdown (added to
+// dashboard.html this session) has real data to chart going forward. Rows
+// from before this deploy have metadata: null and are excluded from that
+// chart rather than counted as "unknown".
+// v32 — fixes every internal supaAdmin.functions.invoke() call (embed-content
 // x2, send-low-credit-email): supabase-js does NOT auto-send an Authorization
 // header derived from the client's key when that key is one of Supabase's
 // newer sb_secret_... format service-role keys (confirmed live: default invoke()
@@ -504,7 +509,12 @@ serve(async (req) => {
       1,
       Math.ceil((inputTokens / 1000) * rates.input + (outputTokens / 1000) * rates.output)
     );
-    await supaAdmin.from("credit_ledger").insert({ user_id: user.id, delta: -cost, reason: "chat_usage" });
+    await supaAdmin.from("credit_ledger").insert({
+      user_id: user.id,
+      delta: -cost,
+      reason: "chat_usage",
+      metadata: { model: modelKey, input_tokens: inputTokens, output_tokens: outputTokens },
+    });
     const { data: newBal } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
 
     // Auto-title

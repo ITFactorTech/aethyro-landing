@@ -337,6 +337,12 @@
   .intel-fact-val{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .intel-fact-del{background:none;border:none;color:var(--t3);cursor:pointer;font-size:.85rem;padding:0 0 0 .15rem;line-height:1;flex-shrink:0;opacity:.6}
   .intel-fact-del:hover{color:#fca5a5;opacity:1}
+  .mem-spark-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.4rem}
+  .mem-spark-total{font-size:.72rem;color:var(--t3);font-family:var(--mono)}
+  .mem-spark-svg{width:100%;height:48px;display:block;overflow:visible}
+  .mem-spark-line{fill:none;stroke:var(--cyan);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .mem-spark-fill{fill:url(#memSparkGrad);stroke:none}
+  .mem-spark-labels{display:flex;justify-content:space-between;margin-top:.3rem;font-size:.64rem;color:var(--t3);font-family:var(--mono)}
   .intel-mem-entry{padding:.6rem .75rem;border-radius:8px;border:1px solid var(--b1);margin-bottom:.4rem;background:rgba(0,0,0,.2)}
   .intel-mem-who{display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem}
   .intel-mem-role{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.05em}
@@ -708,6 +714,22 @@ I often need help with: client quotes, contract review, business Instagram posts
 
     <!-- Memory pane -->
     <div class="intel-pane" id="pane-memory" style="display:none">
+      <p class="intel-section-title">Memory growth — last 30 days</p>
+      <div class="mem-spark-header">
+        <span style="font-size:.78rem;color:var(--t2)">New memories per day</span>
+        <span class="mem-spark-total" id="memSparkTotal"></span>
+      </div>
+      <svg class="mem-spark-svg" id="memSparkSvg" viewBox="0 0 300 48" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="memSparkGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#00d4ff" stop-opacity="0.02"/>
+          </linearGradient>
+        </defs>
+        <text x="150" y="27" text-anchor="middle" fill="#666" font-size="10" font-family="monospace" id="memSparkEmpty">no memory activity yet</text>
+      </svg>
+      <div class="mem-spark-labels" id="memSparkLabels"></div>
+      <hr class="intel-divider">
       <p class="intel-section-title">What Aethyro Knows About You</p>
       <p style="font-size:.78rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">Facts extracted automatically from your conversations — used to personalise every response.</p>
       <div id="memoryFactGrid" class="intel-fact-grid"><p style="font-size:.75rem;color:var(--t3)">Loading…</p></div>
@@ -2276,6 +2298,49 @@ I often need help with: client quotes, contract review, business Instagram posts
   }
 
   async function loadMemories(){
+    /* Memory growth sparkline (last 30 days) */
+    (async function(){
+      var svg0=$('memSparkSvg');
+      svg0.querySelectorAll('polygon,polyline').forEach(function(el){ el.remove(); }); // loadMemories() re-runs on every tab click
+      $('memSparkEmpty').style.display='';
+      $('memSparkTotal').textContent=''; $('memSparkLabels').innerHTML='';
+      var thirtyDaysAgo=new Date(Date.now()-30*86400000).toISOString();
+      var gr=await supabase.from('memory_embeddings').select('created_at').gte('created_at',thirtyDaysAgo);
+      var rows=(gr.data||[]);
+      if(!rows.length) return; // leave the "no memory activity yet" placeholder text in the SVG
+      var dayMap={};
+      rows.forEach(function(r){
+        var d=r.created_at.slice(0,10);
+        dayMap[d]=(dayMap[d]||0)+1;
+      });
+      var days=[], vals=[];
+      for(var di=29;di>=0;di--){
+        var dd=new Date(Date.now()-di*86400000);
+        var key=dd.toISOString().slice(0,10);
+        days.push(key);
+        vals.push(dayMap[key]||0);
+      }
+      var maxVal=Math.max.apply(null,vals)||1;
+      var W=300, H=48, pad=2;
+      var pts=vals.map(function(v,i){
+        var x=pad+(W-pad*2)*i/(vals.length-1);
+        var y=H-pad-(H-pad*2)*(v/maxVal);
+        return x+','+y;
+      }).join(' ');
+      var firstX=pad, lastX=pad+(W-pad*2);
+      var fillPts=pts+' '+lastX+','+(H-pad)+' '+firstX+','+(H-pad);
+      var svg=$('memSparkSvg');
+      $('memSparkEmpty').style.display='none';
+      var fillEl=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      fillEl.setAttribute('points',fillPts); fillEl.setAttribute('class','mem-spark-fill');
+      var lineEl=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+      lineEl.setAttribute('points',pts); lineEl.setAttribute('class','mem-spark-line');
+      svg.appendChild(fillEl); svg.appendChild(lineEl);
+      var totalMems=vals.reduce(function(s,v){return s+v;},0);
+      $('memSparkTotal').textContent=totalMems.toLocaleString()+' memories';
+      $('memSparkLabels').innerHTML='<span>'+days[0].slice(5)+'</span><span>today</span>';
+    })();
+
     /* Profile facts */
     var grid=$('memoryFactGrid');
     grid.innerHTML='<p style="font-size:.75rem;color:var(--t3)">Loading…</p>';
