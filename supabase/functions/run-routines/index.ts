@@ -27,6 +27,14 @@ const CREDIT_RATES: Record<string, { input: number; output: number }> = {
   opus:   { input: 1.50,  output: 7.50 },
 };
 
+// Chained routines re-invoke this function internally after each successful
+// step (same Authorization: Bearer <service-role-key> pattern webhook-routine-
+// trigger already uses). This caps how many hops a single external trigger
+// can cause — the DB's own trg_enforce_routine_chain already rejects a true
+// cycle at write time, this is just a runtime backstop against anything that
+// slips past it (or a long legitimate chain looping credits away).
+const MAX_CHAIN_DEPTH = 5;
+
 // ── cron-expression → next Date ──────────────────────────────────────────────
 // Minimal 5-field cron parser: minute hour dom month dow
 // Returns next firing time at least 1 minute from now.
@@ -90,11 +98,15 @@ serve(async (req) => {
     if (user) userFilter = user.id;
   }
 
-  // Parse optional body for single routine trigger
+  // Parse optional body for single routine trigger / chained-step context
   let singleRoutineId: string | null = null;
+  let chainContext: string | null = null;
+  let chainDepth = 0;
   try {
     const body = await req.json();
     singleRoutineId = body?.routine_id || null;
+    chainContext = typeof body?.chain_context === "string" ? body.chain_context : null;
+    chainDepth = Number.isInteger(body?.chain_depth) ? body.chain_depth : 0;
   } catch { /* no body or non-JSON from pg_cron — fine */ }
 
   // Fetch due routines
@@ -144,12 +156,18 @@ serve(async (req) => {
         continue;
       }
 
-      // Run the routine prompt
+      // Run the routine prompt — when this run is a chained step, prepend
+      // the previous routine's output so the model can build on it instead
+      // of starting cold.
+      const promptText = chainContext
+        ? `Context from the previous step in this routine chain:\n${chainContext}\n\n---\n\nYour task:\n${routine.prompt}`
+        : routine.prompt;
+
       const msg = await anthropic.messages.create({
         model,
         max_tokens: 1500,
         system: "You are Aethyro, a scheduled AI assistant. Produce a concise, useful result for the user's routine task. Use markdown. Be direct and actionable.",
-        messages: [{ role: "user", content: routine.prompt }],
+        messages: [{ role: "user", content: promptText }],
       });
 
       const resultBlock = msg.content.find(b => b.type === "text") as any;
@@ -179,6 +197,30 @@ serve(async (req) => {
       }).eq("id", routine.id);
 
       results.push({ id: routine.id, name: routine.name, status: "completed" });
+
+      // Chained next step: hand this routine's output to the next one as
+      // context and run it immediately, rather than waiting for its own
+      // schedule. Awaited (not fire-and-forget) so billing/results for the
+      // whole chain land before this HTTP response returns, and so this
+      // isolate doesn't get frozen/recycled mid-chain the way an
+      // un-awaited background call risked (see CLAUDE.md's
+      // EdgeRuntime.waitUntil() note). Depth-capped independently of the
+      // DB's own cycle-detection trigger, which only guards against a true
+      // cycle at write time, not a long legitimate chain.
+      if (routine.next_routine_id && chainDepth < MAX_CHAIN_DEPTH - 1) {
+        try {
+          await supaAdmin.functions.invoke("run-routines", {
+            headers: { Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+            body: {
+              routine_id: routine.next_routine_id,
+              chain_context: resultText,
+              chain_depth: chainDepth + 1,
+            },
+          });
+        } catch (chainErr) {
+          console.error("run-routines: chained step invoke failed", (chainErr as Error).message);
+        }
+      }
     } catch (e) {
       await supaAdmin.from("user_routines").update({
         last_run_at: new Date().toISOString(),
