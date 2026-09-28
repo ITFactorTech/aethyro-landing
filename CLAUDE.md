@@ -82,6 +82,30 @@ it to the `?buy=` pattern instead.
   migration history entirely — it was never defined by a committed
   migration, only ever edited live (dashboard/SQL editor). Don't assume a
   trigger you can't find in `supabase/migrations/` doesn't exist.
+- **There are 4 live `pg_cron` jobs, none previously documented here** —
+  check `select * from cron.job` live, don't assume the trigger list above
+  is the whole picture of what runs automatically. `send-onboarding-emails`
+  (`*/30 * * * *`) drains `scheduled_emails` and calls `send-onboarding-email`
+  (see the stale-content finding under "Pending" — this one's live and
+  worth checking before it fires on a real signup). `cleanup-trial-usage-daily`
+  (`0 3 * * *`) calls `cleanup_old_trial_usage()`. `drip-engagement`
+  (`5 9 * * *`) and `drip-reengagement` (`15 9 * * *`) both call
+  `send-welcome-email` for users 2/5 days old respectively who haven't had
+  that drip stage yet (tracked in `email_drip_state`) — same hardcoded
+  anon-key-literal pattern as `trigger_welcome_email()`, same rotation
+  caveat applies to these two job definitions as well.
+- **Edge function drift is a recurring failure mode in this project, not a
+  one-off** — `redeem-referral` (BUG-04, fixed 2026-09-27) was the first
+  case found; a `site-guardian` sweep the same day found four more live
+  functions with zero source in this repo: `send-newsletter`,
+  `send-onboarding-email`, `trial-chat`, `send-low-credit-email` (now all
+  pulled in, see recent-work-log). Anything deployed straight from the
+  Supabase dashboard/CLI instead of through this repo's normal path will
+  silently drift — `list_edge_functions`' `entrypoint_path` is a tell (a
+  path like `/Users/leer4/Documents/supabase-local/...` or a bare `/tmp/...`
+  with no matching file in `supabase/functions/` means it was deployed
+  outside this repo). Worth a `list_edge_functions` vs. `ls
+  supabase/functions/` diff periodically, not just when a bug forces it.
 
 ## Pending / not yet applied
 
@@ -89,6 +113,48 @@ it to the `?buy=` pattern instead.
   2026-09-27**, see the recent-work-log entry below.
 ~~- New accounts get the 200-credit `signup_bonus` twice~~ — **fixed
   2026-09-27**, see the recent-work-log entry below.
+
+- **`send-onboarding-email`'s 5 email templates describe a completely
+  different product than the one that exists** — found during a
+  `site-guardian` sweep on 2026-09-27. The templates sell the old
+  $29/$199/$299/$499-per-month subscription plans (see "Decommissioned"
+  below), a local-Ollama-install flow, a 14-day trial, and six fictional
+  agent personas (Avery/ORACLE/FORGE/CODEX/SENTINEL/NEXUS) that don't exist
+  anywhere else in this codebase or product. None of this matches the
+  actual product (credit-pack SaaS, Claude-backed chat, no local install,
+  no named-agent personas). **This is live, not dead code**: a `pg_cron`
+  job (`send-onboarding-emails`, `*/30 * * * *`, confirmed `active`) drains
+  `public.scheduled_emails` every 30 minutes and calls this function for
+  whoever's due. Checked live: only one real signup has ever gone through
+  it (5 rows in `scheduled_emails`, all from 2026-08-02–08-14, all
+  `sent=true`) — no one is currently mid-sequence, but the very next real
+  signup would get all 5 of these stale/wrong emails on the current
+  schedule (email 1 at signup, 2 next day, 3 two days later, 4 on day 7, 5
+  on day 12, per `queue_onboarding_emails()`). This needs a real copy
+  rewrite for the actual product, not something to invent unattended —
+  flagging for a human decision rather than fabricating replacement copy.
+- **8 tables in this Supabase project don't belong to Aethyro and aren't
+  documented anywhere**: `agents`, `economy_ticks`, `agent_fitness_history`,
+  `auctions`, `trades`, `agent_events`, `species`, `economy_config` — RLS
+  enabled on all of them, but every one has **zero rows** and none are
+  referenced by any file in this repo (checked via `list_tables` +
+  grep). Naming (agents/species/fitness/auctions/trades/economy) suggests
+  a genetic-algorithm/agent-simulation project that happened to share this
+  Supabase project, unrelated to the AI SaaS product here — similar in
+  shape to the GH05T3/old-subscription discovery from earlier in this
+  project's history. Not touched — need a human call on whether these are
+  safe to drop or belong to something still in use elsewhere.
+- **`auth_leaked_password_protection` is disabled at the Supabase Auth
+  level**, and the custom `check-leaked-password` edge function that exists
+  in this repo (`supabase/functions/check-leaked-password/`) **isn't called
+  from anywhere** — grepped every `.html` file, zero references. So neither
+  the built-in HaveIBeenPwned check nor the custom one is actually
+  protecting signups right now. Fixing the built-in toggle looked like an
+  Auth-service config change outside what the available DB/migration tools
+  can reach; wiring the existing custom function into `signup.html` is a
+  small client-side change but touches the signup flow's UX (what error to
+  show, whether it blocks submission) — flagging rather than guessing at
+  the intended behavior.
 
 ## Decommissioned: old per-plan subscription model (2026-09-27)
 
@@ -161,9 +227,27 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
-- **2026-09-27** — **Hardened `trigger_welcome_email()`** (found by a
-  `site-guardian` sweep): it had no `SET search_path` (unlike every other
-  `SECURITY DEFINER` function here) and was directly callable via
+- **2026-09-27** — First `site-guardian` sweep (see that skill). Pulled four
+  more drifted edge functions into the repo verbatim, no behavior change —
+  `send-newsletter`, `send-onboarding-email`, `trial-chat`,
+  `send-low-credit-email` — closing the same class of gap `redeem-referral`
+  (BUG-04) was. Also ran `get_advisors` (security+performance),
+  cross-checked `pg_trigger`/`pg_cron.job` against this file, live-tested
+  the homepage's anonymous `trial-chat` endpoint (works — its hardcoded
+  `"claude-opus-5"` model string is fine, verified with a real streamed
+  reply, not a stale/broken id despite looking similar to the earlier
+  `MODEL_MAP` bug). Found and escalated (not fixed — real product/content
+  decisions, see "Pending" above): `send-onboarding-email`'s templates
+  describe a dead product (old subscription pricing, fictional agent
+  personas, local-Ollama flow) and are still live-dispatched by an
+  undocumented `pg_cron` job every 30 minutes; 8 unrelated
+  agent-simulation-looking tables with zero rows and zero references
+  anywhere in this repo; leaked-password protection is off both at the
+  Supabase Auth level and in this repo's own unwired `check-leaked-password`
+  function. Also hardened `trigger_welcome_email()` — see below.
+- **2026-09-27** — **Hardened `trigger_welcome_email()`** (found by the
+  `site-guardian` sweep above): it had no `SET search_path` (unlike every
+  other `SECURITY DEFINER` function here) and was directly callable via
   `/rest/v1/rpc/trigger_welcome_email` by anyone, signed in or not — it's
   meant to run only as the `on_auth_user_created_welcome` trigger (it
   references `NEW`, which only exists in trigger context). Fixed both:
