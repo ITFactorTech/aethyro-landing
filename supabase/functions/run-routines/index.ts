@@ -131,6 +131,8 @@ serve(async (req) => {
       const { data: rawBalance } = await supaAdmin.rpc("get_credit_balance", {
         p_user_id: routine.user_id,
       });
+      const { data: routineProfile } = await supaAdmin
+        .from("profiles").select("team_id").eq("id", routine.user_id).single();
       const balance = typeof rawBalance === "number" ? rawBalance : 0;
       if (balance <= 0) {
         await supaAdmin.from("user_routines").update({
@@ -161,11 +163,13 @@ serve(async (req) => {
           (msg.usage.output_tokens / 1000) * rates.output,
         ),
       );
-      await supaAdmin.from("credit_ledger").insert({
+      const { error: ledgerErr } = await supaAdmin.from("credit_ledger").insert({
         user_id: routine.user_id,
         delta:   -cost,
         reason:  "routine",
+        team_id: routineProfile?.team_id ?? null,
       });
+      if (ledgerErr) console.error("routine credit_ledger insert failed", ledgerErr.message);
 
       // Advance routine schedule
       await supaAdmin.from("user_routines").update({

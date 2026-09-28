@@ -334,6 +334,43 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Fixed: `run-routines` and `run-agent-task` had never
+  successfully billed a single credit, ever, since either was written.**
+  Found while starting work on an automation/routines expansion (user asked
+  to prioritize this after a demand-research pass showed workflow
+  automation as the most-requested AI SaaS capability across every survey
+  checked). Both functions insert a `credit_ledger` row with
+  `reason: 'routine'` / `reason: 'agent_task'`, but
+  `credit_ledger_reason_check` only ever allowed
+  `purchase/chat_usage/signup_bonus/admin_adjustment/referral_bonus` —
+  every such insert has been silently failing with a `23514` check
+  violation since day one, and neither function checked the insert's
+  returned error, so nothing ever surfaced it. Confirmed live before
+  fixing: the one real `agent_tasks` row in this project shows
+  `credits_used: 12` on its own record, but zero matching `credit_ledger`
+  row exists anywhere — it ran a real Claude task for free and the
+  ledger never moved. No `user_routines` row had ever actually executed
+  yet (`last_run_at` was null for all of them), so that half of the bug
+  hadn't hit a real balance yet, but would have identically the first
+  time a routine fired. Separately, neither function stamped `team_id`
+  on its ledger insert at all — a gap in PR #100's team-pool rollout,
+  which updated `chat`/`stripe-webhook`/`auto-topup-charge` but missed
+  these two. Fixed both in the same pass: migration
+  `20260928070000_fix_routine_agent_task_billing.sql` extends the CHECK
+  constraint to include `routine`/`agent_task`; both functions now also
+  select the caller's `profiles.team_id` and stamp it on their ledger
+  insert, and both now log (not swallow) the insert's error if one
+  occurs. Verified live end-to-end with a real throwaway account: a real
+  `run-agent-task` call now produces a real `-10, reason: 'agent_task'`
+  ledger row and a correctly reduced balance (200→190); a real manually
+  -triggered routine now produces a real `-1, reason: 'routine'` row
+  (190→189). Cleaned up, `test-admin-setup` re-stubbed to 410, confirmed
+  via a live curl. **If you add a new `credit_ledger.reason` value
+  anywhere in this codebase, add it to `credit_ledger_reason_check` in
+  the same migration — this bug is exactly what happens when you don't,
+  and the insert fails silently unless the caller explicitly checks the
+  returned error, which most of this codebase's fire-and-forget billing
+  calls don't.**
 - **2026-09-28** — **`site-guardian` sweep after merging PRs #96-#100 found
   and fixed a live P0: auto model routing (PR #97) was silently dead in
   production.** Root cause was a gap this project hadn't hit before:
