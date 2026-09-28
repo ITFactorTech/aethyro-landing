@@ -529,6 +529,22 @@
   </div>
 </div>
 
+<!-- Routine webhook modal -->
+<div class="workspace-modal-backdrop" id="webhookModal">
+  <div class="workspace-modal">
+    <h3>Webhook Trigger</h3>
+    <p class="wm-sub">Any system that can make an HTTP request — GitHub Actions, Zapier, IFTTT, a script — can fire this routine on demand by hitting this URL, independent of its schedule. 30-second cooldown between triggers.</p>
+    <div class="ref-link-row">
+      <input type="text" class="ref-link-input" id="webhookLinkInput" readonly value="Loading…"/>
+      <button class="ref-copy-btn" id="webhookCopyBtn">Copy URL</button>
+    </div>
+    <div class="wm-actions" style="margin-top:1.25rem">
+      <button class="wm-cancel" id="webhookRevoke">Revoke &amp; regenerate</button>
+      <button class="wm-cancel" id="webhookClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Workspace context modal -->
 <div class="workspace-modal-backdrop" id="workspaceModal">
   <div class="workspace-modal">
@@ -1614,6 +1630,39 @@ I often need help with: client quotes, contract review, business Instagram posts
     }).catch(function(){ $('refLinkInput').select(); document.execCommand('copy'); });
   });
 
+  /* ── Routine webhook modal ── */
+  var currentWebhookRoutineId=null;
+  async function openWebhookModal(routineId){
+    currentWebhookRoutineId=routineId;
+    $('webhookLinkInput').value='Loading…';
+    $('webhookModal').classList.add('show');
+    var r=await supabase.from('routine_webhooks').select('token').eq('routine_id',routineId).maybeSingle();
+    var token=r.data&&r.data.token;
+    if(!token){
+      var ins=await supabase.from('routine_webhooks').insert({routine_id:routineId}).select('token').single();
+      if(ins.error){ showToast('Could not create webhook','err'); closeWebhookModal(); return; }
+      token=ins.data.token;
+    }
+    $('webhookLinkInput').value=window.AETHYRO_FN_URL+'/webhook-routine-trigger?token='+token;
+  }
+  function closeWebhookModal(){ $('webhookModal').classList.remove('show'); currentWebhookRoutineId=null; }
+  $('webhookClose').addEventListener('click', closeWebhookModal);
+  $('webhookModal').addEventListener('click',function(e){ if(e.target===this) closeWebhookModal(); });
+  $('webhookCopyBtn').addEventListener('click',function(){
+    var val=$('webhookLinkInput').value;
+    navigator.clipboard.writeText(val).then(function(){
+      $('webhookCopyBtn').textContent='Copied!'; $('webhookCopyBtn').classList.add('copied');
+      setTimeout(function(){ $('webhookCopyBtn').textContent='Copy URL'; $('webhookCopyBtn').classList.remove('copied'); },2500);
+    }).catch(function(){ $('webhookLinkInput').select(); document.execCommand('copy'); });
+  });
+  $('webhookRevoke').addEventListener('click',async function(){
+    if(!currentWebhookRoutineId) return;
+    if(!confirm('Revoke this webhook URL? Any system using it will stop working until you get the new one.')) return;
+    var routineId=currentWebhookRoutineId;
+    await supabase.from('routine_webhooks').delete().eq('routine_id',routineId);
+    openWebhookModal(routineId);
+  });
+
   /* ── Tool call card rendering ── */
   var TOOL_ICONS={web_search:'🔍',github_list_repos:'🐙',github_list_issues:'🐛',github_search_code:'🔎',github_read_file:'📄',github_list_prs:'🔀',notion_search:'📓',notion_read_page:'📄'};
   function renderToolCards(container, events){
@@ -2194,6 +2243,9 @@ I often need help with: client quotes, contract review, business Instagram posts
         }catch(e){ showToast('Network error','err'); }
         finally{ runBtn.disabled=false; runBtn.textContent='Run now'; }
       });
+      var hookBtn=document.createElement('button'); hookBtn.className='intel-btn intel-btn-sm'; hookBtn.textContent='🔗 Webhook';
+      hookBtn.title='Get a URL that lets an external system (GitHub Actions, Zapier, a script) trigger this routine on demand';
+      hookBtn.addEventListener('click',function(){ openWebhookModal(rt.id); });
       var delBtn=document.createElement('button'); delBtn.className='intel-btn intel-btn-sm intel-btn-danger'; delBtn.textContent='Delete';
       delBtn.addEventListener('click',async function(){
         if(!confirm('Delete routine "'+rt.name+'"?')) return;
@@ -2202,7 +2254,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         card.style.opacity='0'; card.style.transition='opacity .25s'; setTimeout(function(){ card.remove(); },260);
         loadIntelStats();
       });
-      actions.appendChild(togWrap); actions.appendChild(runBtn); actions.appendChild(delBtn);
+      actions.appendChild(togWrap); actions.appendChild(runBtn); actions.appendChild(hookBtn); actions.appendChild(delBtn);
       card.appendChild(actions); list.appendChild(card);
     });
     loadCommunityRoutines();
