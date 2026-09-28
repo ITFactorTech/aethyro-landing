@@ -476,9 +476,10 @@
         🔴 No credits left. <a href="#" id="depletedBuy">Buy credits →</a>
       </div>
       <div class="model-bar" id="modelBar">
+        <button class="model-btn" data-model="auto" id="mBtnAuto" title="Routes each message to Haiku, Sonnet, or Opus based on how hard it looks — you're only billed for the model actually used">Auto<span class="model-cost">smart routing</span></button>
         <button class="model-btn" data-model="haiku" id="mBtnHaiku">Haiku<span class="model-cost">~1 cr/msg</span></button>
         <button class="model-btn" data-model="sonnet" id="mBtnSonnet">Sonnet<span class="model-cost">~4 cr/msg</span></button>
-        <button class="model-btn active" data-model="opus" id="mBtnOpus">Opus<span class="model-cost">~15 cr/msg</span></button>
+        <button class="model-btn" data-model="opus" id="mBtnOpus">Opus<span class="model-cost">~15 cr/msg</span></button>
       </div>
       <div id="attachChips" style="display:none"></div>
       <form class="composer" id="composer">
@@ -806,7 +807,7 @@ I often need help with: client quotes, contract review, business Instagram posts
   var session=null, history=[], busy=false, trialLocked=false, depleted=false;
   var currentConvId=null;
   var TRIAL_URL=window.AETHYRO_FN_URL+'/trial-chat';
-  var currentModel=(function(){ var m=localStorage.getItem('aethyro_model'); return ['haiku','sonnet','opus'].includes(m)?m:'opus'; })();
+  var currentModel=(function(){ var m=localStorage.getItem('aethyro_model'); return ['auto','haiku','sonnet','opus'].includes(m)?m:'auto'; })();
   var USAGE_MARK='\u0000';
   var THINK_MARK='\u0002';
 
@@ -833,12 +834,16 @@ I often need help with: client quotes, contract review, business Instagram posts
         currentModel=btn.getAttribute('data-model');
         localStorage.setItem('aethyro_model', currentModel);
         bar.querySelectorAll('.model-btn').forEach(function(b){ b.classList.toggle('active', b===btn); });
-        var names={haiku:'Haiku', sonnet:'Sonnet', opus:'Opus'};
-        $('cloudNote').textContent='// Aethyro Cloud — Claude '+names[currentModel]+' · credits billed per token';
+        setCloudNote();
       });
     });
-    var names={haiku:'Haiku', sonnet:'Sonnet', opus:'Opus'};
-    $('cloudNote').textContent='// Aethyro Cloud — Claude '+names[currentModel]+' · credits billed per token';
+    setCloudNote();
+  }
+  function setCloudNote(){
+    var names={auto:'Auto', haiku:'Haiku', sonnet:'Sonnet', opus:'Opus'};
+    $('cloudNote').textContent = currentModel==='auto'
+      ? '// Aethyro Cloud — Auto routing (Haiku/Sonnet/Opus by message) · credits billed per token'
+      : '// Aethyro Cloud — Claude '+names[currentModel]+' · credits billed per token';
   }
 
   (async function init(){
@@ -1432,10 +1437,11 @@ I often need help with: client quotes, contract review, business Instagram posts
            cost from actual input/output token counts — no estimates. */
         if(session && meta && meta.cost && bubble.parentNode){
           var mc=meta.cost;
+          var modelLabel = (mc.requestedModel==='auto') ? ('auto→'+mc.model) : mc.model;
           var costEl=document.createElement('div');
           costEl.className='msg-cost';
           costEl.innerHTML='<span class="mc-credits">'+mc.credits+' credit'+(mc.credits===1?'':'s')+'</span>'+
-            '<span class="mc-detail">· '+mc.inputTokens.toLocaleString()+' in / '+mc.outputTokens.toLocaleString()+' out tokens · '+mc.model+'</span>';
+            '<span class="mc-detail">· '+mc.inputTokens.toLocaleString()+' in / '+mc.outputTokens.toLocaleString()+' out tokens · '+modelLabel+'</span>';
           bubble.parentNode.appendChild(costEl);
           requestAnimationFrame(function(){ costEl.classList.add('show'); });
           addSessionCost(mc.credits);

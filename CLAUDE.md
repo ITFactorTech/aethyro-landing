@@ -317,6 +317,48 @@ that). Newest first.
   Added a footer link from `index.html` and a `sitemap.xml` entry. Items
   4 (auto-topup) still pending; item 5 (team/shared-pool accounts) still
   held for a scope check.
+- **2026-09-28** — **Added auto model routing to chat** (PR #97, item 2 of 5
+  from the "make the site significantly better, do all" request — item 1,
+  the fabricated testimonials, is PR #96 above). Added an "Auto" option to
+  `chat.html`'s model selector, now the default for anyone with no stored
+  `aethyro_model` preference. The `chat` edge function (now v34) gained
+  `routeAutoModel(message, attachments)`: a synchronous, rule-based
+  heuristic (message length, a keyword list, attachment presence — never
+  a second LLM call) that resolves `model:"auto"` to a real haiku/sonnet/
+  opus key before the Anthropic request. Billing and the credit_ledger
+  `metadata.model` use the *resolved* model, same as an explicit choice;
+  `USAGE_MARK`'s `cost` object gained `requestedModel` so the per-message
+  cost badge can show `auto→opus` instead of a bare `opus` when routing
+  picked it. Verified live with a throwaway account: `"thanks!"` → haiku,
+  a plain question → sonnet, a security-audit/architecture-analysis
+  prompt → opus, all billed correctly; explicit `model:"sonnet"` still
+  resolves to sonnet with no regression. Cleaned up the throwaway account
+  and re-stubbed `test-admin-setup` to 410 (confirmed with a live curl).
+  Items 3-4 (public routines gallery, auto-topup) still pending; item 5
+  (team/shared-pool accounts) is still being held for an explicit user
+  scope check before touching RLS.
+- **2026-09-28** — **Removed the fabricated homepage testimonials** (PR #96,
+  1 of 5 "make the site significantly better" recommendations the user asked
+  for — "do all"). The three "Community feedback" quotes attributed to
+  "Alex M." (CTO), "Rachel T." (consultant), and "Sami K." (platform
+  engineer) were invented personas, not real customers — this had been
+  tracked as an open P0 in "Open TODOs" below since 2026-09-27. Removal, not
+  replacement, since this project genuinely has no real customer base yet to
+  draw honest quotes from (per this file's own history, effectively 1-2 real
+  signups total). Replaced the section with a plain, honest statement of the
+  product's actual stage plus the existing Discord CTA and a new "Try it
+  free" CTA. Also removed the now-dead `.testimonials-grid`/`.tcard*` CSS and
+  a dead `.tcard` scroll-reveal JS selector. Verified locally with Playwright
+  (served `index.html`, confirmed zero "Rachel T."/"Sami K." anywhere and
+  zero "Alex M." inside the testimonials section specifically — one
+  unrelated "Alex M." remains as a placeholder avatar label in the separate
+  product-demo UI mockup further down the page, never a customer quote, left
+  alone — and no new console errors). Items 2-4 of the same "do all"
+  request (auto-model-routing, a public routines gallery, auto-topup) are
+  still in progress; item 5 (team/shared-pool accounts) is being held for an
+  explicit scope check with the user before any RLS/schema work, since
+  "team accounts" is ambiguous and that item touches security boundaries
+  across nearly the whole schema.
 - **2026-09-28** — **Removed the pre-Cloud "AI Operating Platform" pages**
   (the two `site-guardian` findings from the sweep below), on explicit
   instruction after confirming via `git log --diff-filter=A` that all 5
@@ -797,9 +839,12 @@ this list supersedes the audit artifact above where they conflict)
 - Blog — `blog/index.html` + real posts exist and are live.
 
 **Confirmed still true — actual open work:**
-- P0: **Fabricated testimonials.** The three landing-page quotes ("Alex M."
+- ~~P0: **Fabricated testimonials.** The three landing-page quotes ("Alex M."
   CTO, "Rachel T." consultant, "Sami K." platform engineer) are invented,
-  detailed personas, not real users. Needs real quotes or removal.
+  detailed personas, not real users. Needs real quotes or removal.~~ — **fixed
+  2026-09-28**, see the recent-work-log entry below (PR #96): removed rather
+  than replaced, since there's no real customer base yet to draw honest
+  quotes from.
 - ~~P2: PWA `manifest.json` had empty `screenshots: []`~~ — **fixed
   2026-09-27**. Added real screenshots of the live site (`/screenshots/
   wide.png` 1280x800, `/screenshots/narrow.png` 390x844 — Playwright against
