@@ -36,10 +36,18 @@ it to the `?buy=` pattern instead.
 
 - **`credit_ledger`** columns: `id, user_id, delta, reason, stripe_session_id, metadata, created_at`.
   The column is **`reason`**, not `note` or `description`. `reason` values:
-  `purchase` (well, actually `pack:<name>` for purchases — see below),
-  `chat_usage`, `signup_bonus`, `admin_adjustment`, `referral_bonus`.
-  Purchase rows use `reason LIKE 'pack:%'` (e.g. `pack:starter`, `pack:value`,
-  `pack:power`, `pack:pro_7k`), not a bare `'purchase'` literal.
+  `purchase`, `chat_usage`, `signup_bonus`, `admin_adjustment`, `referral_bonus`.
+  ~~Purchase rows use `reason LIKE 'pack:%'`~~ — **this was wrong, corrected
+  2026-09-28.** A real purchase's `reason` is the bare literal `'purchase'`
+  (confirmed directly against `stripe-webhook`'s `grantPackCredits()` and the
+  live `credit_ledger_purchase_session_idx` partial unique index definition,
+  both of which say `WHERE reason = 'purchase'`). The pack name
+  (`starter`/`value`/`power`/`pro_7k`) lives in **`metadata.credit_pack`**,
+  not in `reason`. This file's own earlier claim had it backwards and was
+  never caught because zero real purchases existed to check it against
+  until auto-topup's development surfaced it — `dashboard.html`'s credit
+  history had the same bug (`row.reason.replace(/^pack:/, ...)`, which
+  never matched anything real), fixed in the same PR that fixed this note.
 - **`messages`** columns: `id, conversation_id, role, content, created_at`.
   **There is no `user_id` column.** To scope by user, JOIN:
   `messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.user_id = ...`.
@@ -291,6 +299,66 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Added opt-in auto-topup** (PR #99, item 4 of 5 from the
+  "make the site significantly better, do all" request — items 1-3 are PRs
+  #96-98 above; user picked "threshold-based, same pack size" when asked).
+  When a user's balance drops to the existing 30-credit low-credit
+  threshold, `chat`'s `finalize()` now optionally fires a real off-session
+  Stripe charge (via the new `auto-topup-charge` function) alongside the
+  existing warning email, instead of only emailing. Off by default —
+  opt-in from a new "Auto-topup" panel in `dashboard.html`, which saves a
+  card via a Stripe Checkout **setup**-mode session (new `setup-auto-topup`
+  function; `stripe-webhook` gained a `mode === "setup"` branch that sets
+  the customer's default payment method and flips `auto_topup_enabled` on
+  once the card is actually confirmed — same session-then-webhook split as
+  the real purchase flow). Pack size is chosen at opt-in (defaults to the
+  user's most recent purchase) and can be turned off instantly from a
+  direct client-side write. On any charge failure (declined card, SCA/
+  `authentication_required`, expired card, etc.) `auto-topup-charge`
+  disables `auto_topup_enabled` rather than retry-looping — the existing
+  low-credit email still fires as a fallback. New `profiles` columns:
+  `auto_topup_enabled`, `auto_topup_pack` (client-writable — bounded by a
+  CHECK constraint and re-validated server-side, so a bad value is
+  harmless), `stripe_payment_method_id`, `auto_topup_last_attempt_at`
+  (both service-role-only, `authenticated` has no grant on them at all).
+  Migration `20260928050000_auto_topup.sql`.
+  **Two unrelated bugs found and fixed while building this, both live in
+  production before the fix:** (1) `authenticated` had no `UPDATE` grant
+  on `profiles.workspace_context`/`memory`/`updated_at` at all — so
+  `chat.html`'s Workspace Context save and per-entry structured-memory
+  delete had been silently 42501'ing since whichever session shipped them,
+  confirmed with a real throwaway session before the fix. (2) This file's
+  own "Database schema gotchas" claim that purchase rows use
+  `reason LIKE 'pack:%'` was backwards — real purchases use a bare
+  `reason = 'purchase'` literal with the pack name in
+  `metadata.credit_pack` (confirmed against `stripe-webhook`'s actual
+  source and the live partial unique index) — `dashboard.html`'s credit
+  history had the same wrong assumption baked in
+  (`row.reason.replace(/^pack:/, ...)`, which never matched anything real
+  since no purchase has ever landed in this project yet) and both are
+  fixed in the same PR; see the corrected gotcha above.
+  **Verification is more limited here than usual and that's worth
+  flagging explicitly**: this Stripe account has no test-mode counterpart
+  available in this environment (`list_available_accounts_or_orgs` shows
+  only `livemode: true`), so the actual successful-charge path was never
+  exercised with real money, deliberately. What *was* verified live: (a)
+  `setup-auto-topup` creates a real, correctly-shaped Stripe Checkout
+  setup session (inspected the response, never visited/completed it with
+  card details); (b) a real low-balance chat message with
+  `auto_topup_enabled` true and no saved payment method correctly no-ops
+  (confirmed zero Stripe calls, zero side effects); (c) a real low-balance
+  chat message with a garbage/nonexistent `stripe_payment_method_id`
+  correctly reaches Stripe, gets rejected (no real resource to charge, so
+  provably zero money risk), and correctly disables `auto_topup_enabled`
+  with zero credits granted and zero `credit_ledger` rows written; (d)
+  the dashboard UI's on/off states, the real "Turn off" button (direct DB
+  write, confirmed), and the "Set up" button (confirmed it reaches the
+  real deployed function and redirects to a genuine `checkout.stripe.com`
+  URL) — all via Playwright against the live backend. **What was not, and
+  could not safely be, verified**: an actual successful off-session charge
+  completing and granting credits. Recommend a human do one real manual
+  test purchase with their own card before fully trusting the success
+  path.
 - **2026-09-28** — **Added a public community routines gallery** (PR #98,
   item 3 of 5 from the "make the site significantly better, do all"
   request — items 1-2 are PRs #96-97 above). New top-level,

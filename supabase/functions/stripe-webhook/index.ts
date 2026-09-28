@@ -90,6 +90,29 @@ serve(async (req) => {
           break;
         }
 
+        // Auto-topup card setup (setup-auto-topup/index.ts) — save the
+        // confirmed payment method as the customer's default and flip
+        // auto_topup_enabled on. Nothing is charged here.
+        if (s.mode === "setup" && userId) {
+          const setupIntentId = s.setup_intent as string | null;
+          if (!setupIntentId) { console.error("setup session missing setup_intent", { session: s.id }); break; }
+          const si = await stripe.setupIntents.retrieve(setupIntentId);
+          const pmId = si.payment_method as string | null;
+          if (!pmId || !s.customer) { console.error("setup session missing payment_method/customer", { session: s.id }); break; }
+
+          await stripe.customers.update(s.customer as string, {
+            invoice_settings: { default_payment_method: pmId },
+          });
+
+          const { error: autoErr } = await supabase.from("profiles").update({
+            stripe_payment_method_id: pmId,
+            auto_topup_enabled: true,
+            auto_topup_pack: s.metadata?.auto_topup_pack ?? null,
+          }).eq("id", userId);
+          if (autoErr) console.error("auto-topup profile update failed", autoErr.message);
+          break;
+        }
+
         // Subscription checkout
         const plan = s.metadata?.plan || "personal";
         if (userId && s.customer) {

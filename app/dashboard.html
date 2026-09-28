@@ -327,6 +327,16 @@
       <p class="muted" style="font-size:.75rem;margin-top:.75rem">Credits are added automatically after each new friend sends their first message.</p>
     </div>
 
+    <!-- AUTO-TOPUP -->
+    <div class="panel" style="margin-top:1rem" id="autoTopupPanel">
+      <h2>Auto-topup</h2>
+      <p class="muted" style="font-size:.85rem;margin-top:.3rem" id="autoTopupDesc">Automatically buy more credits when your balance runs low, so you never get cut off mid-conversation. Off by default — opt in any time, turn off any time.</p>
+      <div id="autoTopupBody" style="margin-top:.85rem">
+        <p class="muted" style="font-size:.78rem">Loading…</p>
+      </div>
+      <div class="msg" id="autoTopupMsg"></div>
+    </div>
+
     <!-- BUY CREDITS CTA -->
     <div class="panel" style="margin-top:1rem;border-color:rgba(255,77,0,.2)">
       <h2>Buy more credits</h2>
@@ -407,7 +417,7 @@
       // Fetch all data in parallel
       var now=new Date(), monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString();
       var thirtyDaysAgo=new Date(Date.now()-30*86400000).toISOString();
-      var [balRes, ledRes, convRes, lastMsgRes, monthDebitsRes, sparkRes, modelMixRes, refCodeRes, refEventsRes, refBonusRes] = await Promise.all([
+      var [balRes, ledRes, convRes, lastMsgRes, monthDebitsRes, sparkRes, modelMixRes, refCodeRes, refEventsRes, refBonusRes, profRes] = await Promise.all([
         supabase.rpc('get_credit_balance'),
         supabase.from('credit_ledger').select('*').order('created_at',{ascending:false}).limit(20),
         supabase.from('conversations').select('id',{count:'exact',head:true}),
@@ -417,7 +427,8 @@
         supabase.from('credit_ledger').select('delta,metadata').eq('reason','chat_usage').gte('created_at',thirtyDaysAgo),
         supabase.from('referral_codes').select('code').limit(1).maybeSingle(),
         supabase.from('referral_events').select('id',{count:'exact',head:true}),
-        supabase.from('credit_ledger').select('delta').eq('reason','referral_bonus').gt('delta',0)
+        supabase.from('credit_ledger').select('delta').eq('reason','referral_bonus').gt('delta',0),
+        supabase.from('profiles').select('auto_topup_enabled,auto_topup_pack,stripe_payment_method_id').eq('id',user.id).single()
       ]);
 
       // ── Credits ──
@@ -464,15 +475,31 @@
       $('renewLine').textContent = 'No recurring subscription — buy credits below.';
 
       // ── Credit history ──
+      // stripe-webhook (grantPackCredits / auto-topup-charge) inserts real
+      // purchase rows with reason:'purchase' and the pack name in
+      // metadata.credit_pack -- NOT a 'pack:<name>' reason string. The old
+      // `row.reason.replace(/^pack:/, ...)` here never matched anything
+      // real (confirmed: reason is a bare 'purchase' literal, per the
+      // partial unique index on credit_ledger), so a real purchase row
+      // would have shown the raw word "purchase" instead of a pack name.
+      // Never actually hit in production yet -- zero real purchases exist
+      // so far -- but would have as soon as the first one landed.
+      var PACK_LABELS = { starter:'Starter (200cr)', value:'Standard (600cr)', power:'Pro (2,000cr)', pro_7k:'Power (7,000cr)' };
+      var REASON_LABELS = { chat_usage:'Chat usage', signup_bonus:'Signup bonus', referral_bonus:'Referral bonus', admin_adjustment:'Admin adjustment' };
       var ledger = ledRes.data || [];
       if(ledger.length){
         $('historyList').innerHTML = ledger.map(function(row){
           var isCredit = row.delta > 0;
           var d = new Date(row.created_at);
           var dateStr = d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-          var label = row.reason
-            ? row.reason.replace(/^pack:/, 'Pack — ').replace(/_/g,' ')
-            : 'transaction';
+          var label;
+          if(row.reason === 'purchase'){
+            var packKey = row.metadata && row.metadata.credit_pack;
+            var isAuto = row.metadata && row.metadata.auto_topup;
+            label = (PACK_LABELS[packKey] || 'Credit pack purchase') + (isAuto ? ' · auto-topup' : '');
+          } else {
+            label = REASON_LABELS[row.reason] || (row.reason || 'transaction').replace(/_/g,' ');
+          }
           return '<div class="history-row">'
             +'<div><div style="font-weight:600;font-size:.83rem">'+label+'</div>'
             +'<div class="history-type">'+dateStr+'</div></div>'
@@ -480,6 +507,77 @@
             +'</div>';
         }).join('');
       }
+
+      // ── Auto-topup ──
+      var autoProf = profRes && profRes.data;
+      var lastPurchasedPack = (function(){
+        for(var i=0;i<ledger.length;i++){
+          if(ledger[i].reason === 'purchase' && ledger[i].metadata && ledger[i].metadata.credit_pack) return ledger[i].metadata.credit_pack;
+        }
+        return null;
+      })();
+
+      function autoTopupMsg(text, kind){
+        var el = $('autoTopupMsg');
+        el.textContent = text;
+        el.className = 'msg show ' + (kind || 'ok');
+      }
+
+      function renderAutoTopup(){
+        var body = $('autoTopupBody');
+        if(autoProf && autoProf.auto_topup_enabled){
+          var packLabel = PACK_LABELS[autoProf.auto_topup_pack] || autoProf.auto_topup_pack || 'your saved pack';
+          body.innerHTML =
+            '<div class="action-card primary" style="cursor:default">'
+            +'<div class="action-icon">✅</div>'
+            +'<div class="action-title">Auto-topup is on</div>'
+            +'<div class="action-desc">Charges '+packLabel+' automatically when your balance drops low.</div>'
+            +'</div>'
+            +'<button class="btn btn-ghost" id="autoTopupOff" style="width:auto;margin-top:.75rem;padding:.5rem 1rem">Turn off auto-topup</button>';
+          var offBtn = document.getElementById('autoTopupOff');
+          offBtn.onclick = async function(){
+            offBtn.disabled = true; offBtn.textContent = 'Turning off…';
+            var r = await supabase.from('profiles').update({ auto_topup_enabled: false }).eq('id', user.id);
+            if(r.error){ autoTopupMsg('Could not turn off auto-topup: '+r.error.message, 'err'); offBtn.disabled = false; offBtn.textContent = 'Turn off auto-topup'; return; }
+            autoProf.auto_topup_enabled = false;
+            autoTopupMsg('Auto-topup turned off.', 'ok');
+            renderAutoTopup();
+          };
+        } else {
+          var defaultPack = lastPurchasedPack || 'starter';
+          var packOptions = CREDIT_PACKS.map(function(p){
+            return '<option value="'+p.pack+'"'+(p.pack===defaultPack?' selected':'')+'>'+p.price+' — '+p.label+'</option>';
+          }).join('');
+          body.innerHTML =
+            '<label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:.4rem">Pack to auto-buy</label>'
+            +'<select id="autoTopupPackSelect" style="background:var(--surface,#141414);color:var(--text,#f0f0f0);border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:.5rem .7rem;font-size:.85rem;width:100%;max-width:280px">'+packOptions+'</select>'
+            +'<div style="margin-top:.75rem"><button class="btn" id="autoTopupOn" style="width:auto;padding:.6rem 1.2rem;background:#ff4d00;color:#fff;font-weight:700;border-radius:8px;border:none;font-size:.85rem;cursor:pointer">Set up auto-topup →</button></div>'
+            +'<p class="muted" style="font-size:.72rem;margin-top:.6rem;font-family:var(--mono)">// saves a card via Stripe, charges only when your balance drops low, cancel any time</p>';
+          var onBtn = document.getElementById('autoTopupOn');
+          onBtn.onclick = async function(){
+            var pack = document.getElementById('autoTopupPackSelect').value;
+            onBtn.disabled = true; onBtn.textContent = 'Redirecting to Stripe…';
+            try{
+              var r = await fetch(window.AETHYRO_FN_URL+'/setup-auto-topup', {
+                method:'POST',
+                headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+                body: JSON.stringify({ pack: pack }),
+              });
+              var d = await r.json();
+              if(!r.ok || !d.url){ autoTopupMsg(d.error || 'Could not start setup', 'err'); onBtn.disabled=false; onBtn.textContent='Set up auto-topup →'; return; }
+              location.href = d.url;
+            }catch(e){
+              autoTopupMsg('Network error starting setup', 'err');
+              onBtn.disabled = false; onBtn.textContent = 'Set up auto-topup →';
+            }
+          };
+        }
+      }
+      renderAutoTopup();
+
+      var atParam = new URLSearchParams(location.search).get('autotopup');
+      if(atParam === 'success') autoTopupMsg('Card saved — auto-topup is now on.', 'ok');
+      else if(atParam === 'cancelled') autoTopupMsg('Auto-topup setup cancelled — nothing was saved.', 'err');
 
       // ── Sparkline ──
       var sparkRows = (sparkRes.data || []);

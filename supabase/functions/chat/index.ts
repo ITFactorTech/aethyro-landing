@@ -1,4 +1,10 @@
-// chat v34 — adds model:"auto" support. The client can now send model:"auto"
+// chat v35 — merges two independently-shipped v34 changes:
+// (1) the low-credit path now also fires auto-topup-charge (fire-and-forget,
+// alongside the existing send-low-credit-email) when the user has
+// auto_topup_enabled — an off-session Stripe charge for their configured
+// pack instead of just a warning email. Independent cooldown from the
+// email's 24h one; auto-topup-charge enforces its own.
+// (2) adds model:"auto" support. The client can now send model:"auto"
 // instead of a fixed haiku/sonnet/opus key; routeAutoModel() picks a real
 // MODEL_MAP key with a cheap rule-based heuristic (message length, a few
 // keyword signals, presence of attachments) run before the Anthropic call —
@@ -585,10 +591,11 @@ serve(async (req) => {
       },
     })));
 
-    // Low-credit warning (fire-and-forget)
+    // Low-credit warning + auto-topup (fire-and-forget)
     try {
       if (typeof newBal === "number" && newBal > 0 && newBal <= LOW_CREDIT_THRESHOLD) {
-        const { data: prof } = await supaAdmin.from("profiles").select("low_credit_warned_at").eq("id", user.id).single();
+        const { data: prof } = await supaAdmin.from("profiles")
+          .select("low_credit_warned_at, auto_topup_enabled").eq("id", user.id).single();
         const lastWarn = prof?.low_credit_warned_at ? new Date(prof.low_credit_warned_at) : null;
         if (!lastWarn || lastWarn < new Date(Date.now() - 86_400_000)) {
           await supaAdmin.functions.invoke("send-low-credit-email", {
@@ -596,6 +603,15 @@ serve(async (req) => {
             body: { user_id: user.id, balance: newBal },
           });
           await supaAdmin.from("profiles").update({ low_credit_warned_at: new Date().toISOString() }).eq("id", user.id);
+        }
+        // Independent of the email cooldown above — auto-topup-charge has
+        // its own cooldown guard (see that function) and no-ops cleanly if
+        // the user hasn't actually completed setup (no saved payment method).
+        if (prof?.auto_topup_enabled) {
+          await supaAdmin.functions.invoke("auto-topup-charge", {
+            headers: { "X-Internal-Key": SERVICE_ROLE_KEY },
+            body: { user_id: user.id },
+          });
         }
       }
     } catch {}
