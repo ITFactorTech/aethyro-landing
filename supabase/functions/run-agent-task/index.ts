@@ -228,6 +228,8 @@ serve(async (req) => {
   const supaAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   // ── Credit gate ───────────────────────────────────────────────────────────
+  const { data: taskProfile } = await supaAdmin
+    .from("profiles").select("team_id").eq("id", user.id).single();
   const { data: balance } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
   // balance is null for brand-new users with no ledger rows — treat as 0
   const currentBalance = typeof balance === "number" ? balance : 0;
@@ -345,11 +347,13 @@ serve(async (req) => {
 
   // ── Billing ───────────────────────────────────────────────────────────────
   const cost = calcCredits(totalInput, totalOutput, modelKey);
-  await supaAdmin.from("credit_ledger").insert({
+  const { error: ledgerErr } = await supaAdmin.from("credit_ledger").insert({
     user_id: user.id,
     delta:   -cost,
     reason:  "agent_task",
+    team_id: taskProfile?.team_id ?? null,
   });
+  if (ledgerErr) console.error("agent_task credit_ledger insert failed", ledgerErr.message);
 
   // ── Finalise task record ──────────────────────────────────────────────────
   await supaAdmin.from("agent_tasks").update({
