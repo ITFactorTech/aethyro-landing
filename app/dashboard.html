@@ -348,6 +348,17 @@
       <div class="msg" id="autoTopupMsg"></div>
     </div>
 
+    <!-- API KEYS -->
+    <div class="panel" style="margin-top:1rem" id="apiKeysPanel">
+      <h2>API Keys</h2>
+      <p class="muted" style="font-size:.85rem;margin-top:.3rem">Call Aethyro's models from your own code — scripts, backend services, CI pipelines. Each request bills your credit balance, same as a chat message.</p>
+      <div id="apiKeyRevealBox" style="display:none;margin-top:.85rem;padding:.85rem;border:1px solid rgba(255,77,0,.3);border-radius:8px;background:rgba(255,77,0,.05)"></div>
+      <div id="apiKeysBody" style="margin-top:.85rem">
+        <p class="muted" style="font-size:.78rem">Loading…</p>
+      </div>
+      <div class="msg" id="apiKeysMsg"></div>
+    </div>
+
     <!-- BUY CREDITS CTA -->
     <div class="panel" style="margin-top:1rem;border-color:rgba(255,77,0,.2)">
       <h2>Buy more credits</h2>
@@ -683,6 +694,59 @@
         }
       }
       loadTeam();
+
+      // ── API Keys ──
+      function apiKeysMsg(text, kind){ var el = $('apiKeysMsg'); el.textContent = text; el.className = 'msg show ' + (kind || 'ok'); }
+      async function loadApiKeys(){
+        var body = $('apiKeysBody');
+        var r = await supabase.from('api_keys').select('id,name,key_prefix,created_at,last_used_at,request_count').order('created_at',{ascending:false});
+        if(r.error){ body.innerHTML = '<p class="muted" style="font-size:.78rem">Could not load API keys.</p>'; return; }
+        var rows = (r.data||[]).map(function(k){
+          var last = k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'never used';
+          return '<div class="history-row"><div style="font-size:.83rem">'
+            + '<span style="font-family:var(--mono)">'+k.key_prefix+'…</span> · '+(k.name||'API key')
+            + '<br><span class="muted" style="font-size:.72rem">'+(k.request_count||0)+' requests · '+last+'</span></div>'
+            + '<button class="ref-copy-btn" data-revoke="'+k.id+'" style="font-size:.72rem">Revoke</button></div>';
+        }).join('') || '<p class="muted" style="font-size:.78rem">No API keys yet.</p>';
+        body.innerHTML = rows
+          + '<div style="margin-top:1rem"><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:.4rem">Key name (optional)</label>'
+          + '<div style="display:flex;gap:.5rem;flex-wrap:wrap"><input type="text" id="apiKeyNameInput" placeholder="e.g. Production server" maxlength="60" style="background:var(--surface,#141414);color:var(--text,#f0f0f0);border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:.5rem .7rem;font-size:.85rem;flex:1;min-width:200px"/>'
+          + '<button class="btn" id="apiKeyCreateBtn" style="width:auto;padding:.6rem 1.2rem;background:#ff4d00;color:#fff;font-weight:700;border-radius:8px;border:none;font-size:.85rem;cursor:pointer">Create key →</button></div></div>'
+          + '<p class="muted" style="font-size:.72rem;margin-top:.75rem;font-family:var(--mono)">// POST '+window.AETHYRO_FN_URL+'/api-chat · Authorization: Bearer &lt;key&gt; · body: {"message":"..."}</p>';
+
+        document.getElementById('apiKeyCreateBtn').onclick = async function(){
+          var btn = this; var name = document.getElementById('apiKeyNameInput').value;
+          btn.disabled = true; btn.textContent = 'Creating…';
+          try{
+            var res = await supabase.rpc('create_api_key', {p_name: name});
+            if(res.error) throw new Error(res.error.message);
+            var row = (res.data||[])[0];
+            if(!row) throw new Error('No key returned');
+            var box = $('apiKeyRevealBox');
+            box.style.display = 'block';
+            box.innerHTML = '<div style="font-size:.78rem;color:var(--muted);margin-bottom:.4rem">Copy this now — it won’t be shown again.</div>'
+              + '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap"><code style="font-family:var(--mono);font-size:.82rem;word-break:break-all;flex:1;min-width:200px">'+row.plaintext_key+'</code>'
+              + '<button class="ref-copy-btn" id="apiKeyCopyBtn" style="font-size:.72rem">Copy</button></div>';
+            document.getElementById('apiKeyCopyBtn').onclick = function(){
+              navigator.clipboard.writeText(row.plaintext_key).then(function(){ apiKeysMsg('Copied.', 'ok'); });
+            };
+            apiKeysMsg('Key created.', 'ok');
+            await loadApiKeys();
+          }catch(e){ apiKeysMsg(e.message, 'err'); btn.disabled = false; btn.textContent = 'Create key →'; }
+        };
+
+        body.querySelectorAll('[data-revoke]').forEach(function(btn){
+          btn.onclick = async function(){
+            if(!confirm('Revoke this API key? Anything using it will stop working immediately.')) return;
+            btn.disabled = true;
+            var r = await supabase.from('api_keys').delete().eq('id', btn.getAttribute('data-revoke'));
+            if(r.error){ apiKeysMsg('Could not revoke: '+r.error.message, 'err'); btn.disabled = false; return; }
+            apiKeysMsg('Key revoked.', 'ok');
+            await loadApiKeys();
+          };
+        });
+      }
+      loadApiKeys();
 
       // ── Sparkline ──
       var sparkRows = (sparkRes.data || []);
