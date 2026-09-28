@@ -110,6 +110,61 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **P0-severity, needs a product decision — not a code bug**: four pages
+  are **live, return 200, and are listed in `sitemap.xml`** (so actively
+  submitted for Google indexing) that pitch a **completely different
+  product** than the live Aethyro Cloud app, and are **not linked from
+  `index.html` or anywhere in the real site's nav/footer** — found by a
+  `site-guardian` sweep on 2026-09-28, diffing `sitemap.xml` against what
+  `index.html` actually links to (a check no prior sweep had done).
+  - `/marketplace/` — "Pre-built AI agents for law, CPA, medical, real
+    estate, and HR. Buy once, deploy locally." Five per-vertical products
+    at **$29–79/mo** ("Aethyro Legal", "Aethyro CPA", "Aethyro Medical",
+    "Aethyro Realty", "Aethyro HR", "Aethyro Biz") plus a separate
+    "Free/$49/mo/$149/mo" tier grid — none of which match Aethyro Cloud's
+    real one-time-credit-pack pricing.
+  - `/builder/` — "Build Custom AI Agents in Minutes — No Lock-In...
+    Export freely as JSON or Python... Runs 100% on your hardware,"
+    links to `ollama.ai`. Describes a local agent-builder tool, not a
+    browser-based cloud assistant.
+  - `/community/` — "Agent Community — Share & Discover AI Agents,"
+    leaderboard, "live economy that trains the platform 24/7" — the exact
+    same concepts (leaderboard, economy) as the `agents`/`economy_ticks`/
+    `get_leaderboard()` schema that was **dropped as unrelated on
+    2026-09-28** (see below). **Confirmed this page makes zero live
+    Supabase/RPC calls** — it's static copy, so dropping that schema did
+    not break it, but the copy itself describes a feature that no longer
+    has (and per that drop's own investigation, likely never had) any
+    real backing data.
+  - `/contractors.html` — "4 AI agents that write your invoices... Runs on
+    your laptop. $99/mo flat," waitlist-only (`Join the waitlist` /
+    `Get early access` buttons, no real signup flow).
+  - None of these have a working automated purchase flow — every CTA is
+    either a `mailto:` (manual/human-mediated) or a waitlist form
+    (`btn-primary` submit handlers, not verified further this sweep) — so
+    this is **not** the hard-security raw-Stripe-link problem (grepped
+    the whole repo, zero `buy.stripe.com` matches, confirmed clean).
+  - This is a distinct, larger cluster than the already-decommissioned
+    per-plan subscription model below — a different abandoned-or-parallel
+    product direction (per-vertical local-agent products, not a
+    Cloud-tier subscription ladder) that's never been documented here
+    before. **Did not touch any of these 4 files** — per `site-guardian`'s
+    own rule, this needs a human call (relink into nav as a real parallel
+    initiative? `noindex` and leave live? remove entirely and drop from
+    `sitemap.xml`?), not a unilateral fix or deletion.
+- **Needs a product decision, lower severity**: `app/community.html` is a
+  **fully-built, working in-app forum** (threads/posts/replies/reports/
+  delete, real `forum_threads`/`forum_posts`/`forum_reports` tables with
+  owner-scoped RLS, confirmed live) that is **completely orphaned** —
+  nothing in the repo links to it (confirmed by grep), and the site's
+  actual "Community" CTAs (`[data-community]` in `index.html`/footer,
+  `dashboard.html`) all point to a **Discord invite**
+  (`https://discord.gg/5PwBk8RVHv`) instead. `forum_threads`/
+  `forum_posts` both have 0 rows — nobody has ever used it, consistent
+  with it never having been reachable. Needs a human decision: link it
+  into the app nav as a real feature, or it's dead code superseded by
+  Discord and should be removed. Not touched this sweep.
+
 ~~- `referral_events`'s two FKs to `auth.users` were `NO ACTION`~~ — **fixed
   2026-09-27**, see the recent-work-log entry below.
 ~~- New accounts get the 200-credit `signup_bonus` twice~~ — **fixed
@@ -215,6 +270,43 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Full `site-guardian` sweep, user-requested** ("do a
+  full web and code audit to find and fix bugs and fix broken pages and
+  clean dead code"). Ran the complete checklist: `get_advisors`
+  (security + performance) diffed against what's already known/accepted
+  here; `list_edge_functions` vs. `supabase/functions/` (no drift — every
+  live function is committed, `test-voyage-probe`/`test-embed-probe`
+  turned out already properly stubbed to 410 from a prior session, false
+  alarm on first glance); `query_logs` for 24h of 4xx/5xx across all
+  active functions (only expected-error-path codes — the `embed-content`
+  401s were all pre-fix historical, last one at 22:30 UTC on 9/27, none
+  since); `pg_trigger`/`pg_constraint` on `auth.users` re-verified against
+  what this file already claims (exact match, zero drift); a full live
+  smoke test with a real throwaway account (signup produces exactly one
+  `profiles`/`referral_codes`/`signup_bonus` row — no regression of the
+  earlier double-bonus bug — and a real chat message on **all three**
+  `MODEL_MAP` keys, haiku/sonnet/opus, each returned 200 with correct
+  cost badges, confirming the extended-thinking fix still holds); grepped
+  the whole repo for `buy.stripe.com` (zero matches, hard constraint
+  intact); crawled `index.html`/`pricing.html`/`blog/`/`terms.html`/
+  `privacy.html` for broken internal links (all real links resolve; the
+  only 404s were Cloudflare's own email-obfuscation rewrite artifacts,
+  not real links in the source).
+  **Result: zero code bugs found** — signup, chat, schema, and edge
+  functions are all clean. But the sitemap-vs-nav diff (checking what
+  `sitemap.xml` lists against what `index.html` actually links to, which
+  no prior sweep had done) surfaced two real, previously-undocumented
+  findings, both written up in "Pending / not yet applied" above rather
+  than acted on unilaterally, since both need a human product call: (1)
+  four live, sitemap-indexed pages (`/marketplace/`, `/builder/`,
+  `/community/`, `/contractors.html`) pitching a completely different
+  per-vertical local-agent-software product line, totally unlinked from
+  the real site; (2) a fully-built, working, but completely orphaned
+  in-app forum at `app/community.html` (real tables, real RLS, zero
+  usage) that the site's actual "Community" links bypass in favor of
+  Discord. Diagnostic cleanup: `test-admin-setup` was redeployed for the
+  smoke test and re-stubbed to 410 immediately after, confirmed via a
+  live curl.
 - **2026-09-28** — **Fixed: homepage nav showed "Log in" for already
   signed-in users** (user-reported: "sign in, hit the Aethyro logo back to
   home, it doesn't stay signed in"). Root cause: `index.html` has **zero**
