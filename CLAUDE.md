@@ -110,60 +110,14 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
-- **P0-severity, needs a product decision — not a code bug**: four pages
-  are **live, return 200, and are listed in `sitemap.xml`** (so actively
-  submitted for Google indexing) that pitch a **completely different
-  product** than the live Aethyro Cloud app, and are **not linked from
-  `index.html` or anywhere in the real site's nav/footer** — found by a
-  `site-guardian` sweep on 2026-09-28, diffing `sitemap.xml` against what
-  `index.html` actually links to (a check no prior sweep had done).
-  - `/marketplace/` — "Pre-built AI agents for law, CPA, medical, real
-    estate, and HR. Buy once, deploy locally." Five per-vertical products
-    at **$29–79/mo** ("Aethyro Legal", "Aethyro CPA", "Aethyro Medical",
-    "Aethyro Realty", "Aethyro HR", "Aethyro Biz") plus a separate
-    "Free/$49/mo/$149/mo" tier grid — none of which match Aethyro Cloud's
-    real one-time-credit-pack pricing.
-  - `/builder/` — "Build Custom AI Agents in Minutes — No Lock-In...
-    Export freely as JSON or Python... Runs 100% on your hardware,"
-    links to `ollama.ai`. Describes a local agent-builder tool, not a
-    browser-based cloud assistant.
-  - `/community/` — "Agent Community — Share & Discover AI Agents,"
-    leaderboard, "live economy that trains the platform 24/7" — the exact
-    same concepts (leaderboard, economy) as the `agents`/`economy_ticks`/
-    `get_leaderboard()` schema that was **dropped as unrelated on
-    2026-09-28** (see below). **Confirmed this page makes zero live
-    Supabase/RPC calls** — it's static copy, so dropping that schema did
-    not break it, but the copy itself describes a feature that no longer
-    has (and per that drop's own investigation, likely never had) any
-    real backing data.
-  - `/contractors.html` — "4 AI agents that write your invoices... Runs on
-    your laptop. $99/mo flat," waitlist-only (`Join the waitlist` /
-    `Get early access` buttons, no real signup flow).
-  - None of these have a working automated purchase flow — every CTA is
-    either a `mailto:` (manual/human-mediated) or a waitlist form
-    (`btn-primary` submit handlers, not verified further this sweep) — so
-    this is **not** the hard-security raw-Stripe-link problem (grepped
-    the whole repo, zero `buy.stripe.com` matches, confirmed clean).
-  - This is a distinct, larger cluster than the already-decommissioned
-    per-plan subscription model below — a different abandoned-or-parallel
-    product direction (per-vertical local-agent products, not a
-    Cloud-tier subscription ladder) that's never been documented here
-    before. **Did not touch any of these 4 files** — per `site-guardian`'s
-    own rule, this needs a human call (relink into nav as a real parallel
-    initiative? `noindex` and leave live? remove entirely and drop from
-    `sitemap.xml`?), not a unilateral fix or deletion.
-- **Needs a product decision, lower severity**: `app/community.html` is a
-  **fully-built, working in-app forum** (threads/posts/replies/reports/
-  delete, real `forum_threads`/`forum_posts`/`forum_reports` tables with
-  owner-scoped RLS, confirmed live) that is **completely orphaned** —
-  nothing in the repo links to it (confirmed by grep), and the site's
-  actual "Community" CTAs (`[data-community]` in `index.html`/footer,
-  `dashboard.html`) all point to a **Discord invite**
-  (`https://discord.gg/5PwBk8RVHv`) instead. `forum_threads`/
-  `forum_posts` both have 0 rows — nobody has ever used it, consistent
-  with it never having been reachable. Needs a human decision: link it
-  into the app nav as a real feature, or it's dead code superseded by
-  Discord and should be removed. Not touched this sweep.
+~~- Four pages (`/marketplace/`, `/builder/`, `/community/`,
+  `/contractors.html`) were live/indexed but pitched a different, pre-pivot
+  product~~ — **confirmed pre-"Aethyro Cloud" via git history and removed
+  2026-09-28**, see "Decommissioned: pre-Cloud 'AI Operating Platform'
+  pages" below.
+~~- `app/community.html` was a fully-built but completely orphaned in-app
+  forum~~ — **confirmed same pre-Cloud era and removed 2026-09-28**, see
+  the same section below.
 
 ~~- `referral_events`'s two FKs to `auth.users` were `NO ACTION`~~ — **fixed
   2026-09-27**, see the recent-work-log entry below.
@@ -198,6 +152,55 @@ it to the `?buy=` pattern instead.
   (fail-open every time). Nothing to fix here unless/until this project
   upgrades to Pro — at which point `check-leaked-password` is already
   written and ready to wire in as the Auth Hook.
+
+## Decommissioned: pre-Cloud "AI Operating Platform" pages (2026-09-28)
+
+A `site-guardian` sweep on 2026-09-28 found four live, `sitemap.xml`-indexed
+pages plus one orphaned in-app feature, all pitching a product with no
+resemblance to the current Aethyro Cloud app. Confirmed via git history
+they predate the pivot, then removed on explicit instruction after
+presenting that evidence:
+
+- `git log --diff-filter=A` on `marketplace/index.html`, `builder/index.html`,
+  and `community/index.html` all point to the **same commit, 2026-06-01**:
+  *"Launch AI Operating Platform — marketplace, builder, community pages."*
+  `contractors.html` followed six days later, 2026-06-07. **Aethyro Cloud**
+  (the current product — `app/chat.html`, browser chat, credit-pack billing)
+  didn't launch until **2026-09-20**, ~3.5 months after these pages — a
+  separate, earlier pivot ("AI Operating Platform": a local AI-agent
+  builder + a per-vertical marketplace selling "Aethyro Legal"/"Aethyro
+  CPA"/etc. at $29–79/mo, plus a standalone contractor-invoicing product
+  at $99/mo — all local-hardware/Ollama-integrated, nothing like Cloud's
+  one-time credit packs) that was simply never cleaned up when the product
+  changed direction.
+- `app/community.html` (a fully-built members-only forum — threads, posts,
+  replies, reports, delete) is from the same era, added 2026-05-31 — one
+  day *before* the other three — and its own commit message says
+  *"+ dashboard link"*, meaning it really was wired into the dashboard
+  originally. That link was later repointed to a Discord invite
+  (`https://discord.gg/5PwBk8RVHv`) during the Cloud pivot; the forum's
+  code and tables were left in place, unreferenced, rather than removed
+  alongside the link change.
+- Confirmed safe to remove before doing so: none of the 5 pages had a
+  working automated purchase/signup flow (`marketplace/`'s "Start Trial"
+  buttons were `mailto:` links; `contractors.html`'s waitlist form posted
+  to `/site/email/signup`, which returns a live `405` — that endpoint was
+  never actually implemented, so the form never worked and captured zero
+  real leads); no `waitlist`/`email_signup`/`lead`-named table exists in
+  the DB at all; `forum_threads`/`forum_posts` both had 0 rows, ever; and
+  a repo-wide grep found nothing else anywhere referencing any of the 5
+  paths except `sitemap.xml` itself.
+- **Removed**: `marketplace/index.html`, `builder/index.html`,
+  `community/index.html`, `contractors.html`, `app/community.html` (all
+  deleted, along with their now-empty `marketplace/`/`builder/`/`community/`
+  directories), their 4 corresponding `<url>` entries in `sitemap.xml`, and
+  the forum's backing schema (`forum_threads`, `forum_posts`,
+  `forum_reports`, plus the 3 trigger functions that only existed to serve
+  them: `forum_after_post()`, `forum_rate_post()`, `forum_rate_thread()`)
+  — migration `20260928030000_drop_orphaned_forum_schema.sql`. Nothing
+  else in the repo referenced any of this, confirmed by grep before
+  deleting. `dashboard.html`'s `[data-community]` Discord link needed no
+  change — it was already correct.
 
 ## Decommissioned: old per-plan subscription model (2026-09-27)
 
@@ -243,9 +246,11 @@ active functions when only 10 were documented anywhere.
   pricing, CTAs go to `/app/signup.html`), it just contains the word
   "subscriptions" in a "no subscriptions" sentence, which is a false
   positive if you're grep'ing for the old model.
-- Not yet checked: `marketplace/`, `contractors.html`, `app/community.html`
-  content for other stale references to the old model — flagged for
-  awareness, not yet acted on.
+~~- Not yet checked: `marketplace/`, `contractors.html`, `app/community.html`
+  content for other stale references to the old model~~ — **checked
+  2026-09-28: turned out to be a different, earlier decommissioned era
+  entirely** (pre-dates even this subscription model), removed. See
+  "Decommissioned: pre-Cloud 'AI Operating Platform' pages" above.
 
 ## Key config
 
@@ -270,6 +275,24 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Removed the pre-Cloud "AI Operating Platform" pages**
+  (the two `site-guardian` findings from the sweep below), on explicit
+  instruction after confirming via `git log --diff-filter=A` that all 5
+  predate the Aethyro Cloud pivot by ~3.5 months (`marketplace/`,
+  `builder/`, `community/` all first committed 2026-06-01 in one "Launch
+  AI Operating Platform" commit; `contractors.html` 2026-06-07;
+  `app/community.html` 2026-05-31, one day earlier, its own commit
+  message showing it *was* originally linked from the dashboard before
+  that link got repointed to Discord during the pivot). See
+  "Decommissioned: pre-Cloud 'AI Operating Platform' pages" above for full
+  detail — confirmed no real leads/data existed to lose (contractors.html's
+  waitlist endpoint `/site/email/signup` returns a live 405, so it never
+  actually worked), deleted all 5 files, removed their 4 `sitemap.xml`
+  entries, and dropped the now-fully-dead forum schema
+  (`forum_threads`/`forum_posts`/`forum_reports` + 3 trigger functions,
+  migration `20260928030000_drop_orphaned_forum_schema.sql`) after
+  re-confirming zero rows and zero other references immediately before
+  dropping.
 - **2026-09-28** — **Full `site-guardian` sweep, user-requested** ("do a
   full web and code audit to find and fix bugs and fix broken pages and
   clean dead code"). Ran the complete checklist: `get_advisors`
