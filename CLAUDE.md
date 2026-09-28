@@ -334,6 +334,72 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Added Phase 2: a public, metered API** (`api-chat`),
+  the second phase of the site-expansion blueprint (Phase 1 was
+  webhook-triggered routines + chaining, above). Lets a user call
+  Aethyro's models from their own code — scripts, backend services, CI —
+  with a long-lived API key instead of a browser session, billed against
+  the same team-pool-aware credit balance as chat.html. New `api_keys`
+  table (`user_id`, `name`, `key_prefix` — first 16 chars, shown in the
+  UI — `key_hash` — sha256, plaintext never stored — `last_used_at`,
+  `request_count`) and a `create_api_key(p_name)` SECURITY DEFINER RPC
+  that generates the real key server-side and returns the plaintext
+  exactly once; revocation is a plain owner-scoped `DELETE`, no
+  soft-revoked flag, same shape `routine_webhooks`' regenerate already
+  uses. New public (`verify_jwt: false`) `api-chat` function: resolves
+  the key via sha256 lookup, checks credit balance, calls Claude
+  (stateless — caller sends full message history each request, same
+  shape most public completion APIs use), bills `credit_ledger` with a
+  new `reason: 'api_usage'` (added to `credit_ledger_reason_check` in the
+  same migration as the feature that introduces it — see the
+  routine/agent_task entry below for exactly what happens when that step
+  gets skipped) stamped with `team_id`, and updates the key's
+  `last_used_at`/`request_count`. New `app/dashboard.html` "API Keys"
+  panel (list, create — reveals the plaintext once in a dedicated box the
+  list-refresh never touches — revoke). New public, SEO-indexable
+  `developers.html` (quickstart curl example, auth, request shape,
+  pricing table matching the real `CREDIT_RATES`, error codes, and an
+  honest "known v1 gaps" note: no hard per-key rate limit beyond the
+  credit balance itself, no streaming, no `auto` model routing on this
+  endpoint yet) — linked from `index.html`'s footer and `sitemap.xml`,
+  same pattern `routines.html` used for Phase 1.
+  **Found and fixed a real grant bug while verifying live**: this
+  project auto-grants full `ALL`-privilege table access to
+  `anon`/`authenticated` via a default-privileges rule that fires on
+  every new table in `public` — the first migration's column-scoped
+  `GRANT SELECT (id, name, key_prefix, ...)` never actually narrowed
+  anything, since a GRANT is additive, never restrictive, and the
+  broader default-privilege grant underneath it still gave
+  `authenticated` full-table `SELECT` (confirmed live: a real
+  authenticated session's raw REST call for `select=id,key_hash`
+  returned the real hash for a still-live key), plus `INSERT`/`UPDATE`,
+  and gave `anon` `SELECT`/`INSERT` too. Practical exploit surface was
+  narrow (RLS's `auth.uid() = user_id` check still blocked anon's
+  INSERT, and an authenticated user self-inserting/updating only ever
+  touches their own row), but it defeated the point of hashing the key
+  and broke the "only `create_api_key()` mints a row" invariant. Fixed
+  with a follow-up migration doing an explicit `REVOKE ALL ... FROM
+  authenticated, anon` before the narrow re-grant — confirmed via
+  `has_table_privilege`/`has_column_privilege` per role, not just by
+  re-reading the grant statements, same lesson as the earlier
+  `get_credit_balance` anon-grant incident below. **Worth checking
+  `has_table_privilege('authenticated', '<new table>', 'INSERT')` right
+  after creating *any* new table in this project from now on** — a plain
+  `GRANT SELECT (...)` is not a ceiling here, it's a floor, unless
+  preceded by an explicit `REVOKE ALL`. Verified live end-to-end with a
+  real throwaway account: `create_api_key` RPC returned a real
+  `ak_live_...` key; a real `api-chat` call (both the `message` shorthand
+  and the `messages` array form) billed correctly (`-1, reason:
+  'api_usage'`, `credits_remaining` accurate) and updated
+  `last_used_at`/`request_count`; an invalid key correctly 401s; missing
+  body and a `messages` array not ending in a `user` turn both correctly
+  400; revoking via a real RLS-scoped `DELETE` immediately 401'd the same
+  key on the next call. Cleaned up: deleted the throwaway account,
+  confirmed zero orphaned rows (`api_keys`/`credit_ledger`/`profiles`/
+  `auth.users`), `test-admin-setup` re-stubbed to 410 and confirmed via a
+  live curl. `api-chat` deployed live at v1. Not yet done from the same
+  blueprint: Phase 3 (a narrow fine-tuned model) and Phase 4 (a `/trust`
+  page) are still pending.
 - **2026-09-28** — **Added multi-step routine chaining** (the other half of
   Phase 1's automation-depth expansion, alongside webhook-triggered
   routines above). A routine can now name a `next_routine_id` — another
