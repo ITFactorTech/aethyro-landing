@@ -119,17 +119,30 @@ it to the `?buy=` pattern instead.
   product~~ — **fixed 2026-09-27**, see the recent-work-log entry below.
 ~~- 8 unrelated agent-simulation tables didn't belong to Aethyro~~ — **dropped
   2026-09-28**, see the recent-work-log entry below.
-- **`auth_leaked_password_protection` is disabled at the Supabase Auth
-  level**, and the custom `check-leaked-password` edge function that exists
-  in this repo (`supabase/functions/check-leaked-password/`) **isn't called
-  from anywhere** — grepped every `.html` file, zero references. So neither
-  the built-in HaveIBeenPwned check nor the custom one is actually
-  protecting signups right now. Fixing the built-in toggle looked like an
-  Auth-service config change outside what the available DB/migration tools
-  can reach; wiring the existing custom function into `signup.html` is a
-  small client-side change but touches the signup flow's UX (what error to
-  show, whether it blocks submission) — flagging rather than guessing at
-  the intended behavior.
+~~- Leaked-password protection isn't active~~ — **checked 2026-09-28, not a
+  bug.** The earlier finding was wrong on the key point: `signup.html`
+  **does** have a working client-side HaveIBeenPwned check (`isPasswordLeaked()`
+  around line 93 — SHA-1 hash, k-anonymity range query to
+  `api.pwnedpasswords.com`, blocks the form submit with a clear error before
+  `supabase.auth.signUp()` is ever called). The earlier grep only searched
+  for the string `check-leaked-password` and missed this because it's an
+  inline reimplementation, not a call to that edge function. Verified live:
+  hit the real HIBP range API for a known-leaked password
+  (`password123` → 2,266,543 breach count) and confirmed the same
+  suffix-match logic `signup.html` uses would correctly flag it.
+  Separately, `auth_leaked_password_protection` (the *built-in* Supabase
+  Auth toggle) really is off — but that's because **this project is on the
+  Supabase Free plan**, and per Supabase's own docs, leaked-password
+  protection at the Auth-service level requires Pro plan or above; it
+  isn't purchasable/enableable at all on Free (confirmed via
+  `get_organization`: `plan: "free"`). This is also exactly why
+  `check-leaked-password`'s own code comment says the client-side check in
+  `signup.html` is "the primary defense" — the free-tier `before_user_created`
+  hook payload doesn't even include the plaintext password, so wiring that
+  edge function up as an Auth Hook right now would be a guaranteed no-op
+  (fail-open every time). Nothing to fix here unless/until this project
+  upgrades to Pro — at which point `check-leaked-password` is already
+  written and ready to wire in as the Auth Hook.
 
 ## Decommissioned: old per-plan subscription model (2026-09-27)
 
@@ -202,6 +215,24 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Closed the last `site-guardian` escalation — turned
+  out not to be a bug.** Investigated the "leaked-password protection
+  isn't active" finding to actually fix it, and found the earlier finding
+  itself was wrong: `signup.html` already has a real, working client-side
+  HaveIBeenPwned check (missed by the earlier grep because it's an inline
+  reimplementation, not a call to the `check-leaked-password` edge
+  function by name). Verified live against the real HIBP range API with a
+  known-leaked password to confirm the logic actually works. Separately
+  confirmed via `get_organization` that this project is on Supabase's
+  **Free plan**, and per Supabase's own docs the built-in
+  `auth_leaked_password_protection` toggle requires Pro plan or above —
+  it's not an oversight, it's unavailable to enable at all on this tier,
+  which is also exactly why `check-leaked-password`'s own code comment
+  already says the client-side check is "the primary defense" for now.
+  No code changed; corrected the record in "Pending" above so this doesn't
+  get re-flagged as broken by a future sweep. If this project ever
+  upgrades to Pro, `check-leaked-password` is already written and ready to
+  wire in as a real Auth Hook.
 - **2026-09-28** — **Dropped 8 unrelated tables and their 4 functions**
   (the agent-simulation-schema finding from the `site-guardian` sweep, on
   explicit instruction): `agents`, `economy_ticks`, `agent_fitness_history`,
