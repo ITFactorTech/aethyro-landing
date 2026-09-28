@@ -1,4 +1,7 @@
-// chat v34 — low-credit path now also fires auto-topup-charge (fire-and-
+// chat v35 — chat_usage credit_ledger inserts now stamp team_id (from the
+// acting user's profiles.team_id at insert time) so usage by any team
+// member draws from the shared pool get_credit_balance() now understands.
+// v34 — low-credit path now also fires auto-topup-charge (fire-and-
 // forget, alongside the existing send-low-credit-email) when the user has
 // auto_topup_enabled — an off-session Stripe charge for their configured
 // pack instead of just a warning email. Independent cooldown from the
@@ -275,7 +278,7 @@ serve(async (req) => {
 
   // ── Load profile, memory, integrations in parallel ────────────────────────
   const [profileRes, integrationsRes, queryEmbedding] = await Promise.all([
-    supaAdmin.from("profiles").select("workspace_context, memory").eq("id", user.id).single(),
+    supaAdmin.from("profiles").select("workspace_context, memory, team_id").eq("id", user.id).single(),
     supaAdmin.from("user_integrations").select("provider, access_token, metadata").eq("user_id", user.id),
     embedText(message),
   ]);
@@ -518,6 +521,7 @@ serve(async (req) => {
       user_id: user.id,
       delta: -cost,
       reason: "chat_usage",
+      team_id: profileRes.data?.team_id ?? null,
       metadata: { model: modelKey, input_tokens: inputTokens, output_tokens: outputTokens },
     });
     const { data: newBal } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
