@@ -725,17 +725,25 @@
       </button>
     </div>
   </div>
-  <div class="nav-drawer" id="navDrawer" aria-hidden="true">
-    <a href="#how">How it works</a>
-    <a href="#pricing">Pricing</a>
-    <a href="#calculator">Calculator</a>
-    <a href="#faq">FAQ</a>
-    <a href="/app/chat.html">Chat now</a>
-    <a href="/blog/">Blog</a>
-    <a href="/app/login.html">Log in</a>
-    <a href="/app/chat.html" class="drawer-cta">Get Started Free →</a>
-  </div>
 </nav>
+<!-- .nav-drawer must NOT be nested inside <nav>: <nav> has backdrop-filter,
+     and any element with a non-none backdrop-filter becomes the containing
+     block for position:fixed descendants (same rule as transform/filter).
+     <nav> is only as tall as its own bar, so a fixed drawer nested inside it
+     gets confined to that small box instead of the viewport -- its background
+     paints only within nav's height while its overflowing content (this
+     drawer's padded links) renders with no backdrop behind it, letting the
+     whole page show through. Keep this as a sibling of <nav>, not a child. -->
+<div class="nav-drawer" id="navDrawer" aria-hidden="true">
+  <a href="#how">How it works</a>
+  <a href="#pricing">Pricing</a>
+  <a href="#calculator">Calculator</a>
+  <a href="#faq">FAQ</a>
+  <a href="/app/chat.html">Chat now</a>
+  <a href="/blog/">Blog</a>
+  <a href="/app/login.html">Log in</a>
+  <a href="/app/chat.html" class="drawer-cta">Get Started Free →</a>
+</div>
 
 <!-- ── CMD+K COMMAND PALETTE ── -->
 <div class="cmdpal-overlay" id="cmdPal" role="dialog" aria-modal="true" aria-label="Command palette" aria-hidden="true">
