@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Aethyro Community Routines — Fork a Scheduled AI Routine</title>
+  <meta name="description" content="Browse scheduled AI routines published by the Aethyro community — daily briefs, monitoring, reports — and fork one into your own account in a click."/>
+  <link rel="canonical" href="https://aethyro.com/routines.html"/>
+  <meta name="robots" content="index, follow"/>
+  <meta property="og:title" content="Aethyro Community Routines"/>
+  <meta property="og:description" content="Scheduled AI routines published by the Aethyro community. Fork one into your own account in a click."/>
+  <meta property="og:url" content="https://aethyro.com/routines.html"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:image" content="https://aethyro.com/og-image.png"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Aethyro Community Routines"/>
+  <meta name="twitter:description" content="Scheduled AI routines published by the Aethyro community. Fork one into your own account in a click."/>
+  <meta name="twitter:image" content="https://aethyro.com/og-image.png"/>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+  <link rel="apple-touch-icon" href="/favicon.svg"/>
+  <meta name="theme-color" content="#030303"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="preconnect" href="https://uzmdqbtflcpikjdrggqc.supabase.co"/>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#030303;--s1:#0a0a0a;--s2:#111214;--b1:#1c1c1e;--b2:#2a2a2d;--b3:#3a3a3e;--orange:#ff4d00;--orange2:#ff7a3d;--cyan:#00d4ff;--violet:#8b5cf6;--green:#22c55e;--gold:#f59e0b;--text:#f0f0f0;--t2:#aaaaaa;--t3:#7a7a7a;--font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace}
+    body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6}
+    nav{position:sticky;top:0;z-index:200;background:rgba(3,3,3,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--b1)}
+    .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:.7rem 1.5rem}
+    .nav-logo{font-size:1.15rem;font-weight:800;text-decoration:none;color:#fff;display:flex;align-items:center;gap:.35rem}
+    .nav-dot{width:8px;height:8px;border-radius:50%;background:var(--orange);box-shadow:0 0 8px var(--orange)}
+    .nav-link{font-size:.8rem;color:var(--t2);text-decoration:none;padding:.4rem .85rem;border-radius:6px;transition:color .15s}
+    .nav-link:hover{color:var(--text)}
+    .nav-cta{padding:.5rem 1.1rem;background:var(--orange);color:#fff;font-weight:700;border-radius:8px;text-decoration:none;font-size:.82rem}
+    .nav-cta:hover{background:var(--orange2)}
+    .wrap{max-width:1100px;margin:0 auto;padding:5rem 1.5rem 7rem}
+    .page-header{text-align:center;margin-bottom:1.5rem}
+    .eyebrow{font-family:var(--mono);font-size:.65rem;color:var(--orange);text-transform:uppercase;letter-spacing:.12em;margin-bottom:.75rem}
+    h1{font-size:clamp(2rem,5vw,3.2rem);font-weight:800;letter-spacing:-1.5px;margin-bottom:1rem}
+    .page-header p{color:var(--t2);font-size:1rem;max-width:560px;margin:0 auto 1.5rem}
+
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-top:2.5rem}
+    .rcard{background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:1.4rem;display:flex;flex-direction:column;gap:.75rem}
+    .rcard-name{font-weight:800;font-size:1rem;color:#fff}
+    .rcard-prompt{font-size:.83rem;color:var(--t2);line-height:1.6;flex:1;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+    .rcard-meta{display:flex;flex-wrap:wrap;gap:.5rem;font-family:var(--mono);font-size:.68rem;color:var(--t3)}
+    .rcard-meta span{background:rgba(255,255,255,.04);border:1px solid var(--b1);border-radius:6px;padding:.2rem .5rem}
+    .rcard-cta{display:block;text-align:center;padding:.65rem;border-radius:9px;font-size:.83rem;font-weight:700;text-decoration:none;background:rgba(255,255,255,.04);color:var(--text);border:1px solid var(--b2);transition:all .18s;cursor:pointer}
+    .rcard-cta:hover{border-color:var(--b3);background:rgba(255,255,255,.08)}
+    .rcard-cta.orange{background:var(--orange);color:#fff;border-color:transparent}
+    .rcard-cta.orange:hover{background:var(--orange2)}
+
+    .state-msg{text-align:center;padding:3rem 1.5rem;color:var(--t2);font-size:.9rem}
+    .state-msg .sp{display:inline-block;width:14px;height:14px;border:2px solid var(--b2);border-top-color:var(--orange);border-radius:50%;animation:spin .7s linear infinite;margin-right:.5rem;vertical-align:-2px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .empty-box{text-align:center;padding:2.5rem 1.5rem;background:var(--s1);border:1px solid var(--b1);border-radius:16px;margin-top:2.5rem}
+    .empty-box h3{font-size:1.1rem;font-weight:800;margin-bottom:.5rem}
+    .empty-box p{color:var(--t2);font-size:.85rem;max-width:440px;margin:0 auto 1.25rem}
+    .empty-box .btn{display:inline-block;padding:.7rem 1.5rem;background:var(--orange);color:#fff;font-weight:700;border-radius:9px;text-decoration:none;font-size:.85rem}
+    .empty-box .btn:hover{background:var(--orange2)}
+
+    .starters{margin-top:4rem}
+    .starters-head{text-align:center;margin-bottom:.5rem}
+    .starters-head h2{font-size:1.3rem;font-weight:800;margin-bottom:.4rem}
+    .starters-head p{color:var(--t3);font-size:.78rem;font-family:var(--mono);max-width:520px;margin:0 auto}
+
+    footer{border-top:1px solid var(--b1);padding:2rem 1.5rem;text-align:center;font-size:.72rem;color:var(--t3);font-family:var(--mono)}
+    footer a{color:var(--orange);text-decoration:none}
+    @media(max-width:600px){.wrap{padding:3rem 1rem 5rem}}
+  </style>
+</head>
+<body>
+<nav aria-label="Main navigation">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo" aria-label="Aethyro home"><span class="nav-dot"></span> Aethyro</a>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <a href="/app/login.html" class="nav-link">Log in</a>
+      <a href="/app/signup.html" class="nav-cta" onclick="gtag('event','signup_click',{surface:'routines_nav'})">Start free →</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="page-header">
+    <div class="eyebrow">Community</div>
+    <h1>Routines people<br/>built. Fork one.</h1>
+    <p>A routine is a scheduled task Claude runs on autopilot — a daily brief, a weekly digest, a recurring check. Publish one from your own account to share it here; fork someone else's into your account in one click.</p>
+  </div>
+
+  <div id="routinesArea">
+    <div class="state-msg"><span class="sp"></span>Loading community routines…</div>
+  </div>
+
+  <div class="starters" id="startersArea" style="display:none">
+    <div class="starters-head">
+      <h2>Starter ideas</h2>
+      <p>// Example routines to give you a sense of what's possible — not submitted by other users. Sign up to build and publish your own.</p>
+    </div>
+    <div class="grid" id="startersGrid"></div>
+  </div>
+</div>
+
+<footer>
+  © 2026 Aethyro &nbsp;·&nbsp; <a href="/">Home</a> &nbsp;·&nbsp; <a href="/app/chat.html">Chat</a> &nbsp;·&nbsp; <a href="/pricing.html">Pricing</a> &nbsp;·&nbsp; <a href="/terms.html">Terms</a> &nbsp;·&nbsp; <a href="/privacy.html">Privacy</a>
+</footer>
+
+<script src="/app/vendor/supabase.js"></script>
+<script src="/app/config.js"></script>
+<script>
+(function(){
+  var supabase = window.AETHYRO && window.AETHYRO.supabase;
+
+  var STARTERS = [
+    { name: 'Daily AI news brief', prompt: 'Search the web for the top 5 AI/ML news stories from the last 24 hours and summarize each in 2-3 sentences with a source link.', schedule: 'Daily at 8:00am UTC', model: 'sonnet' },
+    { name: 'Weekly GitHub PR digest', prompt: 'List all open pull requests across my connected GitHub repos, grouped by repo, with age and review status.', schedule: 'Mondays at 9:00am UTC', model: 'haiku' },
+    { name: 'Monday planning assistant', prompt: 'Based on what you know about my projects and preferences, draft a prioritized to-do list for this week.', schedule: 'Mondays at 7:00am UTC', model: 'sonnet' },
+    { name: 'Competitor pricing watch', prompt: 'Check the pricing pages of [your competitors] and flag anything that changed since last time.', schedule: 'Weekdays at 6:00am UTC', model: 'opus' },
+  ];
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function cronHuman(expr){
+    var p=(expr||'').trim().split(/\s+/);
+    if(p.length!==5) return expr;
+    var min=p[0],hr=p[1],dom=p[2],mon=p[3],dow=p[4];
+    var days={0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'};
+    var timeStr='';
+    if(min==='0'&&hr!=='*'&&!hr.startsWith('*/')){ var h=parseInt(hr); timeStr=(h%12||12)+':00'+(h<12?'am':'pm')+' UTC'; }
+    else if(hr.startsWith('*/')){ timeStr='every '+hr.slice(2)+'h'; }
+    else if(hr==='*'&&min==='0'){ timeStr='every hour'; }
+    else { timeStr=min+' '+hr+' UTC'; }
+    if(dow==='1-5') return 'Weekdays at '+timeStr;
+    if(dow==='*'&&dom==='*') return 'Daily at '+timeStr;
+    if(dow==='1') return 'Mondays at '+timeStr;
+    if(dow!=='*'&&dom==='*'){ var d=parseInt(dow); return (days[d]||dow)+'s at '+timeStr; }
+    return expr;
+  }
+
+  async function forkAndGo(routineId){
+    if(!supabase){ location.href='/app/signup.html?next=chat'; return; }
+    var s = await supabase.auth.getSession();
+    var session = s.data && s.data.session;
+    if(!session){
+      location.href='/app/signup.html?next=chat';
+      return;
+    }
+    try{
+      var r = await supabase.rpc('fork_routine', { p_routine_id: routineId });
+      if(r.error) throw r.error;
+      gtag('event','routine_fork',{routine_id:routineId,surface:'public_gallery'});
+      location.href='/app/chat.html';
+    }catch(e){
+      alert('Could not fork this routine: '+(e.message||'unknown error'));
+    }
+  }
+  window.AETHYRO_forkAndGo = forkAndGo;
+
+  function renderRoutines(rows){
+    var area = document.getElementById('routinesArea');
+    if(!rows.length){
+      area.innerHTML = '<div class="empty-box"><h3>No public routines yet</h3>'+
+        '<p>Nobody has published a routine to the community gallery yet — be the first. Build one in the app, then hit "Publish" in the Routines tab.</p>'+
+        '<a href="/app/signup.html?next=chat" class="btn" onclick="gtag(\'event\',\'signup_click\',{surface:\'routines_empty\'})">Create your first routine →</a></div>';
+      document.getElementById('startersArea').style.display='';
+      return;
+    }
+    var html = '<div class="grid">';
+    rows.forEach(function(rt){
+      html += '<div class="rcard">'+
+        '<div class="rcard-name">'+esc(rt.name)+'</div>'+
+        '<div class="rcard-prompt">'+esc(rt.prompt)+'</div>'+
+        '<div class="rcard-meta"><span>'+esc(cronHuman(rt.schedule))+'</span><span>'+esc(rt.model||'haiku')+'</span><span>'+(rt.fork_count||0)+' fork'+(rt.fork_count===1?'':'s')+'</span></div>'+
+        '<a href="#" class="rcard-cta orange" onclick="event.preventDefault();window.AETHYRO_forkAndGo(\''+rt.id+'\')">Fork this routine →</a>'+
+        '</div>';
+    });
+    html += '</div>';
+    area.innerHTML = html;
+  }
+
+  function renderStarters(){
+    var grid = document.getElementById('startersGrid');
+    var html='';
+    STARTERS.forEach(function(s){
+      html += '<div class="rcard">'+
+        '<div class="rcard-name">'+esc(s.name)+'</div>'+
+        '<div class="rcard-prompt">'+esc(s.prompt)+'</div>'+
+        '<div class="rcard-meta"><span>'+esc(s.schedule)+'</span><span>'+esc(s.model)+'</span></div>'+
+        '<a href="/app/signup.html?next=chat" class="rcard-cta" onclick="gtag(\'event\',\'signup_click\',{surface:\'routines_starter\'})">Try this idea →</a>'+
+        '</div>';
+    });
+    grid.innerHTML = html;
+  }
+
+  (async function init(){
+    renderStarters();
+    if(!supabase){
+      document.getElementById('routinesArea').innerHTML = '<div class="state-msg">Couldn\'t load community routines right now.</div>';
+      document.getElementById('startersArea').style.display='';
+      return;
+    }
+    try{
+      var r = await supabase.from('user_routines')
+        .select('id,name,prompt,schedule,model,fork_count')
+        .eq('is_public', true)
+        .order('fork_count', { ascending: false })
+        .limit(30);
+      if(r.error) throw r.error;
+      renderRoutines(r.data || []);
+    }catch(e){
+      document.getElementById('routinesArea').innerHTML = '<div class="state-msg">Couldn\'t load community routines right now.</div>';
+      document.getElementById('startersArea').style.display='';
+    }
+  })();
+})();
+</script>
+</body>
+</html>
