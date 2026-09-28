@@ -320,6 +320,48 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Added webhook-triggered routines** (Phase 1 of a
+  site-expansion pass, prioritized by real demand research: workflow
+  automation is the single most-requested AI SaaS capability across every
+  survey checked). A routine (`chat.html`'s Intelligence → Routines tab)
+  could previously only fire on its own cron schedule or a manual "Run
+  now" click from inside the app; it can now also be triggered from
+  outside Aethyro entirely — GitHub Actions, Zapier, IFTTT, a script, any
+  system that can make an HTTP request — by hitting a per-routine URL
+  containing a secret token, independent of its schedule. New
+  `routine_webhooks` table (`routine_id`, `token` — random, unique,
+  DB-generated default — `last_triggered_at`, `trigger_count`); RLS
+  ownership is derived from a join to `user_routines` (same pattern as
+  `agent_task_steps`' `steps_own` policy), so the owner can create/view/
+  delete their own routine's webhook row directly via `supabase-js`, no
+  edge function needed for that half. New public
+  `webhook-routine-trigger` function (`verify_jwt: false` — auth is the
+  token itself, not a Supabase session, since callers have no Aethyro
+  account) looks the token up, enforces a 30-second cooldown (same
+  mark-before-charging concurrency-guard pattern as `auto-topup-charge`,
+  so a leaked/spammed token can't rack up unbounded credit charges), then
+  invokes `run-routines` as the service role for just that one routine —
+  the same internal-caller path `pg_cron` itself already uses
+  (`Authorization: Bearer <service-role-key>`, body `{routine_id}}`),
+  which `run-routines` already recognized and skipped the per-user JWT
+  lookup for. New "🔗 Webhook" button per routine card opens a modal
+  (mirrors the existing referral-link modal's markup/JS pattern exactly)
+  showing the full trigger URL with a copy button and a "Revoke &
+  regenerate" action (delete + re-insert, since the token's `DEFAULT`
+  re-generates it — no `UPDATE` grant needed on the table at all).
+  Verified live end-to-end with two real throwaway accounts: a non-owner
+  correctly blocked by RLS from creating a webhook for someone else's
+  routine (`42501`); the owner's real webhook token, hit with **no
+  Authorization header at all** (simulating a real external caller),
+  correctly fired the routine (`last_run_at`/`last_result` updated) and
+  correctly billed a real `-1, reason: 'routine'` ledger row; an
+  immediate second hit correctly cooldown-blocked (`429`); an invalid
+  token correctly `404`s. Zero orphaned rows after cleanup, including
+  confirming `routine_webhooks`' cascade-delete through
+  `user_routines → auth.users`. Migration:
+  `20260928080000_routine_webhooks.sql`. Multi-step routine chaining
+  (the other half of this phase) is still pending, deliberately shipped
+  as a separate PR rather than bundled into this one.
 - **2026-09-28** — **Fixed: `run-routines` and `run-agent-task` had never
   successfully billed a single credit, ever, since either was written.**
   Found while starting work on an automation/routines expansion (user asked
