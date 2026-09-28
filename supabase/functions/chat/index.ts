@@ -1,8 +1,17 @@
-// chat v34 — low-credit path now also fires auto-topup-charge (fire-and-
-// forget, alongside the existing send-low-credit-email) when the user has
+// chat v35 — merges two independently-shipped v34 changes:
+// (1) the low-credit path now also fires auto-topup-charge (fire-and-forget,
+// alongside the existing send-low-credit-email) when the user has
 // auto_topup_enabled — an off-session Stripe charge for their configured
 // pack instead of just a warning email. Independent cooldown from the
 // email's 24h one; auto-topup-charge enforces its own.
+// (2) adds model:"auto" support. The client can now send model:"auto"
+// instead of a fixed haiku/sonnet/opus key; routeAutoModel() picks a real
+// MODEL_MAP key with a cheap rule-based heuristic (message length, a few
+// keyword signals, presence of attachments) run before the Anthropic call —
+// no second LLM call, no added latency. The resolved model is billed and
+// reported exactly like an explicit choice; USAGE_MARK's cost object also
+// carries requestedModel so the client can show "Auto → Opus" instead of
+// just "Opus" when routing picked it.
 // v33 — chat_usage credit_ledger inserts now carry metadata: {model,
 // input_tokens, output_tokens}, so a per-model cost-mix breakdown (added to
 // dashboard.html this session) has real data to chart going forward. Rows
@@ -56,6 +65,38 @@ const CREDIT_RATES: Record<string, { input: number; output: number }> = {
   sonnet: { input: 0.30,  output: 1.50  },
   opus:   { input: 1.50,  output: 7.50  },
 };
+
+// Cheap, rule-based router for model:"auto" — no LLM call, runs synchronously
+// before the real request. Errs toward Opus whenever a signal is ambiguous;
+// only routes down to Haiku for clearly trivial messages, and never routes
+// an attachment (document/image) below Sonnet.
+const AUTO_HEAVY_SIGNALS = [
+  "audit", "security", "vulnerab", "architecture", "refactor", "debug",
+  "prove", "optimi", "algorithm", "strategy", "analyz", "analysis",
+  "contract", "legal", "compliance", "research", "comprehensive",
+  "in-depth", "in depth", "detailed plan", "step by step", "step-by-step",
+  "compare", "pros and cons", "root cause", "design a", "write a full",
+];
+const AUTO_LIGHT_RE = /^(hi|hey|hello|yo|sup|thanks|thank you|thx|ok|okay|cool|nice|great|sure|yes|no|got it|sounds good|np|k)\b[.!?]*$/i;
+
+function routeAutoModel(message: string, attachments: Attachment[]): "haiku" | "sonnet" | "opus" {
+  const trimmed = message.trim();
+  const lower = trimmed.toLowerCase();
+  const len = trimmed.length;
+
+  if (attachments.length > 0) {
+    // Documents/images need real reading comprehension; never trivialize these.
+    return len > 400 || AUTO_HEAVY_SIGNALS.some(s => lower.includes(s)) ? "opus" : "sonnet";
+  }
+
+  const isHeavy = len > 500 || AUTO_HEAVY_SIGNALS.some(s => lower.includes(s));
+  if (isHeavy) return "opus";
+
+  const isLight = len > 0 && len <= 40 && (AUTO_LIGHT_RE.test(trimmed) || !/[?]/.test(trimmed) && len <= 15);
+  if (isLight) return "haiku";
+
+  return "sonnet";
+}
 
 const TOOL_MARK  = "\x01";
 const USAGE_MARK = "\x00";
@@ -257,7 +298,8 @@ serve(async (req) => {
   const historyRaw        = Array.isArray(body.history) ? body.history : [];
   const attachments       = Array.isArray(body.attachments) ? body.attachments.slice(0, MAX_ATTACHMENTS) : [];
   const conversationId    = body.conversation_id || null;
-  const modelKey          = ["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "haiku";
+  const requestedModel    = body.model === "auto" ? "auto" : (["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "haiku");
+  const modelKey          = requestedModel === "auto" ? routeAutoModel(message, attachments) : requestedModel;
   const MODEL             = MODEL_MAP[modelKey];
   const rates             = CREDIT_RATES[modelKey];
 
@@ -541,6 +583,7 @@ serve(async (req) => {
       cost: {
         credits: cost,
         model: modelKey,
+        requestedModel,
         inputTokens,
         outputTokens,
         inputRate: rates.input,

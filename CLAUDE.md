@@ -115,6 +115,22 @@ it to the `?buy=` pattern instead.
   with no matching file in `supabase/functions/` means it was deployed
   outside this repo). Worth a `list_edge_functions` vs. `ls
   supabase/functions/` diff periodically, not just when a bug forces it.
+- **An RLS `USING` policy allowing a role is not enough by itself — the role
+  also needs the underlying table-level `GRANT`, and PostgREST checks the
+  grant first.** Found live 2026-09-28 building `routines.html`: `anon` had
+  every grant on `user_routines` (`INSERT`/`UPDATE`/`DELETE`/etc.) except
+  `SELECT`, so the existing `routines_public_read` policy
+  (`is_public = true`) 401'd for every logged-out request despite being
+  correctly written — nothing before this had ever exercised that path
+  signed-out (chat.html's in-app gallery always runs with a session). Check
+  `information_schema.role_table_grants` for the actual role, not just
+  `pg_policy`, when a public/anon-facing query 401s despite a policy that
+  looks right. Separately: **a column-scoped `GRANT SELECT (col1, col2, ...)`
+  must list every column the query touches anywhere — `WHERE` clauses and
+  RLS `USING` expressions included, not just the output column list.**
+  Granting only the columns actually `select()`ed from the client (leaving
+  out a column referenced only in a filter, like `is_public` here) fails
+  with `42501 permission denied`, not a clean 0-row result.
 
 ## Pending / not yet applied
 
@@ -343,6 +359,52 @@ that). Newest first.
   completing and granting credits. Recommend a human do one real manual
   test purchase with their own card before fully trusting the success
   path.
+- **2026-09-28** — **Added a public community routines gallery** (PR #98,
+  item 3 of 5 from the "make the site significantly better, do all"
+  request — items 1-2 are PRs #96-97 above). New top-level,
+  SEO-indexable `routines.html` (real `<title>`/description, `robots:
+  index,follow`) lists public routines (`user_routines` where
+  `is_public = true`) for logged-out visitors with a one-click "Fork this
+  routine" CTA — the public-facing counterpart to the in-app,
+  logged-in-only gallery already in `chat.html`'s Intelligence panel.
+  Zero public routines exist yet, so the page shows an honest empty state
+  plus 4 clearly-labeled "Starter ideas" (explicitly captioned as not
+  from real users) rather than fabricating community activity — same
+  lesson as the testimonials fix. **Found and fixed a real bug while
+  verifying live**: `anon` had every table-level grant on
+  `user_routines` except `SELECT`, so `routines_public_read`'s RLS
+  policy was unreachable for logged-out requests (always 401'd) — see
+  the new schema-gotchas bullet below. Migration
+  `20260928040000_grant_anon_select_public_routines.sql`. Verified live
+  end-to-end with throwaway accounts: seeded a real public routine,
+  confirmed the page renders it (not the starters), forked it as a
+  second account, confirmed the new private/disabled copy and the
+  `fork_count` increment, confirmed zero orphaned rows after cleanup.
+  Also confirmed live that a private row and a restricted column
+  (`user_id`) both stay correctly inaccessible to `anon` after the grant.
+  Added a footer link from `index.html` and a `sitemap.xml` entry. Items
+  4 (auto-topup) still pending; item 5 (team/shared-pool accounts) still
+  held for a scope check.
+- **2026-09-28** — **Added auto model routing to chat** (PR #97, item 2 of 5
+  from the "make the site significantly better, do all" request — item 1,
+  the fabricated testimonials, is PR #96 above). Added an "Auto" option to
+  `chat.html`'s model selector, now the default for anyone with no stored
+  `aethyro_model` preference. The `chat` edge function (now v34) gained
+  `routeAutoModel(message, attachments)`: a synchronous, rule-based
+  heuristic (message length, a keyword list, attachment presence — never
+  a second LLM call) that resolves `model:"auto"` to a real haiku/sonnet/
+  opus key before the Anthropic request. Billing and the credit_ledger
+  `metadata.model` use the *resolved* model, same as an explicit choice;
+  `USAGE_MARK`'s `cost` object gained `requestedModel` so the per-message
+  cost badge can show `auto→opus` instead of a bare `opus` when routing
+  picked it. Verified live with a throwaway account: `"thanks!"` → haiku,
+  a plain question → sonnet, a security-audit/architecture-analysis
+  prompt → opus, all billed correctly; explicit `model:"sonnet"` still
+  resolves to sonnet with no regression. Cleaned up the throwaway account
+  and re-stubbed `test-admin-setup` to 410 (confirmed with a live curl).
+  Items 3-4 (public routines gallery, auto-topup) still pending; item 5
+  (team/shared-pool accounts) is still being held for an explicit user
+  scope check before touching RLS.
 - **2026-09-28** — **Removed the fabricated homepage testimonials** (PR #96,
   1 of 5 "make the site significantly better" recommendations the user asked
   for — "do all"). The three "Community feedback" quotes attributed to
