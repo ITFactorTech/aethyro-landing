@@ -107,6 +107,22 @@ it to the `?buy=` pattern instead.
   with no matching file in `supabase/functions/` means it was deployed
   outside this repo). Worth a `list_edge_functions` vs. `ls
   supabase/functions/` diff periodically, not just when a bug forces it.
+- **An RLS `USING` policy allowing a role is not enough by itself — the role
+  also needs the underlying table-level `GRANT`, and PostgREST checks the
+  grant first.** Found live 2026-09-28 building `routines.html`: `anon` had
+  every grant on `user_routines` (`INSERT`/`UPDATE`/`DELETE`/etc.) except
+  `SELECT`, so the existing `routines_public_read` policy
+  (`is_public = true`) 401'd for every logged-out request despite being
+  correctly written — nothing before this had ever exercised that path
+  signed-out (chat.html's in-app gallery always runs with a session). Check
+  `information_schema.role_table_grants` for the actual role, not just
+  `pg_policy`, when a public/anon-facing query 401s despite a policy that
+  looks right. Separately: **a column-scoped `GRANT SELECT (col1, col2, ...)`
+  must list every column the query touches anywhere — `WHERE` clauses and
+  RLS `USING` expressions included, not just the output column list.**
+  Granting only the columns actually `select()`ed from the client (leaving
+  out a column referenced only in a filter, like `is_public` here) fails
+  with `42501 permission denied`, not a clean 0-row result.
 
 ## Pending / not yet applied
 
@@ -275,6 +291,32 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Added a public community routines gallery** (PR #98,
+  item 3 of 5 from the "make the site significantly better, do all"
+  request — items 1-2 are PRs #96-97 above). New top-level,
+  SEO-indexable `routines.html` (real `<title>`/description, `robots:
+  index,follow`) lists public routines (`user_routines` where
+  `is_public = true`) for logged-out visitors with a one-click "Fork this
+  routine" CTA — the public-facing counterpart to the in-app,
+  logged-in-only gallery already in `chat.html`'s Intelligence panel.
+  Zero public routines exist yet, so the page shows an honest empty state
+  plus 4 clearly-labeled "Starter ideas" (explicitly captioned as not
+  from real users) rather than fabricating community activity — same
+  lesson as the testimonials fix. **Found and fixed a real bug while
+  verifying live**: `anon` had every table-level grant on
+  `user_routines` except `SELECT`, so `routines_public_read`'s RLS
+  policy was unreachable for logged-out requests (always 401'd) — see
+  the new schema-gotchas bullet below. Migration
+  `20260928040000_grant_anon_select_public_routines.sql`. Verified live
+  end-to-end with throwaway accounts: seeded a real public routine,
+  confirmed the page renders it (not the starters), forked it as a
+  second account, confirmed the new private/disabled copy and the
+  `fork_count` increment, confirmed zero orphaned rows after cleanup.
+  Also confirmed live that a private row and a restricted column
+  (`user_id`) both stay correctly inaccessible to `anon` after the grant.
+  Added a footer link from `index.html` and a `sitemap.xml` entry. Items
+  4 (auto-topup) still pending; item 5 (team/shared-pool accounts) still
+  held for a scope check.
 - **2026-09-28** — **Removed the pre-Cloud "AI Operating Platform" pages**
   (the two `site-guardian` findings from the sweep below), on explicit
   instruction after confirming via `git log --diff-filter=A` that all 5
