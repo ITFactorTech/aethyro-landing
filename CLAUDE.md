@@ -215,6 +215,37 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Added real usage charts** (user asked for "graphs and
+  charts... for the intelligent aspect of the AI"). Hand-rolled inline-SVG
+  charts, same technique `dashboard.html` already used for its 30-day
+  credit-usage sparkline — no new chart library, consistent with this
+  repo's vanilla/no-framework approach and the performance work above.
+  (1) **`dashboard.html`: Model mix — last 30 days** panel, right below
+  the existing sparkline — horizontal bars showing the Haiku/Sonnet/Opus
+  split of credits spent. Required a real gap-fix first:
+  `chat`'s `finalize()` was inserting `chat_usage` rows into
+  `credit_ledger` with **no `metadata` at all** — the per-message
+  `model`/token breakdown was streamed to the client (`USAGE_MARK`) but
+  never persisted, so there was no historical data to chart from. Fixed
+  in `supabase/functions/chat/index.ts` (now stores
+  `metadata:{model,input_tokens,output_tokens}` on every usage row,
+  deployed live). Rows from before this deploy have `metadata: null` and
+  are excluded from the chart rather than counted as "unknown" — the
+  panel says so explicitly when there's no post-deploy data yet.
+  (2) **`chat.html`: Memory growth — last 30 days** sparkline at the top
+  of the Intelligence panel's Memory tab, showing new `memory_embeddings`
+  rows per day. Verified live end-to-end with real data, not synthetic
+  rows: created a real throwaway account (temporary `test-admin-setup`
+  helper, same pattern as the PR #77 verification — deleted after, function
+  re-stubbed to 410), signed in via Playwright, sent two real messages
+  through the actual chat UI (Opus, real token counts), then confirmed the
+  Memory sparkline rendered "4 memories" with correct labels and the
+  dashboard Model Mix panel rendered a single 100% Opus / 4cr bar matching
+  exactly what was spent. Zero console errors on either page. Cleaned up:
+  deleted the throwaway account, confirmed zero orphaned rows across
+  `credit_ledger`/`memory_embeddings`/`conversations`/`profiles`/
+  `referral_codes`/`auth.users`, re-stubbed `test-admin-setup` to 410.
+  `chat` edge function now at v33.
 - **2026-09-28** — **Homepage performance/accessibility pass** (PR #91),
   from a real PageSpeed Insights/Lighthouse mobile audit (Performance 83,
   Accessibility 86-87, Best Practices/SEO 100). Fixed the specific flagged
