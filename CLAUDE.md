@@ -334,6 +334,53 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Added multi-step routine chaining** (the other half of
+  Phase 1's automation-depth expansion, alongside webhook-triggered
+  routines above). A routine can now name a `next_routine_id` — another
+  routine of the same user's, run immediately after this one completes,
+  with this routine's output prepended as context ("Context from the
+  previous step in this routine chain: ... Your task: ..."), turning a
+  single scheduled prompt into a pipeline (e.g. "scrape + summarize" then
+  "draft an email from that summary") without gluing them together by
+  hand. New nullable self-referential `user_routines.next_routine_id`
+  column (migration `20260928090000_routine_chaining.sql`) plus a
+  `BEFORE INSERT OR UPDATE OF next_routine_id` trigger
+  (`enforce_routine_chain()`) that rejects self-chaining, rejects
+  chaining to a routine owned by someone else, and walks the proposed
+  chain forward to reject any cycle — runs under the caller's own
+  RLS-scoped rights (no `SECURITY DEFINER` needed, since the target
+  lookup is either the caller's own row or, for a public routine, still
+  correctly fails the explicit `user_id` match). `run-routines/index.ts`
+  gained `chain_context`/`chain_depth` request-body fields and, after a
+  successful run, an **awaited** (not fire-and-forget — same
+  `EdgeRuntime.waitUntil()` isolate-freeze risk noted elsewhere in this
+  file) internal re-invoke of itself for `next_routine_id` with the
+  result as `chain_context`, using the same
+  `Authorization: Bearer <service-role-key>` internal-caller pattern
+  `webhook-routine-trigger` already established. `MAX_CHAIN_DEPTH = 5` is
+  a runtime backstop independent of the DB trigger's own cycle rejection
+  (guards a long legitimate chain from looping credits away, not just a
+  true cycle). `chat.html`'s routine form gained a "Then run (optional)"
+  select, and each routine card gained a chain indicator plus a "➜
+  Chain" button to set/change/clear the target inline. Verified live
+  end-to-end with a real throwaway account and two real chained
+  routines: the DB trigger correctly rejected a self-chain attempt and a
+  true A→B→A cycle attempt (both rolled back cleanly, confirmed via
+  direct state check after each), and — separately, since the DB
+  connection itself hit a few transient gateway 502s mid-session,
+  confirmed each time via a direct state re-check that nothing had
+  actually mutated — a real chain-to-another-user's-routine attempt
+  against the live admin account's own real routine left both rows
+  untouched. The real end-to-end run (`run-routines` called once, for
+  routine A only) correctly ran both steps automatically: A produced a
+  specific real fact, B's real output explicitly built on that exact
+  fact (proving `chain_context` actually reaches the model, not just
+  that the second call fires), and `credit_ledger` shows two separate
+  real `-1, reason: 'routine'` charges per full chain run. Cleaned up:
+  deleted both test routines and the throwaway account, confirmed zero
+  orphaned rows (`user_routines`/`credit_ledger`/`profiles`/`auth.users`
+  all zero for the test id), `test-admin-setup` re-stubbed to 410 and
+  confirmed via a live curl. `run-routines` now at v7.
 - **2026-09-28** — **Added webhook-triggered routines** (Phase 1 of a
   site-expansion pass, prioritized by real demand research: workflow
   automation is the single most-requested AI SaaS capability across every

@@ -682,6 +682,13 @@ I often need help with: client quotes, contract review, business Instagram posts
             <option value="opus">Opus</option>
           </select>
         </div>
+        <div class="intel-form-group">
+          <label class="intel-label" for="routineChainSelect">Then run (optional)</label>
+          <select class="intel-select" id="routineChainSelect">
+            <option value="">— none —</option>
+          </select>
+          <span style="font-size:.69rem;color:var(--t3);display:block;margin-top:.3rem">Chains this routine's result into another one of your routines as context, run immediately after this one completes</span>
+        </div>
         <div class="intel-btn-row">
           <button class="intel-btn" type="submit" id="routineSaveBtn">Save Routine</button>
         </div>
@@ -1970,11 +1977,12 @@ I often need help with: client quotes, contract review, business Instagram posts
       e.preventDefault();
       var name=$('routineName').value.trim(), prompt=$('routinePrompt').value.trim(), schedule=$('routineSchedule').value.trim();
       if(!name||!prompt||!schedule) return;
+      var chainTo=$('routineChainSelect').value||null;
       var btn=$('routineSaveBtn'); btn.disabled=true; btn.textContent='Saving…';
       try{
-        var r=await supabase.from('user_routines').insert({user_id:session.user.id,name:name,prompt:prompt,schedule:schedule,model:$('routineModel').value});
+        var r=await supabase.from('user_routines').insert({user_id:session.user.id,name:name,prompt:prompt,schedule:schedule,model:$('routineModel').value,next_routine_id:chainTo});
         if(r.error){ showToast(r.error.message,'err'); return; }
-        $('routineName').value=''; $('routinePrompt').value=''; $('routineSchedule').value='0 9 * * 1-5';
+        $('routineName').value=''; $('routinePrompt').value=''; $('routineSchedule').value='0 9 * * 1-5'; $('routineChainSelect').value='';
         showToast('Routine "'+name+'" created','ok'); loadRoutines();
       }catch(e){ showToast('Could not save routine','err'); }
       finally{ btn.disabled=false; btn.textContent='Save Routine'; }
@@ -2177,12 +2185,27 @@ I often need help with: client quotes, contract review, business Instagram posts
     });
   }
 
+  function populateChainSelect(routines){
+    var sel=$('routineChainSelect');
+    if(!sel) return;
+    var prev=sel.value;
+    sel.innerHTML='<option value="">— none —</option>';
+    routines.forEach(function(rt){
+      var opt=document.createElement('option'); opt.value=rt.id; opt.textContent=rt.name;
+      sel.appendChild(opt);
+    });
+    sel.value=prev;
+  }
+
   async function loadRoutines(){
     var list=$('routineList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
     var r=await supabase.from('user_routines').select('*').order('created_at',{ascending:false}).limit(20);
+    populateChainSelect(r.data||[]);
     if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="font-size:1.8rem;margin-bottom:.5rem">⏰</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No routines yet</div><div>Schedule a recurring AI task above — daily briefings, weekly reports, hourly data checks, and more.</div></div>'; return; }
     list.innerHTML='';
+    var routineNameById={};
+    r.data.forEach(function(rt){ routineNameById[rt.id]=rt.name; });
     r.data.forEach(function(rt){
       var card=document.createElement('div'); card.className='intel-card';
       var lastRun=rt.last_run_at?timeAgo(new Date(rt.last_run_at)):'Never run';
@@ -2202,6 +2225,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         '<div class="intel-card-meta"><span class="routine-sched-human">'+intelEsc(cronHuman(rt.schedule))+'</span> · Last: '+lastRun+
           (rt.is_public?' · <span style="color:var(--cyan)">🌐 public'+(rt.fork_count?' · '+rt.fork_count+' fork'+(rt.fork_count===1?'':'s'):'')+'</span>':'')+
           (rt.forked_from?' · <span style="color:var(--t3)">forked</span>':'')+
+          (rt.next_routine_id?' · <span style="color:#c4b5fd">➜ then: '+intelEsc(routineNameById[rt.next_routine_id]||'(deleted)')+'</span>':'')+
         '</div>'+
         (rt.last_result?'<div class="intel-card-result" style="margin-top:.4rem">'+renderMarkdown(rt.last_result.slice(0,300))+'</div>':'');
       var actions=document.createElement('div'); actions.className='intel-card-actions';
@@ -2246,6 +2270,24 @@ I often need help with: client quotes, contract review, business Instagram posts
       var hookBtn=document.createElement('button'); hookBtn.className='intel-btn intel-btn-sm'; hookBtn.textContent='🔗 Webhook';
       hookBtn.title='Get a URL that lets an external system (GitHub Actions, Zapier, a script) trigger this routine on demand';
       hookBtn.addEventListener('click',function(){ openWebhookModal(rt.id); });
+      var chainBtn=document.createElement('button'); chainBtn.className='intel-btn intel-btn-sm'; chainBtn.textContent='➜ Chain';
+      chainBtn.title='Choose a routine to run automatically after this one completes, using its result as context';
+      var chainSel=document.createElement('select'); chainSel.className='intel-select'; chainSel.style.display='none'; chainSel.style.marginTop='.4rem';
+      var noneOpt=document.createElement('option'); noneOpt.value=''; noneOpt.textContent='— none —'; chainSel.appendChild(noneOpt);
+      r.data.forEach(function(other){
+        if(other.id===rt.id) return; // no self-chaining
+        var opt=document.createElement('option'); opt.value=other.id; opt.textContent=other.name;
+        if(rt.next_routine_id===other.id) opt.selected=true;
+        chainSel.appendChild(opt);
+      });
+      chainBtn.addEventListener('click',function(){ chainSel.style.display=chainSel.style.display==='none'?'block':'none'; });
+      chainSel.addEventListener('change',async function(){
+        var newTarget=chainSel.value||null;
+        var ur=await supabase.from('user_routines').update({next_routine_id:newTarget}).eq('id',rt.id);
+        if(ur.error){ showToast(ur.error.message||'Could not update chain','err'); return; }
+        showToast(newTarget?'Chained to "'+intelEsc(routineNameById[newTarget])+'"':'Chain removed','ok');
+        loadRoutines();
+      });
       var delBtn=document.createElement('button'); delBtn.className='intel-btn intel-btn-sm intel-btn-danger'; delBtn.textContent='Delete';
       delBtn.addEventListener('click',async function(){
         if(!confirm('Delete routine "'+rt.name+'"?')) return;
@@ -2254,7 +2296,8 @@ I often need help with: client quotes, contract review, business Instagram posts
         card.style.opacity='0'; card.style.transition='opacity .25s'; setTimeout(function(){ card.remove(); },260);
         loadIntelStats();
       });
-      actions.appendChild(togWrap); actions.appendChild(runBtn); actions.appendChild(hookBtn); actions.appendChild(delBtn);
+      actions.appendChild(togWrap); actions.appendChild(runBtn); actions.appendChild(hookBtn); actions.appendChild(chainBtn); actions.appendChild(delBtn);
+      card.appendChild(chainSel);
       card.appendChild(actions); list.appendChild(card);
     });
     loadCommunityRoutines();
