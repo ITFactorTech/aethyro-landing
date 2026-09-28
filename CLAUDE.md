@@ -117,17 +117,8 @@ it to the `?buy=` pattern instead.
 
 ~~- `send-onboarding-email`'s templates described a completely different
   product~~ — **fixed 2026-09-27**, see the recent-work-log entry below.
-- **8 tables in this Supabase project don't belong to Aethyro and aren't
-  documented anywhere**: `agents`, `economy_ticks`, `agent_fitness_history`,
-  `auctions`, `trades`, `agent_events`, `species`, `economy_config` — RLS
-  enabled on all of them, but every one has **zero rows** and none are
-  referenced by any file in this repo (checked via `list_tables` +
-  grep). Naming (agents/species/fitness/auctions/trades/economy) suggests
-  a genetic-algorithm/agent-simulation project that happened to share this
-  Supabase project, unrelated to the AI SaaS product here — similar in
-  shape to the GH05T3/old-subscription discovery from earlier in this
-  project's history. Not touched — need a human call on whether these are
-  safe to drop or belong to something still in use elsewhere.
+~~- 8 unrelated agent-simulation tables didn't belong to Aethyro~~ — **dropped
+  2026-09-28**, see the recent-work-log entry below.
 - **`auth_leaked_password_protection` is disabled at the Supabase Auth
   level**, and the custom `check-leaked-password` edge function that exists
   in this repo (`supabase/functions/check-leaked-password/`) **isn't called
@@ -211,6 +202,22 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Dropped 8 unrelated tables and their 4 functions**
+  (the agent-simulation-schema finding from the `site-guardian` sweep, on
+  explicit instruction): `agents`, `economy_ticks`, `agent_fitness_history`,
+  `auctions`, `trades`, `agent_events`, `species`, `economy_config`, plus
+  `get_leaderboard()`, `find_similar_agents()`, `get_agent_trend()`,
+  `get_economy_summary()` (the only functions that referenced them).
+  Re-verified live immediately before dropping, not just trusting the
+  sweep's earlier finding: all 8 tables still had zero rows
+  (`pg_stat_user_tables.n_live_tup`), zero FK relationships to/from any
+  Aethyro table (`pg_constraint`), and the 4 functions were confirmed
+  unreferenced anywhere in this repo despite being `EXECUTE`-granted to
+  `authenticated`. Verified after dropping: `list_tables` shows only
+  Aethyro's own tables, `get_advisors` no longer lists any of the 8
+  tables' GraphQL-exposure warnings or the 4 functions'
+  `SECURITY DEFINER`-exposure warnings, and no other advisory finding
+  changed. Migration: `20260928002700_drop_unrelated_agent_sim_schema.sql`.
 - **2026-09-28** — **Rewrote `send-onboarding-email`'s content** (the
   stale-product finding from the `site-guardian` sweep below). The old
   templates sold the decommissioned $29–499/mo subscription plans, a
