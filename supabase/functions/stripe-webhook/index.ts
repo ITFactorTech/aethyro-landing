@@ -32,11 +32,16 @@ async function grantPackCredits(s: Stripe.Checkout.Session) {
     return;
   }
 
+  // Stamp the buyer's current team, if any, so a purchase by any team
+  // member feeds the shared pool get_credit_balance() understands.
+  const { data: buyer } = await supabase.from("profiles").select("team_id").eq("id", userId).single();
+
   const { error } = await supabase.from("credit_ledger").insert({
     user_id: userId,
     delta: credits,
     reason: "purchase",
     stripe_session_id: s.id,
+    team_id: buyer?.team_id ?? null,
     metadata: { credit_pack: s.metadata?.credit_pack, amount_total: s.amount_total },
   });
   // 23505 = unique_violation (duplicate delivery) — idempotent, not an error

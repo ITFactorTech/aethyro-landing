@@ -44,7 +44,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "user_id required" }), { status: 400 });
 
   const { data: profile, error: profErr } = await supabase.from("profiles")
-    .select("stripe_customer_id, stripe_payment_method_id, auto_topup_enabled, auto_topup_pack, auto_topup_last_attempt_at")
+    .select("stripe_customer_id, stripe_payment_method_id, auto_topup_enabled, auto_topup_pack, auto_topup_last_attempt_at, team_id")
     .eq("id", userId).single();
   if (profErr || !profile)
     return new Response(JSON.stringify({ skipped: "profile lookup failed" }));
@@ -94,6 +94,7 @@ serve(async (req) => {
       delta: pack.credits,
       reason: "purchase",
       stripe_session_id: pi.id,
+      team_id: profile.team_id ?? null,
       metadata: { credit_pack: profile.auto_topup_pack, amount_total: pack.amountCents, auto_topup: true },
     });
     if (ledgerErr && ledgerErr.code !== "23505") {

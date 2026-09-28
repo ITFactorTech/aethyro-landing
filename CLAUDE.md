@@ -115,6 +115,27 @@ it to the `?buy=` pattern instead.
   with no matching file in `supabase/functions/` means it was deployed
   outside this repo). Worth a `list_edge_functions` vs. `ls
   supabase/functions/` diff periodically, not just when a bug forces it.
+- **A `SECURITY INVOKER` (the default) aggregate function over a
+  restrictively-RLS'd table silently under-counts for anyone but the row
+  owner — it won't error, it'll just return a wrong number.** Found live
+  2026-09-28 fixing `get_credit_balance` for team pools:
+  `credit_ledger`'s only SELECT policy is `user_id = auth.uid()` (own
+  rows only), so a non-owner team member's call — even with the
+  function's own `WHERE team_id = X` correctly written — had that RLS
+  policy ANDed in underneath, silently narrowing the sum to only rows
+  *that caller* created. Two real accounts on the same team showed
+  different pooled balances until this was caught. Fix is
+  `SECURITY DEFINER`, but only when the function is provably safe to run
+  with elevated rights (here: it only ever returns one aggregate integer,
+  never raw rows) — and when you do this, re-check every overload's
+  grants individually with
+  `has_function_privilege(role, oid, 'EXECUTE')`, not just by re-reading
+  your own `REVOKE`/`GRANT` statements: `REVOKE ALL ... FROM PUBLIC` does
+  **not** remove a role's separate, earlier *explicit* grant — `anon` had
+  one on this function from before the team-pool work (harmless on its
+  own, since anon's `auth.uid()` is null) that combined with the new
+  `SECURITY DEFINER` to let anyone pass an arbitrary user id and read
+  their exact balance, until revoked from `anon` by name specifically.
 - **An RLS `USING` policy allowing a role is not enough by itself — the role
   also needs the underlying table-level `GRANT`, and PostgREST checks the
   grant first.** Found live 2026-09-28 building `routines.html`: `anon` had
@@ -299,6 +320,58 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Added team accounts: shared credit pool** (PR #100,
+  item 5 of 5 from the "make the site significantly better, do all"
+  request — items 1-4 are PRs #96-99 above; user picked "shared credit
+  pool only" when asked to scope it, out of 4 options ranging from that
+  to full admin-managed seats). Built on top of `feat/auto-topup` (PR #99)
+  rather than `main`, since it touches the same `profiles`/`credit_ledger`
+  surface auto-topup does and needed to compose with it correctly — will
+  need rebasing onto `main` once #99 merges. Conversations, documents, and
+  memory all stay private per-user; only the credit balance is shared.
+  New `teams` table + `profiles.team_id` (at most one team per user,
+  never client-writable — only the new `team-manage` function, service
+  role, can change it) + `credit_ledger.team_id` (stamped on new
+  chat_usage/purchase rows going forward by `chat`/`stripe-webhook`/
+  `auto-topup-charge`; existing rows never backfilled, so pre-team credit
+  history reappears if a user leaves). `get_credit_balance` (both
+  overloads) is now team-pool-aware. `team-manage`: create/invite/remove/
+  leave/list — no disband/delete-team action, since "where does the
+  leftover pool balance go" is a real product decision this pass
+  deliberately doesn't make. New "Team" panel in `dashboard.html`.
+  **Two real bugs found and fixed live** while verifying with two real
+  throwaway accounts on the same team: (1) `get_credit_balance` needed
+  `SECURITY DEFINER`, not the `SECURITY INVOKER` it started as —
+  `credit_ledger`'s only SELECT policy is strictly own-rows-only
+  (`user_id = auth.uid()`), so a non-owner team member's aggregate query
+  had that RLS policy silently ANDed underneath its own `WHERE team_id =
+  X`, limiting the sum to only ledger rows *they themselves* created;
+  caught because two real accounts on the same team showed different
+  balances (100 vs 0) before the fix. Safe specifically because the
+  function only ever returns one aggregate integer, never raw rows.
+  (2) That same fix initially over-granted — a naive `SECURITY DEFINER`
+  on the `(uuid)`-argument overload with `authenticated`/`anon` still
+  able to call it would have let any signed-in (or even fully
+  unauthenticated) caller pass an arbitrary other user's id and read
+  their exact balance; confirmed this was really exploitable with a real
+  second account and a bare curl before locking that overload down to
+  `service_role` only. Worth remembering generally: **`REVOKE ALL ...
+  FROM PUBLIC` does not remove a role's own separate, earlier *explicit*
+  grant** — `anon` kept its execute grant on the `(uuid)` overload through
+  the first fix attempt (inherited from the function's pre-team
+  definition) until revoked from `anon` by name specifically; checking
+  `has_function_privilege(role, oid, 'EXECUTE')` per-role is what caught
+  it, not just re-reading the `REVOKE`/`GRANT` statements. Verified live
+  end-to-end: pooled balance correctly shared and correctly drained by
+  either member's real chat message; non-owner invite/remove correctly
+  403; invite of a nonexistent email 404s; remove/leave correctly revert
+  a member's frozen personal balance; an unrelated authenticated user
+  sees an empty team list (not an error); a client cannot write
+  `profiles.team_id` under any circumstance (confirmed both the "not
+  granted" case and, for the `teams` table's own RLS, the "authenticated
+  but unrelated" case returns `[]` cleanly). Zero orphaned rows after
+  cleanup (`teams` cascade-deletes via `owner_id -> auth.users ON DELETE
+  CASCADE`).
 - **2026-09-28** — **Added opt-in auto-topup** (PR #99, item 4 of 5 from the
   "make the site significantly better, do all" request — items 1-3 are PRs
   #96-98 above; user picked "threshold-based, same pack size" when asked).

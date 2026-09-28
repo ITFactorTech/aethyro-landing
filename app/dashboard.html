@@ -223,6 +223,7 @@
           </div>
         </div>
         <p class="muted" style="font-size:.78rem;margin-top:.35rem">Each Aethyro Cloud message costs approximately 1–5 credits depending on length.</p>
+        <p class="muted" style="font-size:.76rem;margin-top:.3rem;display:none" id="teamPoolNote"></p>
         <div class="pack-row" id="packRow">
           <!-- populated by JS -->
         </div>
@@ -325,6 +326,16 @@
         </div>
       </div>
       <p class="muted" style="font-size:.75rem;margin-top:.75rem">Credits are added automatically after each new friend sends their first message.</p>
+    </div>
+
+    <!-- TEAM -->
+    <div class="panel" style="margin-top:1rem" id="teamPanel">
+      <h2>Team</h2>
+      <p class="muted" style="font-size:.85rem;margin-top:.3rem">Share one credit pool across multiple logins. Conversations, documents, and memory stay private to each person — only the credit balance is shared.</p>
+      <div id="teamBody" style="margin-top:.85rem">
+        <p class="muted" style="font-size:.78rem">Loading…</p>
+      </div>
+      <div class="msg" id="teamMsg"></div>
     </div>
 
     <!-- AUTO-TOPUP -->
@@ -578,6 +589,100 @@
       var atParam = new URLSearchParams(location.search).get('autotopup');
       if(atParam === 'success') autoTopupMsg('Card saved — auto-topup is now on.', 'ok');
       else if(atParam === 'cancelled') autoTopupMsg('Auto-topup setup cancelled — nothing was saved.', 'err');
+
+      // ── Team ──
+      function teamMsg(text, kind){
+        var el = $('teamMsg');
+        el.textContent = text;
+        el.className = 'msg show ' + (kind || 'ok');
+      }
+      async function callTeamManage(action, extra){
+        var r = await fetch(window.AETHYRO_FN_URL+'/team-manage', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY},
+          body: JSON.stringify(Object.assign({action:action}, extra||{})),
+        });
+        var d = await r.json();
+        if(!r.ok) throw new Error(d.error || 'Request failed');
+        return d;
+      }
+      function renderTeamOff(){
+        var body = $('teamBody');
+        body.innerHTML =
+          '<label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:.4rem">Team name</label>'
+          +'<input type="text" id="teamNameInput" placeholder="e.g. Acme Inc" maxlength="60" style="background:var(--surface,#141414);color:var(--text,#f0f0f0);border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:.5rem .7rem;font-size:.85rem;width:100%;max-width:280px"/>'
+          +'<div style="margin-top:.75rem"><button class="btn" id="teamCreateBtn" style="width:auto;padding:.6rem 1.2rem;background:#ff4d00;color:#fff;font-weight:700;border-radius:8px;border:none;font-size:.85rem;cursor:pointer">Create a team →</button></div>'
+          +'<p class="muted" style="font-size:.72rem;margin-top:.6rem;font-family:var(--mono)">// you become the owner; invite teammates by email once created</p>';
+        document.getElementById('teamCreateBtn').onclick = async function(){
+          var btn = this; var name = document.getElementById('teamNameInput').value;
+          btn.disabled = true; btn.textContent = 'Creating…';
+          try{ await callTeamManage('create', {name:name}); teamMsg('Team created.', 'ok'); await loadTeam(); }
+          catch(e){ teamMsg(e.message, 'err'); btn.disabled=false; btn.textContent='Create a team →'; }
+        };
+        $('teamPoolNote').style.display = 'none';
+      }
+      function renderTeamOn(data){
+        var body = $('teamBody');
+        var team = data.team, members = data.members || [];
+        $('teamPoolNote').style.display = '';
+        $('teamPoolNote').textContent = '// shared with ' + team.name + ' (' + members.length + ' member' + (members.length===1?'':'s') + ')';
+
+        var rows = members.map(function(m){
+          var label = (m.email || m.id) + (m.isOwner ? ' (owner)' : '');
+          var removeBtn = (team.isOwner && !m.isOwner)
+            ? '<button class="ref-copy-btn" data-remove="'+m.id+'" style="font-size:.72rem">Remove</button>' : '';
+          return '<div class="history-row"><div style="font-size:.83rem">'+label+'</div>'+removeBtn+'</div>';
+        }).join('');
+
+        var inviteForm = team.isOwner
+          ? '<div style="margin-top:1rem"><label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:.4rem">Invite by email</label>'
+            +'<div style="display:flex;gap:.5rem;flex-wrap:wrap"><input type="email" id="teamInviteInput" placeholder="teammate@example.com" style="background:var(--surface,#141414);color:var(--text,#f0f0f0);border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:.5rem .7rem;font-size:.85rem;flex:1;min-width:200px"/>'
+            +'<button class="ref-copy-btn" id="teamInviteBtn">Invite</button></div>'
+            +'<p class="muted" style="font-size:.72rem;margin-top:.5rem;font-family:var(--mono)">// they must already have an Aethyro account and not be on another team</p></div>'
+          : '';
+
+        body.innerHTML =
+          '<div style="font-weight:700;font-size:.95rem;margin-bottom:.5rem">'+team.name+'</div>'
+          +rows
+          +inviteForm
+          +'<div style="margin-top:1rem"><button class="btn btn-ghost" id="teamLeaveBtn" style="width:auto;padding:.5rem 1rem">Leave team</button></div>';
+
+        if(team.isOwner){
+          document.getElementById('teamInviteBtn').onclick = async function(){
+            var btn = this; var email = document.getElementById('teamInviteInput').value;
+            btn.disabled = true; btn.textContent = 'Inviting…';
+            try{ await callTeamManage('invite', {email:email}); teamMsg('Invited.', 'ok'); await loadTeam(); }
+            catch(e){ teamMsg(e.message, 'err'); btn.disabled=false; btn.textContent='Invite'; }
+          };
+          body.querySelectorAll('[data-remove]').forEach(function(btn){
+            btn.onclick = async function(){
+              btn.disabled = true;
+              try{ await callTeamManage('remove', {user_id: btn.getAttribute('data-remove')}); teamMsg('Removed.', 'ok'); await loadTeam(); }
+              catch(e){ teamMsg(e.message, 'err'); btn.disabled=false; }
+            };
+          });
+        }
+        document.getElementById('teamLeaveBtn').onclick = async function(){
+          var btn = this;
+          btn.disabled = true; btn.textContent = 'Leaving…';
+          try{ await callTeamManage('leave'); teamMsg('You left the team.', 'ok'); await loadTeam(); await refreshCredits(); }
+          catch(e){ teamMsg(e.message, 'err'); btn.disabled=false; btn.textContent='Leave team'; }
+        };
+      }
+      async function refreshCredits(){
+        var b = await supabase.rpc('get_credit_balance');
+        var balance = (b.data != null) ? Number(b.data) : 0;
+        $('creditNum').textContent = fmt(balance);
+      }
+      async function loadTeam(){
+        try{
+          var data = await callTeamManage('list');
+          if(data.team) renderTeamOn(data); else renderTeamOff();
+        }catch(e){
+          $('teamBody').innerHTML = '<p class="muted" style="font-size:.78rem">Could not load team info.</p>';
+        }
+      }
+      loadTeam();
 
       // ── Sparkline ──
       var sparkRows = (sparkRes.data || []);
