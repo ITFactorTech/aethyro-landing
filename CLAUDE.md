@@ -275,6 +275,26 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Added auto model routing to chat** (PR #97, item 2 of 5
+  from the "make the site significantly better, do all" request — item 1,
+  the fabricated testimonials, is PR #96 above). Added an "Auto" option to
+  `chat.html`'s model selector, now the default for anyone with no stored
+  `aethyro_model` preference. The `chat` edge function (now v34) gained
+  `routeAutoModel(message, attachments)`: a synchronous, rule-based
+  heuristic (message length, a keyword list, attachment presence — never
+  a second LLM call) that resolves `model:"auto"` to a real haiku/sonnet/
+  opus key before the Anthropic request. Billing and the credit_ledger
+  `metadata.model` use the *resolved* model, same as an explicit choice;
+  `USAGE_MARK`'s `cost` object gained `requestedModel` so the per-message
+  cost badge can show `auto→opus` instead of a bare `opus` when routing
+  picked it. Verified live with a throwaway account: `"thanks!"` → haiku,
+  a plain question → sonnet, a security-audit/architecture-analysis
+  prompt → opus, all billed correctly; explicit `model:"sonnet"` still
+  resolves to sonnet with no regression. Cleaned up the throwaway account
+  and re-stubbed `test-admin-setup` to 410 (confirmed with a live curl).
+  Items 3-4 (public routines gallery, auto-topup) still pending; item 5
+  (team/shared-pool accounts) is still being held for an explicit user
+  scope check before touching RLS.
 - **2026-09-28** — **Removed the fabricated homepage testimonials** (PR #96,
   1 of 5 "make the site significantly better" recommendations the user asked
   for — "do all"). The three "Community feedback" quotes attributed to
