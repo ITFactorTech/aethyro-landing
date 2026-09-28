@@ -275,6 +275,28 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Removed the fabricated homepage testimonials** (PR #96,
+  1 of 5 "make the site significantly better" recommendations the user asked
+  for — "do all"). The three "Community feedback" quotes attributed to
+  "Alex M." (CTO), "Rachel T." (consultant), and "Sami K." (platform
+  engineer) were invented personas, not real customers — this had been
+  tracked as an open P0 in "Open TODOs" below since 2026-09-27. Removal, not
+  replacement, since this project genuinely has no real customer base yet to
+  draw honest quotes from (per this file's own history, effectively 1-2 real
+  signups total). Replaced the section with a plain, honest statement of the
+  product's actual stage plus the existing Discord CTA and a new "Try it
+  free" CTA. Also removed the now-dead `.testimonials-grid`/`.tcard*` CSS and
+  a dead `.tcard` scroll-reveal JS selector. Verified locally with Playwright
+  (served `index.html`, confirmed zero "Rachel T."/"Sami K." anywhere and
+  zero "Alex M." inside the testimonials section specifically — one
+  unrelated "Alex M." remains as a placeholder avatar label in the separate
+  product-demo UI mockup further down the page, never a customer quote, left
+  alone — and no new console errors). Items 2-4 of the same "do all"
+  request (auto-model-routing, a public routines gallery, auto-topup) are
+  still in progress; item 5 (team/shared-pool accounts) is being held for an
+  explicit scope check with the user before any RLS/schema work, since
+  "team accounts" is ambiguous and that item touches security boundaries
+  across nearly the whole schema.
 - **2026-09-28** — **Removed the pre-Cloud "AI Operating Platform" pages**
   (the two `site-guardian` findings from the sweep below), on explicit
   instruction after confirming via `git log --diff-filter=A` that all 5
@@ -755,9 +777,12 @@ this list supersedes the audit artifact above where they conflict)
 - Blog — `blog/index.html` + real posts exist and are live.
 
 **Confirmed still true — actual open work:**
-- P0: **Fabricated testimonials.** The three landing-page quotes ("Alex M."
+- ~~P0: **Fabricated testimonials.** The three landing-page quotes ("Alex M."
   CTO, "Rachel T." consultant, "Sami K." platform engineer) are invented,
-  detailed personas, not real users. Needs real quotes or removal.
+  detailed personas, not real users. Needs real quotes or removal.~~ — **fixed
+  2026-09-28**, see the recent-work-log entry below (PR #96): removed rather
+  than replaced, since there's no real customer base yet to draw honest
+  quotes from.
 - ~~P2: PWA `manifest.json` had empty `screenshots: []`~~ — **fixed
   2026-09-27**. Added real screenshots of the live site (`/screenshots/
   wide.png` 1280x800, `/screenshots/narrow.png` 390x844 — Playwright against
