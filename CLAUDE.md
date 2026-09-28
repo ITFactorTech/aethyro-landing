@@ -215,6 +215,32 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Fixed: mobile nav drawer rendered fully transparent
+  over page content** (user-reported, with a real Android Chrome
+  screenshot showing the hero headline/CTAs and the drawer's own link
+  text simultaneously legible, overlapping). Root cause:
+  `.nav-drawer` (`position:fixed;inset:0`) was nested **inside** `<nav>`,
+  and `<nav>` has `backdrop-filter:blur(20px)`. Any element with a
+  non-`none` `backdrop-filter` becomes the **containing block** for
+  `position:fixed` descendants (same rule as `transform`/`filter`) — so
+  the drawer's fixed box was being sized to `<nav>`'s own ~60px bar
+  height instead of the viewport. Its opaque background only painted
+  within that ~60px strip; the drawer's own content (links padded `5rem`
+  from the top) rendered far below it with nothing opaque behind it,
+  letting the whole hero section bleed through underneath the drawer's
+  own text. Spent significant diagnostic effort ruling out backdrop-filter
+  support, CSS transitions, z-index/stacking, and duplicate markup before
+  finding this — the giveaway was forcing an unmissable `!important`
+  magenta override on the drawer and seeing only a ~60px strip (matching
+  nav's height, not the viewport) actually turn opaque. Fixed by moving
+  `.nav-drawer`'s markup to be a **sibling** of `<nav>` instead of a
+  child. Verified: reparented the element live via Playwright DOM
+  mutation first to confirm the theory before touching the real file;
+  after editing `index.html`, served it locally and re-verified
+  `isChildOfNav: false`, fully opaque drawer with zero bleed-through,
+  open/close toggle still correct (`aria-hidden`, `body.style.overflow`
+  lock), and desktop layout unaffected. Confirmed via `grep` no other
+  page shares this markup, so nothing else needed the same fix. PR #90.
 - **2026-09-28** — **Closed the last `site-guardian` escalation — turned
   out not to be a bug.** Investigated the "leaked-password protection
   isn't active" finding to actually fix it, and found the earlier finding
