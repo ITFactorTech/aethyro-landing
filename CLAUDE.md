@@ -215,6 +215,27 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Fixed: homepage nav showed "Log in" for already
+  signed-in users** (user-reported: "sign in, hit the Aethyro logo back to
+  home, it doesn't stay signed in"). Root cause: `index.html` has **zero**
+  session awareness anywhere — it never loads the Supabase JS client
+  (deliberately kept off the homepage, see the render-blocking/unused-JS
+  cleanup below) and never calls `supabase.auth.getSession()`, so its nav
+  ("Log in" link, desktop + mobile drawer) is fully static regardless of
+  actual auth state. Verified live with a real throwaway account that the
+  session itself was never actually lost — same
+  `sb-uzmdqbtflcpikjdrggqc-auth-token` localStorage key present and valid
+  on the homepage, navigating straight into `chat.html` from there didn't
+  bounce to login — it was purely a nav-display bug, not a real
+  sign-out. Fixed with a small inline script (no SDK load, no network
+  request) that reads that same shared localStorage key and swaps
+  "Log in" → "Dashboard" on both nav locations when a session with a
+  `refresh_token` is present. Verified both directions: signed-in shows
+  "Dashboard" (desktop + mobile drawer, screenshotted), and clearing the
+  session + reloading correctly falls back to "Log in" — not just the
+  happy path. Left the footer's Account column and the ⌘K command
+  palette's `Log in`/`Dashboard` entries alone (they're static
+  destination lists, not a status indicator, same as before).
 - **2026-09-28** — **Added real usage charts** (user asked for "graphs and
   charts... for the intelligent aspect of the AI"). Hand-rolled inline-SVG
   charts, same technique `dashboard.html` already used for its 30-day

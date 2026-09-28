@@ -736,7 +736,7 @@
       <a href="/blog/"  class="nav-link" role="listitem">Blog</a>
     </div>
     <div class="nav-right">
-      <a href="/app/login.html" class="nav-link">Log in</a>
+      <a href="/app/login.html" class="nav-link" id="navLoginLink">Log in</a>
       <a href="/app/chat.html" class="btn-nav btn-nav-orange" aria-label="Get started free with Aethyro">Get Started →</a>
       <button class="nav-cmdpal-btn" id="navCmdPalBtn" aria-label="Open command palette (⌘K)">Search <kbd>⌘K</kbd></button>
       <button class="nav-hamburger" id="navHamburger" aria-label="Open menu" aria-expanded="false">
@@ -760,7 +760,7 @@
   <a href="#faq">FAQ</a>
   <a href="/app/chat.html">Chat now</a>
   <a href="/blog/">Blog</a>
-  <a href="/app/login.html">Log in</a>
+  <a href="/app/login.html" id="drawerLoginLink">Log in</a>
   <a href="/app/chat.html" class="drawer-cta">Get Started Free →</a>
 </div>
 
@@ -2142,6 +2142,30 @@ patterns are well established.</div>
 
     slider.addEventListener('input', update);
     update();
+  })();
+
+  // ── nav sign-in state ──
+  // index.html never loads the Supabase JS client (kept off the homepage
+  // deliberately -- see the render-blocking/unused-JS cleanup elsewhere in
+  // this file), so it can't call supabase.auth.getSession(). But every app
+  // page shares one localStorage key for the session (same origin), so a
+  // direct read is enough to know whether to show "Log in" or "Dashboard" --
+  // no SDK load needed just to swap two nav links. This fixes a real report:
+  // a signed-in user landing back on the homepage saw "Log in" again and
+  // assumed they'd been signed out, even though their session (confirmed via
+  // this same localStorage key) was still fully valid the whole time.
+  (function(){
+    try{
+      var raw = localStorage.getItem('sb-uzmdqbtflcpikjdrggqc-auth-token');
+      if(!raw) return;
+      var session = JSON.parse(raw);
+      if(!session || !session.refresh_token) return;
+      [document.getElementById('navLoginLink'), document.getElementById('drawerLoginLink')].forEach(function(el){
+        if(!el) return;
+        el.href = '/app/dashboard.html';
+        el.textContent = 'Dashboard';
+      });
+    }catch(e){}
   })();
 
   // ── mobile hamburger nav ──
