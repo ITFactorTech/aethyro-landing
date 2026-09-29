@@ -334,6 +334,67 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-28** — **Added Phase 3: a smarter `model:"auto"` router**
+  backed by a real embedding classifier, replacing the old keyword/length
+  heuristic (`routeAutoModel()`, now only the fallback) as the primary
+  resolver. Nearest-centroid classification: 3 reference vectors
+  (light/medium/heavy, unit-normalized mean `voyage-4-lite` embeddings
+  over ~25 curated example prompts per tier) stored in a new
+  `public.model_router_centroids` table, queried via a new
+  `classify_router_tier(p_embedding)` SQL function using pgvector's `<=>`
+  operator — same pattern `match_memory_embeddings`/`match_document_chunks`
+  already use for semantic retrieval, just applied to routing. `chat`'s
+  existing `embedText(message)` call (already made for semantic memory/
+  document retrieval) is reused for classification too — zero added
+  Voyage calls, zero added latency. Leave-one-out cross-validation on the
+  75-example training set: 94.7% accurate, and every one of the 4 misses
+  was an adjacent-tier confusion (light↔medium on short factual
+  questions) — never a light/heavy or medium/heavy mix-up. Separately
+  spot-checked against 10 genuinely novel prompts not in the training
+  set; all 10 classified as a human would expect. The old keyword-signal
+  list (`AUTO_HEAVY_SIGNALS`) and the attachment rule are kept as
+  asymmetric safety nets on top of the classifier's result — both can
+  only push the tier *up* (toward Opus), never down, so the embedding
+  classifier can never be the thing that trivializes a security/legal/
+  architecture question or a document/image attachment.
+  **Deliberately not stored as source-code literals** — see the incident
+  below for why. Verified live end-to-end with a real throwaway account:
+  a trivial "thanks so much!" → haiku, a real factual-explanation prompt
+  → sonnet, and a genuinely novel security/threat-modeling prompt (not
+  in the training set) → opus, all three with correct billing; explicit
+  `model:"haiku"` still resolves to haiku with no regression. Cleaned
+  up: deleted the throwaway account and the `test-embed-batch` diagnostic
+  function's data, confirmed zero orphaned rows, `test-admin-setup`
+  re-stubbed to 410 and confirmed via a live curl. `chat` now at v37.
+  **A real, brief production incident happened building this, worth
+  recording in full:** the first implementation embedded all 3 centroid
+  vectors (~30KB of raw float literals, ~1024 numbers × 3) directly in
+  `chat/index.ts`. Deploying that ~64KB file failed **twice** — the
+  content silently truncated mid-transmission both times, once leaving
+  the deployed function with no request handler at all (missing
+  `serve(...)` entirely) — meaning **every chat request failed** for
+  roughly 3 minutes between the bad deploy and the fix. Caught
+  immediately via a live smoke test (not by a user report), and fixed by
+  redeploying the exact last-known-good committed source, verified
+  byte-for-byte via a SHA-256 hash comparison and a full fetch-back diff
+  against `get_edge_function` before trusting it live again. Root cause
+  wasn't a real size limit — it was generating a very large single piece
+  of literal content in one deploy call being unreliable in practice.
+  Rebuilt with the DB-backed design above instead (small edge-function
+  source, centroids seeded via three separate, smaller `INSERT`
+  statements instead of one combined blob), which both fixed the
+  transmission risk and turned out to be the more idiomatic design for
+  this codebase anyway. **Lesson for this repo generally: never embed
+  large generated data blobs (large float/vector arrays, long lookup
+  tables, etc.) as source-code literals in an edge function.** Put them
+  in the database (a table, queried at request time — this project
+  already has the pgvector infrastructure for exactly this) instead, and
+  keep function source small enough to transmit reliably in one deploy
+  call. If a large one-time data load is ever unavoidable, split it into
+  several smaller calls rather than one large one, and always verify a
+  large deploy by fetching the live source back and diffing it against
+  local disk before trusting it — don't just trust the deploy call's own
+  success response.
 - **2026-09-28** — **Added Phase 2: a public, metered API** (`api-chat`),
   the second phase of the site-expansion blueprint (Phase 1 was
   webhook-triggered routines + chaining, above). Lets a user call
