@@ -334,6 +334,58 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-29** — **Live regression/security pass over the three most
+  recently shipped phases** (routines/webhooks/chaining, the public API, the
+  embedding auto-router), user-requested ("test out the new implements to
+  work out the bugs") rather than a scheduled `site-guardian` sweep. Found
+  and fixed one real bug, verified everything else clean.
+  **Found live**: `classify_router_tier` (Phase 3's classifier RPC, meant to
+  be `service_role`-only — only `chat`'s internal routing call should reach
+  it) was directly callable by any signed-in user. Its own migration
+  (`20260928120000_model_router_centroids.sql`) revoked `EXECUTE` from
+  `PUBLIC` and `anon` but never `authenticated` — same root cause as the
+  earlier `api_keys`/`get_credit_balance` grant incidents already documented
+  above: this project auto-grants `authenticated` `EXECUTE` on new functions
+  via a default-privileges rule, and revoking from `PUBLIC`/`anon` doesn't
+  touch that separate grant. Confirmed live via `has_function_privilege`
+  before fixing (`authenticated_can_exec: true`) and after (`false`).
+  Impact was low — the function only ever returns a bare `light`/`medium`/
+  `heavy` label, never raw centroid data, and an RPC call isn't billed — but
+  it broke the intended design and is exactly the class of bug this file
+  already tells future sessions to check for. Fixed with
+  `20260929230000_lock_down_classify_router_tier_authenticated.sql`
+  (`REVOKE ALL ... FROM authenticated`), confirmed via `get_advisors`: the
+  `classify_router_tier` finding is gone, nothing else changed.
+  **Everything else verified clean** with a real throwaway account: (1)
+  auto-router — `"thanks so much!"` → haiku, a photosynthesis explanation →
+  sonnet, a novel API-key threat-modeling prompt → opus, all three billed
+  correctly, and an explicit `model:"haiku"` on a heavy-sounding prompt
+  correctly bypassed the router (no regression); (2) public API — created a
+  real key via `create_api_key`, called `api-chat` with both the `message`
+  shorthand and `messages` array forms (both billed `reason:'api_usage'`
+  correctly), confirmed an invalid key 401s, a missing body and a
+  `messages` array not ending in `user` both 400, and revoking the key via
+  the owner-scoped `DELETE` immediately 401'd the next call; (3) routine
+  chaining + webhooks — created two real routines, chained A→B, confirmed
+  the DB trigger correctly rejected both a self-chain and a real cycle
+  attempt, created a real webhook for A, fired it with **no Authorization
+  header** (a real external caller has none) via the exact
+  `?token=...`-query-param URL `chat.html` actually generates (a first
+  attempt using a path-style URL failed with `"token required"` — that was
+  my own wrong URL shape in testing, not a bug: confirmed via grep that
+  `chat.html`'s real webhook modal only ever builds the query-param form),
+  and confirmed the full chain ran automatically end-to-end: A's real
+  output (`"ALPHA"`) was billed and then correctly passed as
+  `chain_context` into B, whose real output explicitly referenced it
+  (`"...previous step said ALPHA"`), with both steps billed
+  `reason:'routine'`. Also re-confirmed signup still produces exactly one
+  `profiles`/`signup_bonus` row (no regression of the old double-bonus
+  bug). Cleaned up: deleted all test routines/webhooks/the API key/the
+  throwaway account, confirmed zero orphaned rows across
+  `profiles`/`credit_ledger`/`conversations`/`memory_embeddings`/
+  `api_keys`/`user_routines`/`routine_webhooks`/`referral_codes`/
+  `referral_events`/`deletion_receipts`, `test-admin-setup` re-stubbed to
+  410 and confirmed via a live curl.
 - **2026-09-28** — **Added Phase 3: a smarter `model:"auto"` router**
   backed by a real embedding classifier, replacing the old keyword/length
   heuristic (`routeAutoModel()`, now only the fallback) as the primary
