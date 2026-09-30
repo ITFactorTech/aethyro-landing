@@ -334,6 +334,28 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-30** — **Added a "Continue with Google" / "Sign up with Google"
+  OAuth button to `app/login.html` and `app/signup.html`**, mirroring the
+  existing GitHub OAuth button exactly (`supabase.auth.signInWithOAuth
+  ({provider:'google', options:{redirectTo:nextAbs}})`, same click-handler
+  shape, same `.btn-oauth` styling). User-requested ("add google sign in
+  like the github sign in"). Notable: `app/admin.html`'s user-list table
+  already had a `google` provider badge wired up (line ~880,
+  `u.provider === 'google' ? '<span class="badge badge-blue">google</span>'`)
+  with no corresponding sign-in button anywhere — this was a half-built
+  feature, not a net-new one; this PR completes the client side of it.
+  **What this PR does NOT and cannot do**: enable the Google provider
+  itself in Supabase Auth. That's a project-level Auth setting
+  (Authentication → Providers → Google in the Supabase Dashboard,
+  requiring a Google Cloud OAuth 2.0 Client ID + secret with the
+  redirect URI set to `https://uzmdqbtflcpikjdrggqc.supabase.co/auth/v1/
+  callback`) with no equivalent in any available Supabase MCP tool —
+  `execute_sql` can't reach it, it's not a database-level setting. Until
+  that's done in the dashboard, clicking either new button will error
+  (Supabase will reject an unconfigured `provider`). Confirmed via
+  `get_project` that no tool here exposes Auth provider config — this is
+  a manual step for a human, not something a future session can silently
+  "finish" via SQL or a migration.
 - **2026-09-30** — **`site-guardian` sweep, user-requested ("do a full site
   audit for anything else broken").** Ran the full checklist. Two real
   findings, both fixed; everything else clean.
