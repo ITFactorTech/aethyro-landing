@@ -334,6 +334,53 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-30** — **`site-guardian` sweep, user-requested ("do a full site
+  audit for anything else broken").** Ran the full checklist. Two real
+  findings, both fixed; everything else clean.
+  **Fixed**: `enforce_routine_chain()` (the `BEFORE INSERT OR UPDATE`
+  trigger on `user_routines.next_routine_id` from the routine-chaining
+  feature) had a mutable search_path — flagged by `get_advisors`, unlike
+  every other function in this project which sets one explicitly. Not
+  `SECURITY DEFINER`, so practical risk was low (it already only
+  referenced fully-qualified `public.user_routines`), but fixed for
+  consistency: `20260930020000_fix_enforce_routine_chain_search_path.sql`
+  adds `SET search_path = public`. Verified via a real transactional test
+  (self-chain and cycle both still correctly rejected, rolled back
+  cleanly) and confirmed `get_advisors` no longer flags it.
+  **Everything else checked clean**: `get_advisors` (security+performance)
+  — the only performance findings are long-standing, low-priority,
+  previously-un-actioned classes (unindexed FKs, RLS `auth.<fn>()`
+  re-evaluation, unused indexes, multiple permissive policies on 3
+  tables) — not fixed, consistent with every prior sweep's treatment of
+  these as optimization rather than bugs; `list_edge_functions` vs.
+  `supabase/functions/` — zero drift, all 22 real functions present,
+  spot-checked the 4 intentionally-stubbed-to-410 functions
+  (`create-checkout`/`activate-license`/`validate-license`/
+  `customer-portal`) and confirmed none have regressed back to live;
+  hard security constraint re-grepped clean (zero `buy.stripe.com`
+  matches); `auth.users` triggers match the documented 4, all enabled,
+  zero drift; no stale references to the decommissioned subscription
+  model; `robots.txt`/`404.html`/`manifest.json`/OG tags all correct
+  live; the 6 previously-decommissioned pages
+  (`marketplace/`/`builder/`/`community/`/`contractors.html`/
+  `app/community.html`/`app/packs.html`) all still correctly 404, no
+  regression. 24h error-log sweep found one real-looking `500` on
+  `send-welcome-email` — investigated via `function_logs` console output
+  rather than assumed: it was Resend correctly refusing to send to
+  `@example.com` (this session's own earlier throwaway test account,
+  not a real customer), confirmed via timestamp correlation. Not a bug,
+  no fix needed. Live smoke test with two real throwaway accounts:
+  explicit `model:"haiku"/"sonnet"/"opus"` chat sends all succeeded (the
+  historical thinking-param P0 only ever showed on Sonnet/Opus, so this
+  is the specific regression class worth re-checking each sweep);
+  referral redemption happy path (+100 credits), duplicate (409),
+  self-referral (400), and invalid code (404) all correct;
+  `buy-credits` resolves to a real `checkout.stripe.com` URL, never a
+  bare `buy.stripe.com` link. Cleaned up: deleted both throwaway
+  accounts, confirmed zero orphaned rows including `referral_events`
+  cascade, `test-admin-setup` re-stubbed to 410 and confirmed via a live
+  curl. See the separate entry below for the orphaned-SEO-pages finding
+  from the same sweep.
 - **2026-09-30** — **Code-level correctness review of auto-topup's success
   path** (user asked to "check auto-topup with a real test purchase" —
   offered three options via clarifying question, user chose the no-real-
