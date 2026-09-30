@@ -334,6 +334,31 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-30** — **Fixed: three real SEO landing pages were completely
+  orphaned from the rest of the site** (`site-guardian` sweep finding, see
+  the sweep-summary entry below for the rest of that run).
+  `use-cases.html`, `claude-opus-alternative.html`, and
+  `ai-chat-for-developers.html` are real, complete, correctly-built pages
+  (added 2026-09-26, commit "feat: add six product enhancements... SEO" —
+  predates any session documented in this file) with proper titles,
+  descriptions, and CTAs — but had **zero internal links from anywhere
+  else in the site**, weren't in `sitemap.xml`, and had no
+  `<meta name="robots">` tag at all. Confirmed via grep before fixing:
+  not referenced by `index.html`, not by each other in all cases, not by
+  `sitemap.xml`, not by any other page in the repo — reachable only by
+  someone typing the exact URL. All the SEO value already built into
+  them was going entirely to waste. Also found while checking: the 3
+  pages' own mutual cross-linking was incomplete —
+  `claude-opus-alternative.html` didn't link to either of the other two,
+  and `ai-chat-for-developers.html` didn't link to `use-cases.html`.
+  Fixed all of it: added `<meta name="robots" content="index, follow"/>`
+  to all 3 (matching every other properly-configured SEO page in this
+  repo), added all 3 to `sitemap.xml`, completed the missing cross-links
+  between the 3 pages, and linked all 3 from `index.html`'s footer
+  Product column — same remediation pattern this repo already used for
+  `developers.html`/`routines.html` when they shipped. Verified live:
+  all 3 pages still 200, zero horizontal overflow or console errors via
+  a real Playwright render, `sitemap.xml` still valid XML.
 - **2026-09-30** — **Code-level correctness review of auto-topup's success
   path** (user asked to "check auto-topup with a real test purchase" —
   offered three options via clarifying question, user chose the no-real-
