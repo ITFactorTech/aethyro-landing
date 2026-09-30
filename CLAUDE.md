@@ -334,6 +334,64 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-30** — **Code-level correctness review of auto-topup's success
+  path** (user asked to "check auto-topup with a real test purchase" —
+  offered three options via clarifying question, user chose the no-real-
+  money code-review path over actually spending real dollars). Confirms
+  the gap this file already flagged when auto-topup shipped ("the actual
+  successful-charge path was never exercised with real money") is still
+  open — no code changed here, this only narrows *how much* of the pipeline
+  could plausibly be wrong. Checked live before reviewing: zero accounts
+  currently have `auto_topup_enabled` or a saved `stripe_payment_method_id`
+  — nobody has ever completed real setup, so this really is starting from
+  zero. Reviewed, with the live deployed source diffed byte-for-byte
+  against local disk (zero drift on `setup-auto-topup`, `stripe-webhook`,
+  `auto-topup-charge`):
+  1. **Dollar amounts, the highest-stakes thing to get wrong** —
+     `auto-topup-charge`'s hardcoded `CREDIT_PACKS` cents
+     (400/1000/3000/9000) were checked against the **live Stripe Price
+     objects** themselves (`GetPricesPrice` on all 4 real price ids from
+     `buy-credits/index.ts`), not just against another file in this repo.
+     Exact match on both `unit_amount` and `credits` metadata for all 4
+     packs. Also matches `dashboard.html`'s own `CREDIT_PACKS` display
+     array and `setup-auto-topup`'s `VALID_PACKS`. Zero drift anywhere in
+     a 4-file, 2-system (repo + live Stripe) chain that would have been a
+     real "charged the wrong amount" bug if any one of them had drifted.
+  2. **The low-credit/auto-topup trigger in `chat`'s `finalize()`** is a
+     plain `await` that completes *before* `controller.close()` runs — not
+     wrapped in `EdgeRuntime.waitUntil()` like the background memory-embed
+     block elsewhere in the same function, and correctly so: since
+     `finalize()` is itself `await`ed by both of its call sites, this path
+     doesn't have the isolate-freeze race that bit the memory feature
+     (documented above) — it isn't fire-and-forget, so it needs no
+     `waitUntil()` protection to complete reliably.
+  3. **`stripe-webhook`'s `mode === "setup"` branch** correctly retrieves
+     the `SetupIntent` to get the confirmed `payment_method`, sets it as
+     the customer's `invoice_settings.default_payment_method`, and only
+     *then* flips `auto_topup_enabled` — so a checkout session that's
+     `completed` but never actually confirms a working payment method
+     can't silently turn auto-topup on with nothing usable behind it.
+  4. **`auto-topup-charge`'s failure handling** disables
+     `auto_topup_enabled` on any charge exception (declined card, SCA,
+     expired card) rather than retry-looping on every subsequent
+     low-balance message, and marks `auto_topup_last_attempt_at` *before*
+     calling Stripe (not after), so two near-simultaneous chat requests
+     both crossing the threshold can't double-fire. The `credit_ledger`
+     insert reuses the existing `reason = 'purchase'` partial unique index
+     on `stripe_session_id`, storing the PaymentIntent id (`pi_...`) —
+     confirmed this is a distinct id namespace from Checkout Session ids
+     (`cs_...`) used by real purchases, so it structurally can't collide.
+  5. **`dashboard.html`'s setup button** passes the real session
+     `access_token` as `Authorization: Bearer`, which `setup-auto-topup`
+     correctly resolves via `supabase.auth.getUser(token)` — matches the
+     already-Playwright-verified UI behavior documented in the auto-topup
+     entry below.
+  **What this review does NOT and cannot establish**: whether Stripe's
+  real off-session confirmation flow (3DS/SCA handling, actual card
+  network response, `off_session: true` behaving as expected end-to-end)
+  actually works — that still requires a real card and a real charge,
+  which remains a recommended manual step for a human with their own card,
+  not something this review substitutes for.
 - **2026-09-30** — **Added Phase 4: a public `/trust.html` page**, the last
   item from the original site-expansion blueprint (Phases 1-3 — routines/
   webhooks/chaining, the public API, the embedding auto-router — all
