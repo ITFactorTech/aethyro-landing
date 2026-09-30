@@ -334,6 +334,41 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-09-30** — **Added Phase 4: a public `/trust.html` page**, the last
+  item from the original site-expansion blueprint (Phases 1-3 — routines/
+  webhooks/chaining, the public API, the embedding auto-router — all
+  shipped and merged earlier). Deliberately not a compliance-badge page —
+  this project doesn't hold SOC 2/ISO 27001/etc. and the page says so
+  explicitly, same "don't fabricate trust signals" lesson as the removed
+  homepage testimonials. Content is grounded in what's actually true and
+  checkable in this repo today: row-level security enforced at the DB layer
+  on every table, `admin_users` unreachable from the client, API keys
+  SHA-256-hashed and shown once, the real client-side HaveIBeenPwned check
+  at signup, Stripe-hosted checkout (Aethyro never touches card numbers),
+  Anthropic's no-training-on-API-inputs policy, and — the centerpiece —
+  an explainer of the verifiable HMAC-signed deletion receipts feature
+  (already shipped, documented above) framed as the actual differentiator
+  it is. Includes an explicit "what we deliberately don't do" box and an
+  "honest about scale" note (solo-built, no dedicated security team) rather
+  than overclaiming. Linked from `index.html`'s footer (Company column) and
+  added to `sitemap.xml`, matching the `developers.html`/`routines.html`
+  precedent. **Found and fixed one real CSS bug while building it**: the
+  checklist `<li>` items used `display:flex` with a `<strong>` label
+  followed by plain text as direct children — per the flex spec, the
+  `<strong>` element and the trailing text node become *two separate flex
+  items*, not one wrapped paragraph, so each bullet rendered as a narrow
+  bold column next to a disconnected description column instead of reading
+  as one sentence. Fixed by wrapping each li's content in a single `<span>`
+  so it's one flex item. Caught via a real Playwright render (both desktop
+  and mobile viewports) before shipping, not just by reading the HTML —
+  worth remembering generally: `display:flex` directly on an element with
+  mixed inline-element-plus-text-node children needs everything wrapped in
+  one child element, or the browser silently splits it into multiple flex
+  items with only `gap` between them. Confirmed no horizontal overflow at
+  either viewport and zero real console errors (only proxy-induced
+  `ERR_CERT_AUTHORITY_INVALID` on the external Google Fonts/GA requests,
+  an artifact of this sandbox's TLS-intercepting proxy, not a real page
+  bug).
 - **2026-09-29** — **Live regression/security pass over the three most
   recently shipped phases** (routines/webhooks/chaining, the public API, the
   embedding auto-router), user-requested ("test out the new implements to
