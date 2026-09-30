@@ -1,0 +1,12 @@
+-- classify_router_tier (Phase 3's auto-model classifier RPC) was meant to be
+-- service_role-only -- only chat's internal routing call needs it -- but its
+-- original migration (20260928120000_model_router_centroids.sql) only revoked
+-- EXECUTE from PUBLIC and anon. authenticated still had EXECUTE via this
+-- project's default-privileges auto-grant on new functions, the same root
+-- cause as the earlier api_keys/get_credit_balance grant incidents documented
+-- in CLAUDE.md. Confirmed live via has_function_privilege before this fix:
+-- authenticated_can_exec = true. Impact was low (the function only returns a
+-- light/medium/heavy label, never raw centroid data, and costs nothing to
+-- call), but it broke the intended service-role-only design and let any
+-- signed-in user call classify_router_tier directly, bypassing chat entirely.
+REVOKE ALL ON FUNCTION public.classify_router_tier(vector) FROM authenticated;
