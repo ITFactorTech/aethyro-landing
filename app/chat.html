@@ -348,6 +348,15 @@
   .intel-mem-role{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.05em}
   .intel-mem-role.user{color:var(--cyan)}
   .intel-mem-role.assistant{color:var(--orange)}
+  .search-result{padding:.6rem .75rem;border-radius:8px;border:1px solid var(--b1);margin-bottom:.4rem;background:rgba(0,0,0,.2);cursor:pointer;transition:border-color .15s}
+  .search-result:hover{border-color:var(--orange)}
+  .search-result-head{display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem}
+  .search-result-kind{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;padding:.1rem .35rem;border-radius:4px}
+  .search-result-kind.conversation{color:var(--cyan);background:rgba(0,212,255,.1)}
+  .search-result-kind.document{color:#a78bfa;background:rgba(139,92,246,.1)}
+  .search-result-meta{font-size:.68rem;color:var(--t3);margin-left:auto}
+  .search-result-text{font-size:.8rem;color:var(--t2);line-height:1.5}
+  .search-result-score{display:inline-block;height:3px;background:var(--orange);border-radius:2px;margin-top:.4rem;opacity:.6}
   .intel-mem-del{margin-left:auto}
   .intel-mem-time{font-size:.65rem;color:var(--t3);margin-left:auto;font-family:var(--mono)}
   .intel-mem-text{font-size:.78rem;color:var(--t2);line-height:1.55;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
@@ -593,6 +602,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     <button class="intel-tab" data-tab="routines">Routines</button>
     <button class="intel-tab" data-tab="integrations">Integrations</button>
     <button class="intel-tab" data-tab="memory">Memory</button>
+    <button class="intel-tab" data-tab="search">Search</button>
   </div>
   <div class="intel-stats-bar">
     <div class="intel-stat">
@@ -765,6 +775,16 @@ I often need help with: client quotes, contract review, business Instagram posts
       <p style="font-size:.78rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">The last few turns embedded into semantic memory — retrieved to give Claude longer context.</p>
       <input id="memorySearch" type="search" placeholder="Search memories…" style="width:100%;box-sizing:border-box;padding:.4rem .6rem;background:rgba(255,255,255,.05);border:1px solid var(--b2);border-radius:6px;color:var(--text);font-size:.78rem;margin-bottom:.6rem;outline:none"/>
       <div id="memoryList"><p class="intel-loading">Loading…</p></div>
+    </div>
+
+    <div class="intel-pane" id="pane-search" style="display:none">
+      <p class="intel-section-title">Search everything</p>
+      <p style="font-size:.78rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">Semantic search across every conversation you've ever had and every document you've uploaded — not just keyword matching.</p>
+      <form id="searchForm" style="display:flex;gap:.4rem;margin-bottom:.75rem">
+        <input id="searchQuery" type="search" placeholder="e.g. &quot;that pricing discussion from last month&quot;" style="flex:1;min-width:0;box-sizing:border-box;padding:.5rem .6rem;background:rgba(255,255,255,.05);border:1px solid var(--b2);border-radius:6px;color:var(--text);font-size:.82rem;outline:none"/>
+        <button type="submit" class="btn-primary" id="searchGoBtn" style="padding:.5rem .9rem;background:var(--orange);color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer;white-space:nowrap">Search</button>
+      </form>
+      <div id="searchResults"><div class="intel-empty" style="padding:2rem 1rem"><div style="font-size:1.5rem;margin-bottom:.4rem">🔍</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">Search your whole history</div><div>Ask in plain language — results are ranked by meaning, not just keywords.</div></div></div>
     </div>
 
   </div>
@@ -1918,6 +1938,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       else if(tab.dataset.tab==='routines') loadRoutines();
       else if(tab.dataset.tab==='integrations') loadIntegrations();
       else if(tab.dataset.tab==='memory') loadMemories();
+      else if(tab.dataset.tab==='search') $('searchQuery').focus();
     });
   });
 
@@ -2503,6 +2524,75 @@ I often need help with: client quotes, contract review, business Instagram posts
     $('memoryList').querySelectorAll('.intel-mem-entry').forEach(function(el){
       el.style.display=(!q||el.textContent.toLowerCase().includes(q))?'':'none';
     });
+  });
+
+  /* ── Global semantic search (Search tab) ───────────────────────────────── */
+  var docNameCache={};
+  async function runGlobalSearch(query){
+    var out=$('searchResults');
+    out.innerHTML='<div class="intel-loading">Searching…</div>';
+    var headers={'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.AETHYRO_ANON_KEY};
+    var memResults=[], docResults=[];
+    try{
+      var results=await Promise.all([
+        fetch(window.AETHYRO_FN_URL+'/embed-content',{method:'POST',headers:headers,body:JSON.stringify({type:'search',query:query,limit:8})}).then(function(r){return r.json();}).catch(function(){return {results:[]};}),
+        fetch(window.AETHYRO_FN_URL+'/embed-content',{method:'POST',headers:headers,body:JSON.stringify({type:'search',query:query,source:'documents',limit:8})}).then(function(r){return r.json();}).catch(function(){return {results:[]};})
+      ]);
+      memResults=(results[0]&&results[0].results)||[];
+      docResults=(results[1]&&results[1].results)||[];
+    }catch(e){
+      out.innerHTML='<div class="intel-empty">Search failed — try again.</div>';
+      return;
+    }
+    var merged=memResults.map(function(r){return {kind:'conversation',id:r.id,content:r.content,similarity:r.similarity,role:r.role};})
+      .concat(docResults.map(function(r){return {kind:'document',id:r.id,content:r.content,similarity:r.similarity,document_id:r.document_id};}))
+      .sort(function(a,b){return b.similarity-a.similarity;})
+      .slice(0,15);
+
+    if(!merged.length){
+      out.innerHTML='<div class="intel-empty" style="padding:2rem 1rem"><div style="font-size:1.5rem;margin-bottom:.4rem">🔍</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No matches</div><div>Nothing in your history seems related to that — try rephrasing.</div></div>';
+      return;
+    }
+
+    /* Resolve document names for any document hits not already cached */
+    var missingDocIds=merged.filter(function(r){return r.kind==='document'&&!docNameCache[r.document_id];}).map(function(r){return r.document_id;});
+    if(missingDocIds.length){
+      var dn=await supabase.from('user_documents').select('id,name').in('id',missingDocIds);
+      (dn.data||[]).forEach(function(d){ docNameCache[d.id]=d.name; });
+    }
+
+    out.innerHTML='';
+    merged.forEach(function(r){
+      var card=document.createElement('div'); card.className='search-result';
+      var pct=Math.round(r.similarity*100);
+      var metaLabel = r.kind==='conversation' ? (r.role||'message') : (docNameCache[r.document_id]||'document');
+      card.innerHTML='<div class="search-result-head"><span class="search-result-kind '+r.kind+'">'+(r.kind==='conversation'?'💬 chat':'📄 doc')+'</span>'+
+        '<span class="search-result-meta">'+intelEsc(metaLabel)+' · '+pct+'% match</span></div>'+
+        '<div class="search-result-text">'+intelEsc(r.content.length>220?r.content.slice(0,220)+'…':r.content)+'</div>'+
+        '<div class="search-result-score" style="width:'+pct+'%"></div>';
+      card.addEventListener('click',function(){
+        if(r.kind==='conversation'){
+          /* memory_embeddings.conversation_id is a text column, not a strict FK
+             (see CLAUDE.md schema gotchas) — guard against stale/missing ids */
+          supabase.from('memory_embeddings').select('conversation_id').eq('id',r.id).single().then(function(mr){
+            var convId=mr.data&&mr.data.conversation_id;
+            if(convId){ loadConversation(convId); closeIntelPanel(); }
+            else showToast('This memory has no linked conversation','err');
+          });
+        } else {
+          document.querySelector('.intel-tab[data-tab="knowledge"]').click();
+          showToast('Opened in Knowledge tab — see "'+metaLabel+'"','ok');
+        }
+      });
+      out.appendChild(card);
+    });
+  }
+
+  $('searchForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var q=$('searchQuery').value.trim();
+    if(!q) return;
+    runGlobalSearch(q);
   });
 
   $('clearMemsBtn').addEventListener('click',async function(){
