@@ -827,7 +827,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       } else {
         highlighted = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       }
-      var isRunnable=/^(html|javascript|js|css)$/i.test(langStr);
+      var isRunnable=/^(html|javascript|js|css|svg|jsx|tsx|react)$/i.test(langStr);
       var runBtn=isRunnable?'<button class="btn-run-code" title="Run code">▶ Run</button>':'';
       var runOut=isRunnable?'<div class="code-run-output" style="display:none"></div>':'';
       return '<div class="code-block"><div class="code-header"><span class="code-lang">'+(langStr||'code')+'</span>'+runBtn+'<button class="btn-copy-code" title="Copy code">Copy</button></div><pre><code class="hljs language-'+langStr+'">'+highlighted+'</code></pre>'+runOut+'</div>';
@@ -1294,6 +1294,31 @@ I often need help with: client quotes, contract review, business Instagram posts
     });
   });
 
+  /* Prepares a JSX/TSX snippet for standalone preview: strips `export default`
+     (invalid outside an ES module, and these run as a plain Babel script),
+     then auto-mounts the component if the snippet doesn't already call
+     ReactDOM itself. Detects the component from `export default X`/
+     `export default function X` first, falling back to a conventional
+     App/Index/Main name. */
+  function buildReactPreviewHtml(code){
+    var hasRender=/ReactDOM\.(createRoot|render)/.test(code);
+    var componentName=null;
+    var m=code.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/);
+    if(m) componentName=m[1];
+    if(!componentName){ m=code.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;?\s*$/m); if(m) componentName=m[1]; }
+    if(!componentName){ m=code.match(/function\s+(App|Index|Main)\s*\(/)||code.match(/const\s+(App|Index|Main)\s*=/); if(m) componentName=m[1]; }
+    var cleaned=code.replace(/export\s+default\s+/,'');
+    var mount=(!hasRender&&componentName)?('\nReactDOM.createRoot(document.getElementById("root")).render(React.createElement('+componentName+'));'):'';
+    return '<!DOCTYPE html><html><head>'+
+      '<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"><\/script>'+
+      '<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"><\/script>'+
+      '<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"><\/script>'+
+      '<style>body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:1rem;color:#1a1a1a}</style>'+
+      '</head><body><div id="root"></div>'+
+      '<script type="text/babel" data-presets="react">'+cleaned+mount+'<\/script>'+
+      '</body></html>';
+  }
+
   /* ── Code block run (event delegation) ── */
   $('msgs').addEventListener('click',function(e){
     var btn=e.target.closest('.btn-run-code');
@@ -1307,11 +1332,15 @@ I often need help with: client quotes, contract review, business Instagram posts
     var langEl=cb.querySelector('.code-lang');
     var lang=langEl?langEl.textContent.toLowerCase():'html';
     var src=code.textContent||'';
-    /* Wrap js/css into a minimal html page */
+    /* Wrap js/css/svg/jsx into a minimal html page */
     if(/^(javascript|js)$/.test(lang)){
       src='<body><script>'+src+'<\/script></body>';
     } else if(lang==='css'){
       src='<body><style>'+src+'</style><p style="font-family:sans-serif;padding:1rem;color:#555">CSS applied — add HTML content to preview it.</p></body>';
+    } else if(lang==='svg'){
+      src='<body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:200px;background:#fff">'+src+'</body>';
+    } else if(/^(jsx|tsx|react)$/.test(lang)){
+      src=buildReactPreviewHtml(src);
     }
     if(out.style.display==='none'){
       var iframe=document.createElement('iframe');
