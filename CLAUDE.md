@@ -334,6 +334,35 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-02** — **Added client-side Python execution** (PR #114, 4th of
+  4 "serious AI tool" features from the same request — the other 3 are the
+  entry directly below, PR #113). Extends the same Run-code mechanism with
+  `python`/`py` via Pyodide (WASM CPython), loaded lazily from jsdelivr and
+  cached across the page after first use. Auto-detects `numpy`/`pandas`/
+  `matplotlib` imports and loads those packages before running. `_headers`
+  also gained `cdn.jsdelivr.net` in `connect-src` — Pyodide's own
+  `.wasm`/`.whl` fetches go through `connect-src`, a separate CSP
+  directive from the `script-src` that already allowed loading
+  `pyodide.js` itself; missing this would have let the script load but
+  silently block its own runtime data, a subtle split-CSP failure mode
+  worth remembering for any future WASM-runtime addition.
+  **Found and fixed a real bug** while verifying the execution logic with
+  the real `pyodide` npm package directly in Node (this session's sandbox
+  browser proxy was badly rate-limiting Playwright's highly-parallel page
+  loads today — see the entry below for the full root-cause — so this
+  backend-shaped logic got verified this way instead of fighting the
+  browser): the original `catch` block on a mid-run Python exception
+  showed only the traceback, silently discarding any `stdout` that
+  printed successfully before the crash (e.g. `print("before error");
+  1/0` showed just the traceback, losing "before error"). Fixed by
+  declaring the stdout/stderr buffers outside the `try` so the catch
+  block can still include them; re-verified with the same Node harness
+  after the fix — both the prior output and the traceback now show
+  together. All CDN URLs confirmed reachable via direct `curl`, JS syntax
+  of the full inline script verified via `node --check` after every edit.
+  **A real in-browser click-through is still recommended before fully
+  trusting this** — same unresolved Playwright/proxy limitation as the
+  entry below, never completed this session despite repeated attempts.
 - **2026-10-02** — **Added 3 of 4 "serious AI tool" features requested
   together** ("build the website AI further... implement all 4") — the 4th
   (Python code execution) is PR #114, stacked on this one, with its own log
