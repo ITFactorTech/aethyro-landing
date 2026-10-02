@@ -334,6 +334,68 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-02** — **Added 3 of 4 "serious AI tool" features requested
+  together** ("build the website AI further... implement all 4") — the 4th
+  (Python code execution) is PR #114, stacked on this one, with its own log
+  entry. One of these three turned out to already exist from an earlier,
+  undocumented session and only needed live verification; the other two
+  were real new work.
+  1. **Show reasoning** (no code change) — `chat`'s extended-thinking
+     content (`thinking:{type:'adaptive'}`) was already streamed as a
+     `THINK_MARK`-delimited block and already parsed client-side into a
+     collapsible `.reasoning-panel`, just never exercised or documented
+     here. Verified live via a real `chat` API call with a throwaway
+     account: real reasoning content streamed correctly (confirmed the
+     exact byte offsets of both `THINK_MARK` delimiters), followed by the
+     real answer and accurate billing.
+  2. **Cross-conversation/document semantic search** — new "Search" tab in
+     the Intelligence panel. Needed zero backend changes:
+     `embed-content`'s `type:"search"` handler and the
+     `match_memory_embeddings`/`match_document_chunks` RPCs already
+     existed from the earlier Intelligence-panel work, just never had a UI
+     calling them with a user-typed query. Client merges and ranks both
+     sources by cosine similarity; clicking a conversation result jumps to
+     it via the existing `loadConversation()`, clicking a document result
+     switches to the Knowledge tab. Verified both source branches live via
+     direct `embed-content` API calls with a throwaway account (real
+     ranked results for both memory and a real uploaded document) — the
+     one document-embed call that initially came back
+     `has_embeddings:false` was confirmed transient (an immediate retry
+     succeeded), not a bug.
+  3. **Artifacts-style live rendering, extended** — the existing Run-code
+     mechanism (sandboxed iframe, already shipped for html/js/css from an
+     earlier session) now also handles `svg` (raw markup) and
+     `jsx`/`tsx`/`react` (loads React 18 + ReactDOM 18 + Babel standalone,
+     auto-mounts the component via a name detected from
+     `export default function X` / a conventional App/Index/Main
+     fallback). **Used `cdn.jsdelivr.net` for these, not
+     `cdnjs.cloudflare.com`** — `_headers`' CSP `script-src` only
+     allowlists jsdelivr (already used here for marked/highlight.js), not
+     cdnjs; verified by reading `_headers` directly rather than assuming.
+  **Live in-browser click-through for #2/#3 was attempted repeatedly this
+  session but never completed** — this sandbox's Playwright/Chromium
+  traffic through the configured proxy kept hitting
+  `ERR_TOO_MANY_RETRIES`, even though direct `curl` calls to the exact
+  same hosts succeeded instantly and repeatedly throughout. Root-caused,
+  not just retried blindly: one run got far enough to show the failure
+  pattern tracks Chromium's naturally highly-parallel page-load requests
+  (fonts, multiple CDN scripts, analytics, the API call itself, all
+  firing concurrently) exhausting what looks like a low concurrent-
+  connection cap on this session's proxy — curl's one-request-at-a-time
+  pattern never hits it. Confidence for #2/#3 instead rests on: the
+  `embed-content` API itself proven live and correct via direct `curl`
+  (above); the new iframe/CDN-loading code mirroring this repo's already-
+  shipped html/js/css pattern exactly; `node --check` syntax validation
+  after every edit; and every new CDN URL confirmed reachable via direct
+  `curl`. **A real in-browser click-through is still recommended before
+  fully trusting #2/#3** — flagged here rather than silently assumed.
+  **Incidental finding, ruled out, not a bug**: a CSP violation
+  (`style-src` blocking highlight.js's stylesheet) appeared in Playwright
+  console logs during verification — checked via direct `curl -I` on both
+  the `*.workers.dev` preview subdomain and the real `aethyro.com` domain;
+  the CSP header only exists on Cloudflare's preview-subdomain default,
+  not on the production custom domain (confirmed zero CSP header there at
+  all). Not a real site bug, just a preview-environment artifact.
 - **2026-09-30** — **Added a "Continue with Google" / "Sign up with Google"
   OAuth button to `app/login.html` and `app/signup.html`**, mirroring the
   existing GitHub OAuth button exactly (`supabase.auth.signInWithOAuth
