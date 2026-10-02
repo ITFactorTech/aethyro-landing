@@ -148,6 +148,10 @@
   .btn-run-code.running{opacity:.6;cursor:default}
   .code-run-output{border-top:1px solid var(--b2);background:#fff;border-radius:0 0 8px 8px;overflow:hidden}
   .code-run-output iframe{width:100%;border:none;display:block;min-height:120px}
+  .code-run-output.terminal{background:#0a0a0a;padding:.75rem .85rem;font-family:var(--mono);font-size:.78rem;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-height:360px;overflow-y:auto}
+  .code-run-output.terminal .py-stdout{color:#d4d4d4}
+  .code-run-output.terminal .py-error{color:#f87171}
+  .code-run-output.terminal .py-status{color:var(--t3);font-style:italic}
   .code-block pre{margin:0;padding:.75rem .85rem;overflow-x:auto}
   .code-block pre code{background:none;padding:0;font-size:.8rem;white-space:pre}
   /* ── Message copy button ── */
@@ -827,7 +831,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       } else {
         highlighted = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       }
-      var isRunnable=/^(html|javascript|js|css|svg|jsx|tsx|react)$/i.test(langStr);
+      var isRunnable=/^(html|javascript|js|css|svg|jsx|tsx|react|python|py)$/i.test(langStr);
       var runBtn=isRunnable?'<button class="btn-run-code" title="Run code">▶ Run</button>':'';
       var runOut=isRunnable?'<div class="code-run-output" style="display:none"></div>':'';
       return '<div class="code-block"><div class="code-header"><span class="code-lang">'+(langStr||'code')+'</span>'+runBtn+'<button class="btn-copy-code" title="Copy code">Copy</button></div><pre><code class="hljs language-'+langStr+'">'+highlighted+'</code></pre>'+runOut+'</div>';
@@ -1319,6 +1323,61 @@ I often need help with: client quotes, contract review, business Instagram posts
       '</body></html>';
   }
 
+  /* ── Python execution (Pyodide, WASM, fully client-side) ──────────────────
+     Loaded lazily on first use and cached on window.__pyodideReady so every
+     later run across the whole page reuses the same instance — loading the
+     runtime itself takes several seconds, re-running code after that is fast. */
+  var PYODIDE_VERSION='v314.0.7';
+  var PYODIDE_PACKAGE_HINTS=[['numpy','numpy'],['pandas','pandas'],['matplotlib','matplotlib']];
+  function getPyodide(){
+    if(!window.__pyodideReady){
+      window.__pyodideReady=(function(){
+        return new Promise(function(resolve,reject){
+          var s=document.createElement('script');
+          s.src='https://cdn.jsdelivr.net/pyodide/'+PYODIDE_VERSION+'/full/pyodide.js';
+          s.onload=function(){
+            loadPyodide({indexURL:'https://cdn.jsdelivr.net/pyodide/'+PYODIDE_VERSION+'/full/'})
+              .then(resolve,reject);
+          };
+          s.onerror=function(){ reject(new Error('Could not load the Python runtime')); };
+          document.head.appendChild(s);
+        });
+      })();
+    }
+    return window.__pyodideReady;
+  }
+  async function runPythonBlock(out,btn,src){
+    out.className='code-run-output terminal';
+    out.innerHTML='<span class="py-status">Starting Python runtime'+(window.__pyodideReady?'':' (first run, ~10s)')+'…</span>';
+    out.style.display='';
+    btn.textContent='▼ Hide'; btn.title='Hide output';
+    /* Declared outside the try so the catch block can still show whatever
+       printed successfully before a mid-run exception — otherwise a crash
+       after real output silently discards it and shows only the traceback. */
+    var stdoutBuf=[], stderrBuf=[];
+    try{
+      var pyodide=await getPyodide();
+      var neededPkgs=PYODIDE_PACKAGE_HINTS.filter(function(p){ return new RegExp('import\\s+'+p[0]+'\\b|from\\s+'+p[0]+'\\b').test(src); }).map(function(p){return p[1];});
+      if(neededPkgs.length){
+        out.innerHTML='<span class="py-status">Loading '+neededPkgs.join(', ')+'…</span>';
+        await pyodide.loadPackage(neededPkgs);
+      }
+      pyodide.setStdout({batched:function(s){ stdoutBuf.push(s); }});
+      pyodide.setStderr({batched:function(s){ stderrBuf.push(s); }});
+      out.innerHTML='<span class="py-status">Running…</span>';
+      await pyodide.runPythonAsync(src);
+      var html='';
+      if(stdoutBuf.length) html+='<span class="py-stdout">'+intelEsc(stdoutBuf.join('\n'))+'</span>';
+      if(stderrBuf.length) html+=(html?'\n':'')+'<span class="py-error">'+intelEsc(stderrBuf.join('\n'))+'</span>';
+      out.innerHTML=html||'<span class="py-status">(ran with no output)</span>';
+    }catch(err){
+      var errHtml='';
+      if(stdoutBuf.length) errHtml+='<span class="py-stdout">'+intelEsc(stdoutBuf.join('\n'))+'</span>\n';
+      errHtml+='<span class="py-error">'+intelEsc((err&&err.message)||String(err))+'</span>';
+      out.innerHTML=errHtml;
+    }
+  }
+
   /* ── Code block run (event delegation) ── */
   $('msgs').addEventListener('click',function(e){
     var btn=e.target.closest('.btn-run-code');
@@ -1332,6 +1391,18 @@ I often need help with: client quotes, contract review, business Instagram posts
     var langEl=cb.querySelector('.code-lang');
     var lang=langEl?langEl.textContent.toLowerCase():'html';
     var src=code.textContent||'';
+
+    if(out.style.display!=='none'){
+      out.style.display='none'; out.innerHTML=''; out.className='code-run-output';
+      btn.textContent='▶ Run'; btn.title='Run code';
+      return;
+    }
+
+    if(/^(python|py)$/.test(lang)){
+      runPythonBlock(out,btn,src);
+      return;
+    }
+
     /* Wrap js/css/svg/jsx into a minimal html page */
     if(/^(javascript|js)$/.test(lang)){
       src='<body><script>'+src+'<\/script></body>';
@@ -1342,19 +1413,14 @@ I often need help with: client quotes, contract review, business Instagram posts
     } else if(/^(jsx|tsx|react)$/.test(lang)){
       src=buildReactPreviewHtml(src);
     }
-    if(out.style.display==='none'){
-      var iframe=document.createElement('iframe');
-      iframe.sandbox='allow-scripts allow-forms';
-      iframe.srcdoc=src;
-      iframe.style.cssText='width:100%;border:none;display:block;min-height:200px;max-height:480px';
-      iframe.onload=function(){ try{ iframe.style.height=Math.min(iframe.contentDocument.body.scrollHeight+20,480)+'px'; }catch(e){} };
-      out.innerHTML=''; out.appendChild(iframe);
-      out.style.display='';
-      btn.textContent='▼ Hide'; btn.title='Hide output';
-    } else {
-      out.style.display='none'; out.innerHTML='';
-      btn.textContent='▶ Run'; btn.title='Run code';
-    }
+    var iframe=document.createElement('iframe');
+    iframe.sandbox='allow-scripts allow-forms';
+    iframe.srcdoc=src;
+    iframe.style.cssText='width:100%;border:none;display:block;min-height:200px;max-height:480px';
+    iframe.onload=function(){ try{ iframe.style.height=Math.min(iframe.contentDocument.body.scrollHeight+20,480)+'px'; }catch(e){} };
+    out.innerHTML=''; out.appendChild(iframe);
+    out.style.display='';
+    btn.textContent='▼ Hide'; btn.title='Hide output';
   });
 
   /* ── Send ── */
