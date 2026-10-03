@@ -383,6 +383,69 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-03** — **`site-guardian` sweep, user-requested.** One real
+  finding, fixed and verified live; everything else checked clean.
+  **Fixed**: `cleanup_old_rate_limit_counters()` — added by the same-day
+  `20261003160000_rate_limit_counters.sql` migration alongside
+  `increment_rate_limit()` — had no `REVOKE`/`GRANT` statements at all,
+  unlike its sibling function in the same migration (which correctly
+  locks `EXECUTE` to `service_role`). Confirmed live via
+  `has_function_privilege` before fixing: both `anon` and `authenticated`
+  could call it directly via `/rest/v1/rpc/cleanup_old_rate_limit_counters`.
+  Same recurring bug class this file already documents multiple times
+  (`classify_router_tier`, the `api_keys` table grant, `get_credit_balance`)
+  — a new function's default grant here is a floor, not a ceiling, unless
+  explicitly revoked. Practical severity was low (it only deletes
+  `rate_limit_counters` rows older than 1 hour, which can't affect the
+  *current* minute's rate-limit window), but it defeated the migration's
+  own stated design ("the only legitimate caller is each edge function's
+  own `supaAdmin` client... SECURITY DEFINER + service_role-only by
+  design") and is exactly the drift class this skill exists to catch.
+  Fixed with `20261003210000_lock_down_cleanup_rate_limit_counters.sql`
+  (`REVOKE ALL ... FROM PUBLIC, anon, authenticated`, explicit `GRANT` to
+  `service_role`/`postgres`). The function's one real caller — the
+  `cleanup-rate-limit-counters-hourly` pg_cron job — is unaffected, since
+  it runs as a superuser role that bypasses GRANT checks entirely (same
+  reasoning already applied to `trigger_welcome_email()`'s equivalent
+  lockdown). Verified live: `has_function_privilege` now shows
+  `anon`/`authenticated` both `false`, and a direct anon curl to the RPC
+  endpoint now correctly `404`s instead of `200`ing.
+  **Everything else checked clean**: `get_advisors` (security+performance)
+  — no other new finding beyond this one and the project's existing
+  accepted classes (zero-policy tables — now 4, `model_router_centroids`/
+  `rate_limit_counters` added to the existing `admin_users`/`app_secrets`
+  pattern, all intentional; GraphQL-exposure boilerplate; the two
+  pre-existing intentional anon-executable 0-arg functions,
+  `get_credit_balance()`/`is_admin()`); `list_edge_functions` (27 total)
+  vs. `supabase/functions/` (24 committed) — the 3-function gap is exactly
+  the known diagnostic set (`test-admin-setup`, `test-voyage-probe`,
+  `test-embed-probe`, `test-embed-batch` — that's actually 4, all
+  confirmed still correctly stubbed to inert `410`/`410`-equivalent
+  responses, no drift); `pg_trigger` on `auth.users` (exact match, all 4
+  enabled) and `pg_cron.job` (5 jobs, matching — the 5th,
+  `cleanup-rate-limit-counters-hourly`, was added the same day as this
+  sweep and is already documented above) both clean; 24h edge-function
+  error sweep (`function_edge_logs`, correct field is
+  `log_attributes['response.status_code']` — `response_status` and a bare
+  `metadata` column both errored, worth remembering for next time) found
+  nothing but this session's own deliberate test traffic (429s from the
+  rate-limit load test, 402s from the forced-negative-balance test, 401s/
+  410 from `test-admin-setup` probing) plus 3 `send-welcome-email` 500s —
+  traced via `function_logs` to Resend correctly refusing
+  `to: *@example.com` (this session's own throwaway test accounts), the
+  exact same non-bug this file already documented from the 2026-09-30
+  sweep; hard security constraint re-grepped clean (zero `buy.stripe.com`
+  matches); static pages (`/`, `/robots.txt`, `/sitemap.xml`,
+  `/terms.html`, `/privacy.html`, `/trust.html`, `/developers.html`,
+  `/routines.html`) all live, a real unknown path still 404s; the
+  `create-checkout` decommission stub re-checked, still correctly 410.
+  **Not re-tested this sweep** (no code changed in either since their
+  last same-day verification, and this sweep's one real finding was
+  unrelated to both): a full throwaway-account signup/chat/referral smoke
+  test, and the `buy-credits` real-Stripe-URL check — both were exercised
+  multiple times earlier today across the rate-limiting and audit-rerun
+  work; re-running them again this sweep would have been redundant
+  rather than additive.
 - **2026-10-03** — **Acted on two gaps from an external landing-page review**
   (PR #118): a trust-claim/proof-link gap and a pricing-transparency gap.
   The review itself rated the homepage 8.5/10 and flagged four things;
