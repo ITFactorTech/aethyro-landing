@@ -383,6 +383,29 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-03** — **Acted on two gaps from an external landing-page review**
+  (PR #118): a trust-claim/proof-link gap and a pricing-transparency gap.
+  The review itself rated the homepage 8.5/10 and flagged four things;
+  two were already handled before the review landed (fabricated
+  testimonials removed 2026-09-28, not re-added — no real customers to
+  quote yet; `/trust.html` already existed, just under-linked) and one
+  (visual emphasis on the agent-orchestration section) is a design call,
+  not a correctness fix, left alone. The two real, actionable gaps:
+  (1) the hero's "your data never sold" badge and the "Why Aethyro"
+  data-sold bento card both made trust claims with no nearby link to the
+  page that actually substantiates them — `trust.html` was linked only
+  from the footer. Added inline `trust.html` links at both claim sites.
+  (2) `#pricing` explained the credit model conceptually only, with no
+  worked example of what a task actually costs. Added a "what a task
+  actually costs" panel with three example costs (quick question /
+  explain-summarize / deep review, on Haiku/Sonnet/Opus respectively) —
+  the dollar figures are derived from `developers.html`'s already-published
+  `CREDIT_RATES` (Haiku 0.08/0.40, Sonnet 0.30/1.50, Opus 1.50/7.50
+  credits per 1k tokens) and the real Starter pack price ($4/200
+  credits), not invented numbers, and explicitly labeled as approximate.
+  Verified via headless Chromium at 1280×900 and 390×844: zero console
+  errors, zero horizontal overflow at either width, both new links and
+  the new panel render correctly.
 - **2026-10-03** — **Fixed the 2 remaining gaps from the pro-grade audit
   re-run the same day: apple-touch-icon correctness and per-user/per-key
   rate limiting on `chat` and `api-chat`.**
