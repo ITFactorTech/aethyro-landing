@@ -166,6 +166,55 @@ it to the `?buy=` pattern instead.
   Granting only the columns actually `select()`ed from the client (leaving
   out a column referenced only in a filter, like `is_public` here) fails
   with `42501 permission denied`, not a clean 0-row result.
+- **An `auth.uid() = p_user_id` ownership check inside a `SECURITY DEFINER`
+  function breaks that function for its own internal service-role caller —
+  `auth.uid()` is NULL for a service-role-authenticated PostgREST call (no
+  per-user JWT, no `sub` claim), so the check always fails and raises,
+  regardless of GRANTs.** Found live 2026-10-03 (`site-guardian` sweep):
+  `get_credit_balance(uuid)` was hardened on 2026-10-02
+  (`20261002205713_harden_get_credit_balance_and_lock_admin_tables.sql`) to
+  add exactly this `auth.uid() IS DISTINCT FROM p_user_id AND NOT
+  is_admin()` guard — correctly fixing a real arbitrary-balance-disclosure
+  bug — but `chat`, `api-chat`, `run-agent-task`, and `run-routines` all call
+  this same function via a `service_role` client (`supaAdmin.rpc(...)`), so
+  every one of those calls started silently raising `Forbidden`. **Real
+  production impact, confirmed live with a throwaway account forced to
+  -9801 credits: a chat message still succeeded and billed another credit**
+  — because the destructured `const { data: balance } = await
+  supaAdmin.rpc(...)` pattern (used at both the pre-send gate and the
+  post-send balance report, in all four functions) discards the RPC's
+  `error` entirely, so the exception became `balance: null`, and `typeof
+  null === 'number'` is `false` — the `balance <= 0` no-credits gate never
+  fired, and the live balance shown after every message was always `null`
+  instead of a real number. Fixed by adding an explicit `auth.role() =
+  'service_role'` bypass ahead of the ownership check
+  (`20261003135208_fix_get_credit_balance_service_role_bypass.sql`) — safe
+  because `EXECUTE` on this overload is already `GRANT`-restricted to
+  `service_role` only (confirmed via `has_function_privilege`:
+  `authenticated`/`anon` both `false`), so this doesn't expose anything new
+  to a client, it just un-breaks the function's one legitimate internal
+  caller. Verified live: the same -9801-balance account now correctly gets
+  `402 {"error":"No credits","balance":0}`, and a positive-balance account
+  gets a real `balance` integer in the response instead of `null`. **The
+  general lesson: when a `SECURITY DEFINER` RPC is meant to be called both
+  by a real user (their own JWT) and internally by an edge function's
+  admin/service-role client, an ownership check written as `auth.uid() =
+  p_user_id` needs an explicit `auth.role() = 'service_role'` escape hatch
+  — GRANT-level restriction and an internal identity check are not the same
+  thing, and adding the second without accounting for the first's only
+  non-human caller silently breaks it.** Also found in the same sweep: this
+  2026-10-02 migration had been applied live but never committed to the
+  repo — pulled in now, see `supabase/migrations/`.
+- **`newsletter_issues`** (`id, slug, title, summary, body, is_premium,
+  published_at`) and **`pack_content`** (`pack_key, title, summary,
+  price_cents, is_free, content`) are real, migration-backed tables (RLS:
+  free rows open to `anon`+`authenticated`, premium/owned rows gated via
+  `subscriptions`/`purchases`) wired to `send-newsletter` and
+  `app/newsletter.html` — just never documented here until this sweep found
+  them via an unfamiliar `get_advisors` finding. Not a bug; `pack_content`'s
+  "owned" policy references the decommissioned `purchases`/`subscriptions`
+  tables (see "Decommissioned: old per-plan subscription model" below) and
+  is effectively dead code for the same reason those are, but harmless.
 
 ## Pending / not yet applied
 
@@ -334,6 +383,75 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-03** — **`site-guardian` sweep, user-requested. Found and fixed
+  one P0: the credit-balance gate on every billed surface in the app (chat,
+  the public API, agent tasks, scheduled routines) was silently fail-open
+  since 2026-10-02.** Full detail in the new schema-gotchas bullet above;
+  summary here. Root cause: a same-day-prior migration
+  (`20261002205713_harden_get_credit_balance_and_lock_admin_tables.sql`,
+  applied live but never committed until this sweep pulled it in) correctly
+  fixed a real arbitrary-balance-disclosure bug in
+  `get_credit_balance(uuid)` by adding an `auth.uid() = p_user_id OR
+  is_admin()` check — but that check has no awareness of the function's
+  other legitimate caller: `chat`/`api-chat`/`run-agent-task`/`run-routines`
+  all call it via a `service_role` client with no per-user JWT, so
+  `auth.uid()` is NULL there and the check raised `Forbidden` on every
+  single call, silently, because all four functions destructure just
+  `{ data }` from the RPC call and never check `error`. **Proven live, not
+  theoretical**: a throwaway test account forced to a real **-9801** credit
+  balance still got a successful, billed chat reply. Fixed with
+  `20261003135208_fix_get_credit_balance_service_role_bypass.sql` (adds an
+  explicit `auth.role() = 'service_role'` bypass ahead of the ownership
+  check — safe, since `EXECUTE` on this overload is already
+  `service_role`-only by `GRANT`). Re-verified live: the same -9801-balance
+  account now correctly gets `402 "No credits"`, and a positive-balance
+  account gets a real `balance` integer in the chat response instead of the
+  `null` it had been silently returning (meaning the live-updating balance
+  pill in `chat.html` had also been silently stuck since 2026-10-02 — one
+  fix resolves both).
+  **Second, smaller finding, fixed in the same sweep**: `routine_webhooks`
+  had the full default-privilege over-grant (`SELECT`/`INSERT`/`UPDATE`/
+  `DELETE`/`TRUNCATE`/`REFERENCES`/`TRIGGER`) to both `anon` and
+  `authenticated` — not currently exploitable (its RLS policy's join to
+  `user_routines.user_id = auth.uid()` never matches for `anon`, whose
+  `auth.uid()` is null), but matches this project's own recurring
+  over-grant pattern and `anon` had zero legitimate reason to hold any of
+  it. **Caught and corrected a mistake in my own fix before shipping it**:
+  an initial `REVOKE ALL ... FROM authenticated` over-reached and also
+  stripped `authenticated`'s legitimate `INSERT`/`DELETE` (needed for the
+  real owner create/revoke-and-regenerate flow, confirmed via
+  `information_schema.role_table_grants` immediately after the first
+  revoke, before any PR) — corrected in the same pass
+  (`20261003135352_lock_down_routine_webhooks_grants.sql` reflects the
+  final, correct state directly: `anon` gets nothing, `authenticated` keeps
+  `SELECT`/`INSERT`/`DELETE`, loses `UPDATE`/`TRUNCATE`/`REFERENCES`/
+  `TRIGGER`). Verified end-to-end with a real throwaway account: owner
+  INSERT/SELECT/DELETE on their own webhook all still succeed, `anon`
+  INSERT/SELECT both now correctly `401` at the grant level (previously a
+  silent 0-row RLS block).
+  **Also found, not a bug**: two real, migration-backed tables
+  (`newsletter_issues`, `pack_content`) had never been documented in this
+  file's schema-gotchas section — added above. Three stray diagnostic edge
+  functions (`test-voyage-probe`, `test-embed-probe`, `test-embed-batch`,
+  none committed to the repo) were all confirmed already correctly stubbed
+  to inert `410` responses from prior sessions — no drift. `pg_trigger` on
+  `auth.users` and the 4 live `pg_cron` jobs both matched this file's
+  existing documentation exactly. Static pages
+  (`/`, `/robots.txt`, `/sitemap.xml`, `/terms.html`, `/privacy.html`,
+  `/trust.html`, `/developers.html`, `/routines.html`) all live and
+  correct; a real unknown path still 404s. Hard security constraint
+  re-grepped clean (zero `buy.stripe.com` matches). Signup smoke test
+  clean: exactly one `profiles`/`referral_codes`/`signup_bonus` row, zero
+  `subscriptions` rows (no regression of the old double-bonus bug).
+  **Not completed this sweep**: the edge-function error-rate log check
+  (`query_logs`) — tried `function_edge_logs`, `edge_logs`, and
+  `function_logs` as table names and none resolved against this project's
+  log backend this run; flagged here rather than silently skipped, worth
+  retrying with the correct table name next sweep. Cleaned up: deleted the
+  throwaway test account and its test routine (zero orphaned rows
+  confirmed across `profiles`/`credit_ledger`/`user_routines`/
+  `referral_codes`/`conversations`), `test-admin-setup` re-stubbed to 410
+  and confirmed via a live curl.
 - **2026-10-03** — **Closed the live in-browser verification gap PR #113/#114
   both explicitly flagged as outstanding.** Both merged without a human
   click-through ever happening, so this was overdue, not optional. Root
