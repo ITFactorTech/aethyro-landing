@@ -11,10 +11,9 @@
 // account context beyond the key. Same "custom auth in the function body"
 // exemption webhook-routine-trigger already uses.
 //
-// Known v1 gap, documented rather than solved here: no hard per-key rate
-// limit beyond the credit balance itself. A spammed key can't out-run its
-// owner's balance, but nothing yet throttles requests/minute. Worth adding
-// if abuse is ever observed.
+// Per-key rate limit: 30 req/min, shared increment_rate_limit() RPC with
+// chat (see that migration) -- closes the gap this comment used to
+// document as unsolved.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -42,6 +41,7 @@ const CREDIT_RATES: Record<string, { input: number; output: number }> = {
 const MAX_TOKENS = 4096;
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 8000;
+const API_RATE_LIMIT_PER_MINUTE = 30;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
@@ -73,6 +73,22 @@ serve(async (req) => {
     .single();
   if (keyErr || !keyRow) {
     return json({ error: "Invalid or revoked API key" }, 401);
+  }
+
+  // Per-key rate limit, same fixed-window RPC `chat` uses. Fails open on an
+  // RPC error rather than blocking a legitimate call on an infra hiccup.
+  {
+    const windowStart = new Date(Math.floor(Date.now() / 60000) * 60000).toISOString();
+    const { data: rlCount, error: rlErr } = await supaAdmin.rpc("increment_rate_limit", {
+      p_key_type: "api_key", p_key_value: keyRow.id, p_window_start: windowStart,
+    });
+    if (rlErr) {
+      console.error("api-chat: rate limit check failed", rlErr.message);
+    } else if (typeof rlCount === "number" && rlCount > API_RATE_LIMIT_PER_MINUTE) {
+      return new Response(JSON.stringify({ error: "Too many requests, please slow down" }), {
+        status: 429, headers: { ...CORS, "Content-Type": "application/json", "Retry-After": "60" },
+      });
+    }
   }
 
   let body: any;

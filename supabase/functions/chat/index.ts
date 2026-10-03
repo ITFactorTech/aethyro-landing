@@ -63,6 +63,7 @@ const TITLE_TOKENS        = 80;
 const LOW_CREDIT_THRESHOLD = 30;
 const MAX_ATTACHMENTS     = 3;
 const MAX_TOOL_ROUNDS     = 4;
+const CHAT_RATE_LIMIT_PER_MINUTE = 20;
 
 const MODEL_MAP: Record<string, string> = {
   haiku:  "claude-haiku-4-5-20251001",
@@ -334,6 +335,27 @@ serve(async (req) => {
     });
 
   const supaAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  // Per-user rate limit: a fixed 1-minute window, keyed by user id, shared
+  // RPC with api-chat (see increment_rate_limit's own migration). Checked
+  // before body parsing so a request that's merely too frequent never pays
+  // JSON-parse/credit-check cost. A failed RPC call fails open (logs, lets
+  // the request through) rather than blocking real users on an infra hiccup
+  // -- same posture this function already takes with best-effort background
+  // work elsewhere.
+  {
+    const windowStart = new Date(Math.floor(Date.now() / 60000) * 60000).toISOString();
+    const { data: rlCount, error: rlErr } = await supaAdmin.rpc("increment_rate_limit", {
+      p_key_type: "chat_user", p_key_value: user.id, p_window_start: windowStart,
+    });
+    if (rlErr) {
+      console.error("chat: rate limit check failed", rlErr.message);
+    } else if (typeof rlCount === "number" && rlCount > CHAT_RATE_LIMIT_PER_MINUTE) {
+      return new Response(JSON.stringify({ error: "Too many requests, please slow down" }), {
+        status: 429, headers: { ...CORS, "Content-Type": "application/json", "Retry-After": "60" },
+      });
+    }
+  }
 
   let body: any;
   try { body = await req.json(); } catch {
