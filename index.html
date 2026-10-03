@@ -796,7 +796,7 @@
     <div style="display:flex;align-items:center;gap:.65rem;margin:.85rem 0 1rem;padding:.6rem .9rem;background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.15);border-radius:10px;width:fit-content">
       <div style="width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);flex-shrink:0"></div>
       <span style="font-family:var(--mono);font-size:.72rem;color:var(--t2)">
-        <b style="color:var(--cyan)">200 free credits</b> on signup &nbsp;·&nbsp; no credit card &nbsp;·&nbsp; your data never sold
+        <b style="color:var(--cyan)">200 free credits</b> on signup &nbsp;·&nbsp; no credit card &nbsp;·&nbsp; your data never sold — <a href="/trust.html" style="color:var(--cyan);text-decoration:underline">see how →</a>
       </span>
     </div>
 
@@ -942,7 +942,7 @@
       <div class="bento-card bc-span3">
         <div class="bento-icon">🔒</div>
         <h3>Your data, never sold</h3>
-        <p>Your queries go to Anthropic's Claude API to generate your response only. Aethyro never sells your data and Anthropic has a strict no-training policy on API inputs.</p>
+        <p>Your queries go to Anthropic's Claude API to generate your response only. Aethyro never sells your data and Anthropic has a strict no-training policy on API inputs. Full detail — RLS enforcement, HMAC-signed deletion receipts, what we deliberately don't claim — on the <a href="/trust.html" style="color:var(--orange)">Trust &amp; Security page →</a></p>
       </div>
 
       <div class="bento-card bc-span3">
@@ -1313,7 +1313,32 @@ patterns are well established.</div>
     </div>
     <p style="text-align:center;margin-top:2rem;color:var(--t3);font-size:.78rem;font-family:var(--mono)">// 200 free credits on signup · no credit card · credits never expire</p>
 
-    <div style="max-width:640px;margin:2.5rem auto 0;padding:1.5rem 1.75rem;background:var(--s2);border:1px solid var(--b1);border-radius:14px;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap">
+    <div style="max-width:640px;margin:2.5rem auto 0;padding:1.5rem 1.75rem;background:var(--s2);border:1px solid var(--b1);border-radius:14px">
+      <div style="text-align:center;margin-bottom:1.1rem">
+        <span class="badge b-cyan" style="margin-bottom:.4rem">What a task actually costs</span>
+        <p style="font-size:.8rem;color:var(--t3);margin-top:.5rem">Credits are billed per 1,000 tokens, by model — a request never costs less than 1 credit. Approximate examples, at the Starter pack's rate ($4 / 200 credits = $0.02/credit):</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;text-align:center">
+        <div>
+          <div style="font-family:var(--mono);font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Quick question · Haiku</div>
+          <div style="font-size:1.4rem;font-weight:700;margin:.3rem 0;color:var(--text)">1 credit</div>
+          <div style="font-family:var(--mono);font-size:.72rem;color:var(--t3)">≈ $0.02</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Explain / summarize · Sonnet</div>
+          <div style="font-size:1.4rem;font-weight:700;margin:.3rem 0;color:var(--text)">~2 credits</div>
+          <div style="font-family:var(--mono);font-size:.72rem;color:var(--t3)">≈ $0.04</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Deep review / long doc · Opus</div>
+          <div style="font-size:1.4rem;font-weight:700;margin:.3rem 0;color:var(--text)">~18 credits</div>
+          <div style="font-family:var(--mono);font-size:.72rem;color:var(--t3)">≈ $0.36</div>
+        </div>
+      </div>
+      <p style="text-align:center;font-size:.72rem;color:var(--t3);margin-top:1rem;font-family:var(--mono)">Actual cost scales with your real input/output length — see the exact per-model rates on <a href="/developers.html" style="color:var(--orange)">developers.html</a>.</p>
+    </div>
+
+    <div style="max-width:640px;margin:1.5rem auto 0;padding:1.5rem 1.75rem;background:var(--s2);border:1px solid var(--b1);border-radius:14px;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap">
       <div style="flex:1;min-width:220px">
         <div class="badge b-cyan" style="margin-bottom:.5rem">Start Free</div>
         <p style="font-size:.85rem;color:var(--t2);line-height:1.6">Sign up and get 200 credits instantly — no credit card needed. Chat with Claude Opus 5 right in your browser, then top up whenever you need more.</p>
