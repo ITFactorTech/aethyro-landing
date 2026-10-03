@@ -882,10 +882,10 @@
 <!-- ── AGENT VISUALIZER ── -->
 <section class="viz-section">
   <div class="container" style="max-width:1100px">
-    <div style="text-align:center;margin-bottom:2.25rem">
-      <span class="sec-eyebrow">Intelligence architecture</span>
-      <h2 style="font-size:clamp(1.6rem,3vw,2.2rem)">Agents working<br/><span class="grad-mix">in concert.</span></h2>
-      <p class="sec-sub" style="margin:.6rem auto 0;max-width:460px;font-size:.88rem">Every message you send coordinates a live graph of specialized agents — tasks, memory, routines, and integrations — all orchestrated by Claude Opus 5.</p>
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <span class="sec-eyebrow">The actual differentiator</span>
+      <h2 style="font-size:clamp(1.7rem,3.4vw,2.4rem)">Not a chatbot.<br/><span class="grad-mix">An orchestration layer.</span></h2>
+      <p class="sec-sub" style="margin:.75rem auto 0;max-width:620px;font-size:.92rem;line-height:1.7">Most AI products are one model answering one message at a time. Aethyro sits Claude Opus 5 at the center of a live graph of five specialized subsystems — and routes every message through whichever ones it actually needs, automatically, with no setup from you.</p>
     </div>
     <div class="viz-canvas-wrap">
       <canvas id="agentCanvas" width="1000" height="320"></canvas>
@@ -897,6 +897,27 @@
         <span class="viz-leg-item"><span class="viz-leg-dot" style="background:#f59e0b"></span>Integrations</span>
       </div>
     </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-top:1.75rem;max-width:1000px;margin-inline:auto">
+      <div style="padding:1rem 1.1rem;background:var(--s1);border:1px solid var(--b1);border-radius:12px">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.04em">Tasks</div>
+        <p style="font-size:.82rem;color:var(--t2);margin-top:.4rem;line-height:1.55">Plans up to 6 steps, searches the web, synthesizes a report — fires only when a message needs real work done, not every turn.</p>
+      </div>
+      <div style="padding:1rem 1.1rem;background:var(--s1);border:1px solid var(--b1);border-radius:12px">
+        <div style="font-family:var(--mono);font-size:.68rem;color:#c4b5fd;text-transform:uppercase;letter-spacing:.04em">Knowledge</div>
+        <p style="font-size:.82rem;color:var(--t2);margin-top:.4rem;line-height:1.55">Your uploaded documents, chunked and embedded — Claude pulls the exact passages it needs instead of guessing from a stuffed prompt.</p>
+      </div>
+      <div style="padding:1rem 1.1rem;background:var(--s1);border:1px solid var(--b1);border-radius:12px">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--green);text-transform:uppercase;letter-spacing:.04em">Routines</div>
+        <p style="font-size:.82rem;color:var(--t2);margin-top:.4rem;line-height:1.55">Cron-scheduled prompts that run themselves — chainable into pipelines, forkable from a public gallery of real community routines.</p>
+      </div>
+      <div style="padding:1rem 1.1rem;background:var(--s1);border:1px solid var(--b1);border-radius:12px">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--orange);text-transform:uppercase;letter-spacing:.04em">Integrations</div>
+        <p style="font-size:.82rem;color:var(--t2);margin-top:.4rem;line-height:1.55">Read-only GitHub and Notion access via your own token — Claude lists repos and browses pages in-context, nothing stored server-side.</p>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:1.5rem">
+      <a href="#intelligence" class="btn btn-ghost btn-sm">See the full architecture ↓</a>
+    </p>
   </div>
 </section>
 
