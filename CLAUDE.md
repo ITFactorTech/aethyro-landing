@@ -334,6 +334,46 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-03** — **Closed the live in-browser verification gap PR #113/#114
+  both explicitly flagged as outstanding.** Both merged without a human
+  click-through ever happening, so this was overdue, not optional. Root
+  cause of the earlier Playwright failures was correctly diagnosed at the
+  time (this sandbox's proxy throttling Chromium's naturally
+  highly-parallel page loads) but never actually worked around — this
+  session did: created a real throwaway account via the established
+  `test-admin-setup` diagnostic pattern, drove Playwright against
+  **production `aethyro.com`** (not the `*.workers.dev` preview
+  subdomain the earlier attempts used), added `page.route()` blocking of
+  non-essential third-party requests (GA, Google Fonts, Cloudflare
+  challenge-platform/RUM) to cut concurrent-connection pressure on the
+  proxy, and retried a few times through the remaining flakiness — exactly
+  the kind of transient infra noise this file already tells future
+  sessions not to mistake for a real bug. Confirmed clean on production,
+  signed in as a real user:
+  1. **Search tab** (Feature B) — opens, runs a real query against
+     `embed-content` with no client error; 0 results is correct for a
+     fresh account with no conversation/document history, not a bug.
+  2. **React/JSX code-block preview** (Feature C) — confirmed on two
+     independent clean runs: renders `Count: 0` in the sandboxed iframe,
+     and clicking the real rendered button updates React state to
+     `Count: 1` — proving the iframe's event handlers actually execute,
+     not just that markup appears.
+  3. **Python execution via Pyodide** (Feature D) — a real `print()` plus
+     a list comprehension produced the exact expected
+     `"hello from pyodide\nsquares: [0, 1, 4, 9, 16]"`, confirming the
+     stdout-capture bug fixed in PR #114's own Node-harness testing also
+     holds end-to-end in a real browser against the real CDN-hosted
+     Pyodide runtime.
+  One piece of real signal surfaced along the way, not a regression: a
+  few runs hit `ReactDOM.createRoot is not a function` /
+  `__SECRET_INTERNALS...` errors when the React/ReactDOM/Babel CDN
+  scripts themselves got proxy-throttled mid-load on an otherwise-slow
+  run — confirmed this was the CDN fetch failing (via
+  `requestfailed`/`pageerror` listeners), not the app's own code, and a
+  clean retry rendered correctly. Cleaned up: deleted the throwaway
+  account, `test-admin-setup` re-stubbed to 410 and confirmed via a live
+  curl (401 with no/invalid auth, matching this stub's established
+  pattern).
 - **2026-10-02** — **Added client-side Python execution** (PR #114, 4th of
   4 "serious AI tool" features from the same request — the other 3 are the
   entry directly below, PR #113). Extends the same Run-code mechanism with
@@ -360,13 +400,14 @@ that). Newest first.
   after the fix — both the prior output and the traceback now show
   together. All CDN URLs confirmed reachable via direct `curl`, JS syntax
   of the full inline script verified via `node --check` after every edit.
-  **A real in-browser click-through is still recommended before fully
-  trusting this** — same unresolved Playwright/proxy limitation as the
-  entry below, never completed this session despite repeated attempts.
+  Live in-browser click-through confirmed the next day — see the
+  2026-10-03 entry above.
 - **2026-10-02** — **Added 3 of 4 "serious AI tool" features requested
   together** ("build the website AI further... implement all 4") — the 4th
   (Python code execution) is PR #114, stacked on this one, with its own log
-  entry. One of these three turned out to already exist from an earlier,
+  entry. Both PRs' outstanding "needs a real in-browser click-through"
+  caveat was closed the next day — see the 2026-10-03 entry directly
+  above. One of these three turned out to already exist from an earlier,
   undocumented session and only needed live verification; the other two
   were real new work.
   1. **Show reasoning** (no code change) — `chat`'s extended-thinking
@@ -416,8 +457,8 @@ that). Newest first.
   (above); the new iframe/CDN-loading code mirroring this repo's already-
   shipped html/js/css pattern exactly; `node --check` syntax validation
   after every edit; and every new CDN URL confirmed reachable via direct
-  `curl`. **A real in-browser click-through is still recommended before
-  fully trusting #2/#3** — flagged here rather than silently assumed.
+  `curl`. Live in-browser click-through for #2/#3 confirmed the next
+  day — see the 2026-10-03 entry above.
   **Incidental finding, ruled out, not a bug**: a CSP violation
   (`style-src` blocking highlight.js's stylesheet) appeared in Playwright
   console logs during verification — checked via direct `curl -I` on both
