@@ -17,7 +17,7 @@
   <meta name="twitter:description" content="A public, metered API for Aethyro's models. One API key, billed in credits per request."/>
   <meta name="twitter:image" content="https://aethyro.com/og-image.png"/>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
-  <link rel="apple-touch-icon" href="/favicon.svg"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
   <meta name="theme-color" content="#030303"/>
   <link rel="manifest" href="/manifest.json"/>
   <link rel="preconnect" href="https://uzmdqbtflcpikjdrggqc.supabase.co"/>
@@ -134,12 +134,13 @@
     <tr><td class="mono"><span class="badge err">401</span></td><td>Missing, malformed, or revoked API key.</td></tr>
     <tr><td class="mono"><span class="badge err">400</span></td><td>Malformed request body — see the returned <span class="inline-code">error</span> field.</td></tr>
     <tr><td class="mono"><span class="badge err">402</span></td><td>Insufficient credits on the account that owns the key.</td></tr>
+    <tr><td class="mono"><span class="badge err">429</span></td><td>Over 30 requests/minute on this key. Check the <span class="inline-code">Retry-After</span> header (seconds).</td></tr>
     <tr><td class="mono"><span class="badge err">502</span></td><td>The upstream model call failed. Safe to retry.</td></tr>
   </table>
 
   <div class="card">
     <strong style="color:var(--text)">A note on scope, honestly:</strong>
-    <p class="lead" style="margin-top:.5rem;margin-bottom:0">This is a v1. There's no hard per-key rate limit yet beyond your own credit balance, no streaming responses, and no <span class="inline-code">auto</span> model routing on this endpoint (that's chat.html-only for now) — just a single synchronous JSON call. If you need any of those, <a href="mailto:hello@aethyro.com" style="color:var(--orange)">tell us</a>.</p>
+    <p class="lead" style="margin-top:.5rem;margin-bottom:0">This is a v1. Each key is capped at 30 requests/minute (on top of your credit balance) — you'll get a <span class="inline-code">429</span> with <span class="inline-code">Retry-After: 60</span> if you hit it. No streaming responses yet, and no <span class="inline-code">auto</span> model routing on this endpoint (that's chat.html-only for now) — just a single synchronous JSON call. If you need either of those, or a higher rate limit, <a href="mailto:hello@aethyro.com" style="color:var(--orange)">tell us</a>.</p>
   </div>
 
   <div class="cta-box">

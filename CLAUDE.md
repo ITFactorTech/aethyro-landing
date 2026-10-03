@@ -383,6 +383,96 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-03** — **Fixed the 2 remaining gaps from the pro-grade audit
+  re-run the same day: apple-touch-icon correctness and per-user/per-key
+  rate limiting on `chat` and `api-chat`.**
+  **Apple-touch-icon**: the existing tag pointed at `favicon.svg` on only
+  12 of 24 pages — iOS Safari doesn't accept SVG for home-screen icons at
+  all, so this was never actually working despite looking present.
+  Rasterized a real 180×180 PNG from the same SVG via headless Chromium
+  (no `cairosvg`/`Pillow`/`sharp` available in this sandbox; Playwright +
+  the pre-installed Chromium was the reliable path) — first attempt baked
+  in the SVG's own rounded corners against a white page background,
+  leaving visible white corners in the PNG; fixed by flattening to a full
+  bleed square (`rx="0"`, matching background) and letting iOS apply its
+  own corner mask, which is the standard convention. Added
+  `/apple-touch-icon.png` at the repo root and corrected or added the
+  `<link rel="apple-touch-icon">` tag on **all 24** HTML pages — 12 had
+  the wrong `href`, 11 were missing the tag entirely, and `app/admin.html`
+  had no favicon tags *or* the required `noindex,nofollow` robots meta at
+  all (added both while fixing this, since the page is otherwise
+  identical in kind to every other `app/*.html` page).
+  **Rate limiting**: new `rate_limit_counters` table + `increment_rate_limit()`
+  RPC (migration `20261003160000_rate_limit_counters.sql`), a generalized
+  version of the existing `trial_usage`/`increment_trial_usage` fixed-window
+  pattern with a `key_type` column so one table serves both `chat`
+  (`chat_user` + `user.id`, 20 req/min) and `api-chat` (`api_key` +
+  `api_keys.id`, 30 req/min) instead of duplicating it. `SECURITY DEFINER`
+  + a strict `auth.role() <> 'service_role'` check with **no** `OR
+  auth.uid() = ...` branch — unlike `get_credit_balance`, this function's
+  only ever legitimate caller is each edge function's own `supaAdmin`
+  client, never a per-user JWT, so there's no second case to get wrong
+  here (see this file's own `get_credit_balance` incident from earlier
+  today for exactly what happens when that distinction is missed). An
+  hourly `pg_cron` job (`cleanup-rate-limit-counters-hourly`) prunes rows
+  over 1 hour old, same shape as the existing daily trial-usage cleanup.
+  Both edge functions check-and-increment right after auth resolution,
+  before any expensive work (JSON parsing, the credit check, the Anthropic
+  call) — and fail *open* (log, let the request through) if the RPC call
+  itself errors, so an infra hiccup degrades to "no rate limit" rather
+  than blocking real traffic. **Verified live with real concurrent load**,
+  not just code review: 25 parallel requests to `chat` from one throwaway
+  account returned exactly 20× `200` and 5× `429`; 38 parallel requests to
+  `api-chat` from one real API key returned exactly 30× `200` and 8×
+  `429` — both precisely matching the configured limits, confirming the
+  atomic upsert holds correctly under real concurrency.
+  **Caught and fixed a real client-side bug while verifying this** — not
+  theoretical, found by actually reading `chat.html`'s existing response
+  handling rather than assuming a 429 was safe to ship: `send()` already
+  had an `if(resp.status===429)` branch, but it was written only for the
+  anonymous trial endpoint's daily cap and unconditionally called
+  `lockForSignup()` — which sets `trialLocked=true` and permanently
+  disables the input with "Sign up to keep chatting →", with **no
+  corresponding unlock function**. Had this shipped as-is, any real
+  signed-in user who tripped the new per-minute limit would have been
+  told to sign up and had their chat input permanently disabled until a
+  page reload. Fixed by branching on `session`: the existing trial-limit
+  message + `lockForSignup()` only fires for the anonymous path;
+  authenticated users instead see "You're sending messages a bit fast —
+  please wait a moment and try again," with nothing locked (the existing
+  `finally` block's `busy=false` already handles re-enabling the send
+  button correctly once `trialLocked` isn't set).
+  Updated `developers.html`'s "known v1 gaps" copy and its error-code
+  table, which had explicitly and accurately documented the *absence* of
+  rate limiting — leaving that stale after shipping the fix would have
+  been its own correctness bug.
+  Cleanup: deleted the throwaway account and its real API key (profiles/
+  api_keys cascaded correctly); 2 leftover `rate_limit_counters` test rows
+  could not be deleted directly — `execute_sql` DELETEs against this
+  project intermittently return `{"status":"cancelled"}` while SELECTs on
+  the same table succeed instantly (a known, previously-documented quirk
+  of this backend, not specific to this table) — left in place rather
+  than fought further, since they're harmless (zero grants to
+  `anon`/`authenticated`, no sensitive data) and the new hourly cleanup
+  cron purges them within the hour regardless. `test-admin-setup`
+  re-stubbed to 410, confirmed via a live curl.
+- **2026-10-03** — **Re-ran the pro-grade site audit** (the artifact this
+  file links at the top), on request, rather than reusing the stale
+  2026-09-27 score. Score moved from 72/100 to 91/100 — every figure
+  re-verified live against the repo, the database, and the production
+  site, not carried forward: 24 pages (was 13), 19 active edge functions
+  (was 10, +8 intentionally stubbed), 29 DB tables all RLS-enabled (was
+  an unverified "15+"), and 18 real profiles / 61 billed ledger rows to
+  check against instead of the near-zero-signup state the original audit
+  worked from. 12 of the original 16 gap items are now fixed; the
+  remaining 5 (apple-touch-icon, rate limiting, CORS wildcard on `chat`/
+  `buy-credits`, skeleton loading states, PWA offline) are listed in the
+  audit itself with honest effort/priority estimates — the first two are
+  closed by the entry directly above this one, the same day. Also
+  corrected one stale claim in the process: the original "~8ms TTFB" was
+  never actually measured; three real `curl` timing runs this time
+  measured ~200ms (with the caveat that includes this session's own
+  network path, not pure edge latency).
 - **2026-10-03** — **`site-guardian` sweep, user-requested. Found and fixed
   one P0: the credit-balance gate on every billed surface in the app (chat,
   the public API, agent tasks, scheduled routines) was silently fail-open
