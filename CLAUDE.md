@@ -397,6 +397,45 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-05** — **Fixed: `send-welcome-email`'s day-5 "reengagement"
+  email's own targeting gate was silently broken, sending to every
+  candidate regardless of real usage.** Found while investigating a
+  retention pattern pulled live: of 20 accounts old enough to have a
+  "day 2", only 1 has ever returned and sent a message on a day other
+  than their signup day — the rest engaged once (if at all) and never
+  came back, which is the real story behind this product's $0 lifetime
+  revenue. The existing day-2/day-5 drip cron jobs (`drip-engagement`/
+  `drip-reengagement`) are correctly wired and firing on schedule — not
+  a bug — but the day-5 email is supposed to only go to users who've
+  sent **zero** real messages (so an already-active user never gets
+  told their credits are "still waiting"), and its gate queried
+  `messages.user_id` — a column that, per this file's own schema
+  gotchas, doesn't exist. The query errors, the code destructures only
+  `{ count }` and discards the error, and `(count || 0) === 0` ends up
+  permanently `true` — meaning this gate has always passed
+  unconditionally, for every candidate, engaged or not. It hadn't
+  visibly misfired yet purely by luck: every real day-5 candidate so
+  far also happened to have zero messages. Fixed by scoping through
+  `conversations` like every other per-user `messages` query in this
+  codebase (fetch the user's conversation ids, then count messages in
+  those), and made it fail *closed* on an unexpected lookup error —
+  skip the send rather than risk the wrong message reaching an active
+  user. Checked `verify_jwt` before deploying (per the gotcha below from
+  earlier the same day) — confirmed `false`, passed explicit. Live
+  source fetched back and diffed byte-for-byte against local disk.
+  **Verified live, not just logic review**: two real throwaway accounts,
+  one given a real message via a direct DB insert, one left at zero —
+  calling the reengagement check directly on both showed the fix
+  correctly discriminating: the account with a message got a clean
+  `{ok:true}` with *no* Resend call attempted (correctly skipped), while
+  the zero-message account correctly proceeded to a real send attempt,
+  which only then hit Resend's expected, already-documented rejection
+  of `@example.com` test addresses — confirming the code path reached
+  the real send for the right account and not the wrong one. Neither
+  account picked up a stray `reengagement_sent_at`, consistent with both
+  outcomes being correct. Cleaned up: both throwaway accounts deleted,
+  zero orphaned rows confirmed, `test-admin-setup` re-stubbed to 410 and
+  confirmed via a live curl.
 - **2026-10-05** — **Fixed: a user who goes from a positive balance straight
   to 0/negative in a single message got zero credit notification of any
   kind, ever.** Pulled real revenue data after PR #124: **$0 in purchases,
