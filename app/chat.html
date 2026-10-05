@@ -491,6 +491,7 @@
              instead of just typing a sentence into the composer, since a
              chip can't open a file picker or switch Intelligence-panel tabs. -->
         <div class="prompt-chips" id="featureTryouts" style="margin-top:.6rem">
+          <button class="prompt-chip" id="tryDailyBriefing" style="border-color:rgba(255,179,0,.35);color:#ffd966">📰 Try it: daily AI briefing →</button>
           <button class="prompt-chip" id="tryUploadDoc" style="border-color:rgba(139,92,246,.35);color:#c4b5fd">📄 Try it: upload a document →</button>
           <button class="prompt-chip" id="tryRoutine" style="border-color:rgba(34,197,94,.35);color:var(--green)">🔁 Try it: create a routine →</button>
         </div>
@@ -744,6 +745,10 @@ I often need help with: client quotes, contract review, business Instagram posts
             <option value="">— none —</option>
           </select>
           <span style="font-size:.69rem;color:var(--t3);display:block;margin-top:.3rem">Chains this routine's result into another one of your routines as context, run immediately after this one completes</span>
+        </div>
+        <div class="intel-form-group" style="display:flex;align-items:center;gap:.5rem">
+          <input type="checkbox" id="routineEmailOnResult" style="width:auto;margin:0"/>
+          <label class="intel-label" for="routineEmailOnResult" style="margin:0">📧 Email me when this runs</label>
         </div>
         <div class="intel-btn-row">
           <button class="intel-btn" type="submit" id="routineSaveBtn">Save Routine</button>
@@ -2152,7 +2157,36 @@ I often need help with: client quotes, contract review, business Instagram posts
     var rTab=document.querySelector('.intel-tab[data-tab="routines"]');
     if(rTab) rTab.click();
   }
-  var tryUploadDocBtn=$('tryUploadDoc'), tryRoutineBtn=$('tryRoutine');
+  /* Return-visit hook: one real click creates a ready-to-go scheduled
+     routine with email notifications already on, instead of handing a
+     new user a blank form -- the actual retention mechanism is the email
+     itself (see send-routine-result-email / run-routines' email_on_result
+     branch), which gives a reason to open the tab again that doesn't
+     depend on the user remembering to check back. */
+  async function openDailyBriefingFlow(){
+    if(!session){ showToast('Sign in to use Intelligence features','err'); return; }
+    var btn=$('tryDailyBriefing');
+    if(btn){ btn.disabled=true; btn.textContent='Scheduling…'; }
+    try{
+      var r=await supabase.from('user_routines').insert({
+        user_id:session.user.id,
+        name:'Daily Briefing',
+        prompt:'Give me a short daily briefing: the single most interesting AI/tech development from the last 24 hours, one practical tip I could use today, and a one-line thought to start the day with. Keep it concise and skimmable.',
+        schedule:'0 9 * * *',
+        model:'haiku',
+        email_on_result:true
+      });
+      if(r.error){ showToast(r.error.message,'err'); return; }
+      showToast('✓ Daily briefing scheduled — we\'ll email you each morning','ok');
+      openIntelPanel();
+      var rTab=document.querySelector('.intel-tab[data-tab="routines"]');
+      if(rTab) rTab.click();
+      loadRoutines();
+    }catch(e){ showToast('Could not schedule briefing','err'); }
+    finally{ if(btn){ btn.disabled=false; btn.textContent='📰 Try it: daily AI briefing →'; } }
+  }
+  var tryDailyBriefingBtn=$('tryDailyBriefing'), tryUploadDocBtn=$('tryUploadDoc'), tryRoutineBtn=$('tryRoutine');
+  if(tryDailyBriefingBtn) tryDailyBriefingBtn.addEventListener('click',openDailyBriefingFlow);
   if(tryUploadDocBtn) tryUploadDocBtn.addEventListener('click',openDocUploadFlow);
   if(tryRoutineBtn) tryRoutineBtn.addEventListener('click',openRoutineFlow);
 
@@ -2287,9 +2321,9 @@ I often need help with: client quotes, contract review, business Instagram posts
       var chainTo=$('routineChainSelect').value||null;
       var btn=$('routineSaveBtn'); btn.disabled=true; btn.textContent='Saving…';
       try{
-        var r=await supabase.from('user_routines').insert({user_id:session.user.id,name:name,prompt:prompt,schedule:schedule,model:$('routineModel').value,next_routine_id:chainTo});
+        var r=await supabase.from('user_routines').insert({user_id:session.user.id,name:name,prompt:prompt,schedule:schedule,model:$('routineModel').value,next_routine_id:chainTo,email_on_result:$('routineEmailOnResult').checked});
         if(r.error){ showToast(r.error.message,'err'); return; }
-        $('routineName').value=''; $('routinePrompt').value=''; $('routineSchedule').value='0 9 * * 1-5'; $('routineChainSelect').value='';
+        $('routineName').value=''; $('routinePrompt').value=''; $('routineSchedule').value='0 9 * * 1-5'; $('routineChainSelect').value=''; $('routineEmailOnResult').checked=false;
         showToast('Routine "'+name+'" created','ok'); loadRoutines();
       }catch(e){ showToast('Could not save routine','err'); }
       finally{ btn.disabled=false; btn.textContent='Save Routine'; }
@@ -2559,6 +2593,18 @@ I often need help with: client quotes, contract review, business Instagram posts
         togLabel.textContent=rt.enabled?'On':'Off'; togLabel.style.color=rt.enabled?'var(--green)':'var(--t3)';
         await supabase.from('user_routines').update({enabled:rt.enabled}).eq('id',rt.id);
       });
+      var emailBtn=document.createElement('button'); emailBtn.className='intel-btn intel-btn-sm'; emailBtn.textContent=rt.email_on_result?'📧 Email: on':'📧 Email: off';
+      emailBtn.title='Email you a short summary every time this routine produces a result';
+      emailBtn.addEventListener('click',async function(){
+        emailBtn.disabled=true;
+        var next=!rt.email_on_result;
+        var ur=await supabase.from('user_routines').update({email_on_result:next}).eq('id',rt.id);
+        if(ur.error){ showToast('Could not update','err'); emailBtn.disabled=false; return; }
+        rt.email_on_result=next;
+        emailBtn.textContent=next?'📧 Email: on':'📧 Email: off';
+        showToast(next?'Will email you when this runs':'Email notifications off','ok');
+        emailBtn.disabled=false;
+      });
       var runBtn=document.createElement('button'); runBtn.className='intel-btn intel-btn-sm'; runBtn.textContent='Run now';
       runBtn.addEventListener('click',async function(){
         runBtn.disabled=true; runBtn.textContent='Running…';
@@ -2603,7 +2649,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         card.style.opacity='0'; card.style.transition='opacity .25s'; setTimeout(function(){ card.remove(); },260);
         loadIntelStats();
       });
-      actions.appendChild(togWrap); actions.appendChild(runBtn); actions.appendChild(hookBtn); actions.appendChild(chainBtn); actions.appendChild(delBtn);
+      actions.appendChild(togWrap); actions.appendChild(emailBtn); actions.appendChild(runBtn); actions.appendChild(hookBtn); actions.appendChild(chainBtn); actions.appendChild(delBtn);
       card.appendChild(chainSel);
       card.appendChild(actions); list.appendChild(card);
     });
