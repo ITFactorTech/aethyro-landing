@@ -126,6 +126,10 @@
   .pack-btn .amt{font-weight:800;font-size:1rem;font-family:var(--mono)}
   .pack-btn .cr{font-size:.66rem;color:var(--t3);margin-top:.2rem}
   .credit-modal-close{margin-top:1.25rem;text-align:center;font-size:.8rem;color:var(--t3);cursor:pointer}
+  .credit-modal-context{background:rgba(255,77,0,.07);border:1px solid rgba(255,77,0,.2);border-radius:10px;padding:.7rem .9rem;margin:-.6rem 0 1rem;font-size:.78rem;color:var(--t2);line-height:1.5}
+  .pack-btn.recommended{border-color:var(--orange);background:rgba(255,77,0,.08)}
+  .pack-btn .rec-tag{display:none;font-size:.6rem;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.04em;margin-top:.25rem}
+  .pack-btn.recommended .rec-tag{display:block}
 
   /* ── Markdown output ── */
   .msg-bubble h1,.msg-bubble h2,.msg-bubble h3{font-weight:700;margin:.9rem 0 .35rem;line-height:1.3}
@@ -541,11 +545,12 @@
   <div class="credit-modal">
     <h3>Buy credits</h3>
     <p>Credits never expire. A typical multi-message exchange costs ~10–30 credits.</p>
+    <div class="credit-modal-context" id="creditModalContext" style="display:none"></div>
     <div class="pack-grid">
-      <div class="pack-btn" data-pack="starter"><div class="amt">$4</div><div class="cr">200 credits</div></div>
-      <div class="pack-btn" data-pack="value"><div class="amt">$10</div><div class="cr">600 credits</div></div>
-      <div class="pack-btn" data-pack="power"><div class="amt">$30</div><div class="cr">2,000 credits</div></div>
-      <div class="pack-btn" data-pack="pro_7k"><div class="amt">$90</div><div class="cr">7,000 credits</div></div>
+      <div class="pack-btn" data-pack="starter"><div class="amt">$4</div><div class="cr">200 credits</div><div class="rec-tag">Recommended</div></div>
+      <div class="pack-btn" data-pack="value"><div class="amt">$10</div><div class="cr">600 credits</div><div class="rec-tag">Recommended</div></div>
+      <div class="pack-btn" data-pack="power"><div class="amt">$30</div><div class="cr">2,000 credits</div><div class="rec-tag">Recommended</div></div>
+      <div class="pack-btn" data-pack="pro_7k"><div class="amt">$90</div><div class="cr">7,000 credits</div><div class="rec-tag">Recommended</div></div>
     </div>
     <div class="credit-modal-close" id="creditModalClose">Cancel</div>
   </div>
@@ -973,17 +978,19 @@ I often need help with: client quotes, contract review, business Instagram posts
     var q=params.toString();
     window.history.replaceState({},'',location.pathname+(q?'?'+q:''));
 
-    if(outcome==='cancelled'){ showToast('Checkout cancelled — you were not charged','err'); return; }
+    if(outcome==='cancelled'){ track('checkout_cancelled',{}); showToast('Checkout cancelled — you were not charged','err'); return; }
     if(outcome==='success'){
       /* The webhook credits the account asynchronously, so poll rather than
          reading the balance once and reporting nothing. */
       var before=parseInt($('balanceVal').textContent)||0;
+      var wasDepleted=depleted;
       showToast('Payment received — adding credits…','ok');
       for(var i=0;i<10;i++){
         await new Promise(function(r){ setTimeout(r,1500); });
         await refreshBalance();
         var now=parseInt($('balanceVal').textContent)||0;
         if(now>before){
+          track('checkout_completed',{credits_added:now-before,was_depleted:wasDepleted});
           showToast((now-before).toLocaleString()+' credits added','ok');
           if(depleted) unlockDepleted();
           return;
@@ -992,7 +999,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       showToast('Payment received. Credits can take a moment to land — reload if they have not appeared.','ok');
       return;
     }
-    if(wanted && VALID_PACKS.indexOf(wanted)!==-1) startCheckout(wanted);
+    if(wanted && VALID_PACKS.indexOf(wanted)!==-1) startCheckout(wanted,'buy_param');
   }
 
   /* ── Anonymous mode ── */
@@ -1017,6 +1024,7 @@ I often need help with: client quotes, contract review, business Instagram posts
 
   function lockForDepleted(){
     depleted=true;
+    track('credits_depleted',{session_credits_spent:sessionCostTotal,session_messages:sessionMsgCount});
     $('depletedBar').style.display='flex';
     $('lowBalance').style.display='none';
     $('input').disabled=true;
@@ -1606,7 +1614,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         var oocBtn=document.createElement('button');
         oocBtn.className='ooc-buy-btn';
         oocBtn.textContent='Buy credits';
-        oocBtn.addEventListener('click', openCreditModal);
+        oocBtn.addEventListener('click', function(){ openCreditModal('depleted_inline'); });
         bubble.appendChild(oocMsg);
         bubble.appendChild(document.createElement('br'));
         bubble.appendChild(oocBtn);
@@ -2294,7 +2302,7 @@ I often need help with: client quotes, contract review, business Instagram posts
             var lba=document.createElement('a');
             lba.href='#'; lba.className='task-buy-link'; lba.style.cssText='color:var(--orange);font-weight:700';
             lba.textContent='Buy credits →';
-            lba.addEventListener('click',function(e){e.preventDefault();openCreditModal();});
+            lba.addEventListener('click',function(e){e.preventDefault();openCreditModal('depleted_inline');});
             lb.appendChild(lba);
           }
           return;
@@ -2996,12 +3004,42 @@ I often need help with: client quotes, contract review, business Instagram posts
     showToast('Chat exported as Markdown','ok');
   });
 
-  /* ── Credit modal ── */
-  function openCreditModal(){ $('creditModal').classList.add('show'); }
+  /* ── Credit modal ──
+     The moment right after a balance hits zero had zero instrumentation
+     and zero design of its own -- every entry point opened the same bare
+     4-pack grid, and nothing was ever tracked past a raw $0-revenue count
+     in the database. `surface` identifies which entry point opened the
+     modal (tracked via GA), and the two real depleted-moment surfaces
+     ('depleted_bar', the composer-area bar; 'depleted_inline', the 402
+     bubble shown right where a message got cut off) additionally render
+     a contextual block built from this session's own real, already-
+     computed usage (sessionCostTotal/sessionMsgCount from the runway-
+     estimate feature) and recommend the lowest-commitment pack -- never
+     a fabricated or predicted "ideal" pack size, just real numbers plus
+     an honest default for someone who just got blocked and may not know
+     yet whether they'll keep using the product. */
+  var DEPLETED_SURFACES=['depleted_bar','depleted_inline'];
+  var creditModalSurface='topbar';
+  function openCreditModal(surface){
+    creditModalSurface=surface||'topbar';
+    track('buy_modal_open',{surface:creditModalSurface});
+    var ctx=$('creditModalContext');
+    var isDepleted=DEPLETED_SURFACES.indexOf(creditModalSurface)!==-1;
+    if(isDepleted && sessionMsgCount>0){
+      ctx.textContent='You’ve used '+sessionCostTotal.toLocaleString()+' credit'+(sessionCostTotal===1?'':'s')+' across '+sessionMsgCount+' message'+(sessionMsgCount===1?'':'s')+' this session — the Starter pack is the smallest way to keep going right now.';
+      ctx.style.display='block';
+    } else {
+      ctx.style.display='none';
+    }
+    document.querySelectorAll('.pack-btn').forEach(function(btn){
+      btn.classList.toggle('recommended', isDepleted && btn.getAttribute('data-pack')==='starter');
+    });
+    $('creditModal').classList.add('show');
+  }
   function closeCreditModal(){ $('creditModal').classList.remove('show'); }
-  $('buyBtn').addEventListener('click',openCreditModal);
-  $('lowBalanceBuy').addEventListener('click',function(e){ e.preventDefault(); openCreditModal(); });
-  $('depletedBuy').addEventListener('click',function(e){ e.preventDefault(); openCreditModal(); });
+  $('buyBtn').addEventListener('click',function(){ openCreditModal('topbar'); });
+  $('lowBalanceBuy').addEventListener('click',function(e){ e.preventDefault(); openCreditModal('low_balance'); });
+  $('depletedBuy').addEventListener('click',function(e){ e.preventDefault(); openCreditModal('depleted_bar'); });
   $('creditModalClose').addEventListener('click',closeCreditModal);
   $('creditModal').addEventListener('click',function(e){ if(e.target===this) closeCreditModal(); });
 
@@ -3010,10 +3048,11 @@ I often need help with: client quotes, contract review, business Instagram posts
      A raw Payment Link carries no user id, so the buyer would be charged and
      receive nothing. Navigate in-tab — Stripe returns to ?purchase=success. */
   var checkoutBusy=false;
-  async function startCheckout(pack){
+  async function startCheckout(pack,surface){
     if(checkoutBusy) return;
     if(!session){ showToast('Sign in to buy credits','err'); return; }
     checkoutBusy=true;
+    track('checkout_started',{pack:pack,surface:surface||creditModalSurface||'unknown'});
     try{
       var r=await fetch(window.AETHYRO_FN_URL+'/buy-credits',{
         method:'POST',
@@ -3035,7 +3074,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       if(!pack) return;
       var cr=btn.querySelector('.cr'), prev=cr?cr.textContent:'';
       if(cr) cr.textContent='Opening checkout…';
-      startCheckout(pack).then(function(){ if(cr&&!checkoutBusy) cr.textContent=prev; });
+      startCheckout(pack,creditModalSurface).then(function(){ if(cr&&!checkoutBusy) cr.textContent=prev; });
     });
   });
 })();
