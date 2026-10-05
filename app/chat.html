@@ -481,7 +481,7 @@
 
     <div class="composer-wrap">
       <div class="low-balance" id="lowBalance" style="display:none">
-        ⚠ Low balance (<span id="lowBalanceVal">0</span> credits). <a href="#" id="lowBalanceBuy">Buy more →</a>
+        ⚠ Low balance (<span id="lowBalanceVal">0</span> credits)<span id="lowBalanceModelNote"></span>. <a href="#" id="lowBalanceBuy">Buy more →</a>
       </div>
       <div class="low-balance" id="trialLimitBar" style="display:none">
         🔒 That's today's 3 free preview messages. <a href="./signup.html?next=chat" id="trialLimitBarLink">Sign up free for 200 credits →</a>
@@ -492,8 +492,8 @@
       <div class="model-bar" id="modelBar">
         <button class="model-btn" data-model="auto" id="mBtnAuto" title="Routes each message to Haiku, Sonnet, or Opus based on how hard it looks — you're only billed for the model actually used">Auto<span class="model-cost">smart routing</span></button>
         <button class="model-btn" data-model="haiku" id="mBtnHaiku">Haiku<span class="model-cost">~1 cr/msg</span></button>
-        <button class="model-btn" data-model="sonnet" id="mBtnSonnet">Sonnet<span class="model-cost">~4 cr/msg</span></button>
-        <button class="model-btn" data-model="opus" id="mBtnOpus">Opus<span class="model-cost">~15 cr/msg</span></button>
+        <button class="model-btn" data-model="sonnet" id="mBtnSonnet" title="Scales with reply length — longer answers cost more">Sonnet<span class="model-cost">~1-15 cr/msg</span></button>
+        <button class="model-btn" data-model="opus" id="mBtnOpus" title="Scales with reply length — a long reply can cost significantly more than a short one">Opus<span class="model-cost">~5-80 cr/msg</span></button>
       </div>
       <div id="attachChips" style="display:none"></div>
       <form class="composer" id="composer">
@@ -883,6 +883,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         localStorage.setItem('aethyro_model', currentModel);
         bar.querySelectorAll('.model-btn').forEach(function(b){ b.classList.toggle('active', b===btn); });
         setCloudNote();
+        if(_prevBalance!==null) updateLowBalanceWarning(_prevBalance);
       });
     });
     setCloudNote();
@@ -1030,8 +1031,32 @@ I often need help with: client quotes, contract review, business Instagram posts
     _prevBalance = n;
     if(n<=0 && !depleted){ lockForDepleted(); }
     else if(n>0 && depleted){ unlockDepleted(); }
-    if(n>0 && n<=30){ $('lowBalance').style.display='flex'; $('lowBalanceVal').textContent=n; }
-    else { $('lowBalance').style.display='none'; }
+    updateLowBalanceWarning(n);
+  }
+
+  /* Opus/Sonnet reply cost scales with response length (see the model-bar
+     cost badges) -- a flat 30-credit threshold missed the realistic case of
+     a user with, say, 47 credits and Opus selected getting wiped out (and
+     possibly cut off mid-reply) by one long message with zero warning.
+     Threshold is per-model so the warning fires before that happens instead
+     of only after the balance already dropped low in absolute terms. */
+  function lowBalanceThreshold(model){
+    if(model==='opus' || model==='auto') return 80;
+    if(model==='sonnet') return 15;
+    return 10;
+  }
+  function updateLowBalanceWarning(n){
+    if(depleted){ $('lowBalance').style.display='none'; return; }
+    var threshold=lowBalanceThreshold(currentModel);
+    if(n>0 && n<=threshold){
+      $('lowBalance').style.display='flex';
+      $('lowBalanceVal').textContent=n;
+      $('lowBalanceModelNote').textContent =
+        (currentModel==='opus' || currentModel==='auto') ? ' — an Opus reply can cost up to ~80 credits and may not complete' :
+        (currentModel==='sonnet') ? ' — a Sonnet reply can cost up to ~15 credits' : '';
+    } else {
+      $('lowBalance').style.display='none';
+    }
   }
 
   /* ── Conversation list ── */
