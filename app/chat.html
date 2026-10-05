@@ -98,6 +98,11 @@
   .composer-wrap{max-width:800px;width:100%;margin:0 auto;padding:0 1.1rem}
   .low-balance{margin:.5rem 0;padding:.75rem 1rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;font-size:.83rem;color:#fcd34d;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
   .low-balance a{color:var(--orange)}
+  .post-reply-nudge{margin:.5rem 0;padding:.75rem 1rem;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.25);border-radius:12px;font-size:.83rem;color:#ddd6fe;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+  .nudge-link{background:none;border:none;padding:0;color:#c4b5fd;font-weight:700;font-family:var(--font);font-size:inherit;text-decoration:underline;cursor:pointer}
+  .nudge-link:hover{color:#e9d5ff}
+  .nudge-dismiss{margin-left:auto;background:none;border:none;color:var(--t2);font-size:1rem;line-height:1;cursor:pointer;padding:.1rem .3rem}
+  .nudge-dismiss:hover{color:var(--text)}
   .trial-badge{background:rgba(255,77,0,.08);border-color:rgba(255,77,0,.22);color:var(--orange2)}
   .signup-link{background:var(--orange);color:#fff;font-weight:700}
   .signup-link:hover{background:var(--orange2);color:#fff}
@@ -497,6 +502,10 @@
       </div>
       <div class="depleted-bar" id="depletedBar" style="display:none">
         🔴 No credits left. <a href="#" id="depletedBuy">Buy credits →</a>
+      </div>
+      <div class="post-reply-nudge" id="postReplyNudge" style="display:none">
+        ✨ Aethyro can also <button type="button" class="nudge-link" id="nudgeDoc">read your documents</button> or <button type="button" class="nudge-link" id="nudgeRoutine">run this on a schedule</button>.
+        <button type="button" class="nudge-dismiss" id="nudgeDismiss" aria-label="Dismiss">×</button>
       </div>
       <div class="model-bar" id="modelBar">
         <button class="model-btn" data-model="auto" id="mBtnAuto" title="Routes each message to Haiku, Sonnet, or Opus based on how hard it looks — you're only billed for the model actually used">Auto<span class="model-cost">smart routing</span></button>
@@ -1627,6 +1636,7 @@ I often need help with: client quotes, contract review, business Instagram posts
           requestAnimationFrame(function(){ costEl.classList.add('show'); });
           addSessionCost(mc.credits);
         }
+        maybeShowPostReplyNudge();
         /* Auto-title: server generates a smart title on the first exchange */
         if(session && convId && meta && meta.title){
           var aiTitle=meta.title;
@@ -2031,25 +2041,53 @@ I often need help with: client quotes, contract review, business Instagram posts
   $('intelClose').addEventListener('click', closeIntelPanel);
   $('intelOverlay').addEventListener('click', closeIntelPanel);
 
-  /* Empty-state "try it" buttons for Document RAG / Routines -- open the
-     Intelligence panel straight to the relevant tab (and, for documents,
-     the file picker) instead of leaving discovery to the panel's own
-     onboarding-step description, which a new user can dismiss without
-     ever opening the panel at all. */
-  var tryUploadDocBtn=$('tryUploadDoc'), tryRoutineBtn=$('tryRoutine');
-  if(tryUploadDocBtn) tryUploadDocBtn.addEventListener('click',function(){
+  /* Empty-state "try it" buttons and the post-first-reply nudge both open
+     the Intelligence panel straight to the relevant tab (and, for
+     documents, the file picker) instead of leaving discovery to the
+     panel's own onboarding-step description, which a new user can
+     dismiss without ever opening the panel at all. Shared as named
+     functions since startNewChat() rebuilds #emptyState without the
+     #tryUploadDoc/#tryRoutine buttons, so the nudge can't just forward
+     a click to them once a user has started a fresh conversation. */
+  function openDocUploadFlow(){
     if(!session){ showToast('Sign in to use Intelligence features','err'); return; }
     openIntelPanel();
     var kTab=document.querySelector('.intel-tab[data-tab="knowledge"]');
     if(kTab) kTab.click();
     $('docFileInput').click();
-  });
-  if(tryRoutineBtn) tryRoutineBtn.addEventListener('click',function(){
+  }
+  function openRoutineFlow(){
     if(!session){ showToast('Sign in to use Intelligence features','err'); return; }
     openIntelPanel();
     var rTab=document.querySelector('.intel-tab[data-tab="routines"]');
     if(rTab) rTab.click();
-  });
+  }
+  var tryUploadDocBtn=$('tryUploadDoc'), tryRoutineBtn=$('tryRoutine');
+  if(tryUploadDocBtn) tryUploadDocBtn.addEventListener('click',openDocUploadFlow);
+  if(tryRoutineBtn) tryRoutineBtn.addEventListener('click',openRoutineFlow);
+
+  /* Post-first-reply discoverability nudge: real usage data (2026-10-05)
+     showed most new signups send one message and leave without ever
+     trying document upload or routines (0 uploads / 1 routine ever
+     created across 27 real accounts) -- the empty-state buttons above
+     only show before a first message, which is exactly the moment
+     before most drop-off happens. Shown once ever per browser, only
+     after a real completed reply, dismissible. */
+  var NUDGE_KEY='aethyro_post_reply_nudge_v1';
+  function maybeShowPostReplyNudge(){
+    if(!session) return;
+    try{ if(localStorage.getItem(NUDGE_KEY)) return; }catch(e){ return; }
+    try{ localStorage.setItem(NUDGE_KEY,'1'); }catch(e){}
+    var el=$('postReplyNudge');
+    if(el) el.style.display='flex';
+  }
+  function dismissPostReplyNudge(){
+    var el=$('postReplyNudge');
+    if(el) el.style.display='none';
+  }
+  $('nudgeDoc').addEventListener('click',function(){ dismissPostReplyNudge(); openDocUploadFlow(); });
+  $('nudgeRoutine').addEventListener('click',function(){ dismissPostReplyNudge(); openRoutineFlow(); });
+  $('nudgeDismiss').addEventListener('click',dismissPostReplyNudge);
 
   /* ── Onboarding ── */
   (function(){
