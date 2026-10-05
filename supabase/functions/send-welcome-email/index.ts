@@ -1,4 +1,9 @@
-// send-welcome-email v1
+// send-welcome-email v2 — fixed 2026-10-05: the day-5 "reengagement" gate
+// queried messages.user_id, a column that doesn't exist (see CLAUDE.md's
+// schema gotchas); the error was silently discarded, leaving the
+// zero-messages check permanently true. Now scopes through conversations
+// like every other per-user messages query in this codebase, and fails
+// closed (skips the send) on an unexpected lookup error.
 // Called by a Postgres trigger (via pg_net) when a new row appears in auth.users.
 // Sends a 3-step drip:
 //   day 0 — welcome + starter prompts
@@ -177,12 +182,43 @@ serve(async (req) => {
         engagement_sent_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
     } else if (emailType === "reengagement") {
-      // Only send if user has no messages
-      const { count } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
+      // Only send if the user has genuinely sent zero real messages.
+      // `messages` has no user_id column (see CLAUDE.md's schema gotchas) --
+      // the original `.eq("user_id", userId)` queried a column that doesn't
+      // exist, which PostgREST rejects with 42703; the destructured
+      // `{ count }` silently discarded that error, leaving count null and
+      // `(count || 0) === 0` permanently true. That meant this email has
+      // been sent to every day-5 candidate unconditionally, not just
+      // genuinely silent ones -- it just hadn't been caught live yet
+      // because every real candidate so far also happened to have zero
+      // messages. Scope through conversations like every other per-user
+      // messages query in this codebase, and fail closed (skip the send)
+      // on an unexpected error rather than risk telling an active user
+      // their credits are "still waiting".
+      let hasMessages = true;
+      const { data: convos, error: convErr } = await supabase
+        .from("conversations")
+        .select("id")
         .eq("user_id", userId);
-      if ((count || 0) === 0) {
+      if (convErr) {
+        console.error("send-welcome-email: conversation lookup failed", convErr.message);
+      } else {
+        const convoIds = (convos || []).map((c: { id: string }) => c.id);
+        if (convoIds.length === 0) {
+          hasMessages = false;
+        } else {
+          const { count, error: countErr } = await supabase
+            .from("messages")
+            .select("id", { count: "exact", head: true })
+            .in("conversation_id", convoIds);
+          if (countErr) {
+            console.error("send-welcome-email: message count failed", countErr.message);
+          } else {
+            hasMessages = (count || 0) > 0;
+          }
+        }
+      }
+      if (!hasMessages) {
         await sendEmail(email, "Your 200 Aethyro credits are still waiting", reengagementHtml());
         await supabase.from("email_drip_state").upsert({
           user_id: userId,
