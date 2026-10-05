@@ -397,6 +397,66 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Instrumented and redesigned the post-depletion purchase
+  moment** (part 3 of the "go deep" strategy discussion — part 1 was #128,
+  the credit-aware router cap; part 2 was #129, the return-visit hook).
+  Before this, the moment right after a balance hit zero had **zero
+  instrumentation of any kind** — every entry point (the topbar "Buy more"
+  button, the low-balance warning link, the depleted-bar link, the inline
+  402-response "Buy credits" button in a cut-off reply, the agentic-task
+  insufficient-credits link) opened the exact same bare 4-pack grid modal,
+  and nothing about any of it — open, pack click, checkout start, cancel,
+  or completion — was ever tracked. The only signal this product had on
+  its own $0-lifetime-revenue number was the raw absence of rows in
+  `credit_ledger`; there was no way to tell whether people never saw a buy
+  prompt, saw it and ignored it, or started checkout and dropped off.
+  **Instrumentation added**: `openCreditModal` now takes a `surface`
+  argument (`topbar` / `low_balance` / `depleted_bar` / `depleted_inline`
+  / `buy_param`) and fires a real GA4 `buy_modal_open` event; `startCheckout`
+  fires `checkout_started` with the pack and surface; `handlePurchaseReturn`
+  fires `checkout_cancelled` and, for the first time ever, `checkout_completed`
+  (with real `credits_added`) once the webhook-credited balance is actually
+  polled and confirmed — the one event this product could never previously
+  produce, since it only existed after Stripe redirects back. `lockForDepleted`
+  itself now fires `credits_depleted`, so the top of the funnel is measured
+  too, not just clicks.
+  **The actual redesign**: the two surfaces that represent someone getting
+  cut off *right now* (`depleted_bar`, the composer-area bar; `depleted_inline`,
+  the inline 402/insufficient-credits buttons shown directly in a cut-off
+  reply) render a contextual block built from this session's own real,
+  already-computed usage — `sessionCostTotal`/`sessionMsgCount` from the
+  runway-estimate feature (PR #128) — e.g. "You've used 47 credits across 6
+  messages this session — the Starter pack is the smallest way to keep
+  going right now," and visually highlight the Starter ($4/200cr) pack as
+  the lowest-commitment option for someone who just hit a wall and may not
+  yet know if they'll keep using the product. A casual `topbar`/`low_balance`
+  open keeps the original plain framing — the contextual treatment is
+  deliberately scoped to the moment of actually getting blocked, not every
+  "buy credits" entry point. The context block only ever renders from real
+  numbers already computed this session (never a predicted/fabricated
+  pack recommendation) and is correctly suppressed entirely when
+  `sessionMsgCount` is 0 (e.g. a depleted account's very next page load,
+  before any message has been sent this session) — verified explicitly as
+  its own case, not just assumed.
+  **Verified via a modified local copy of `chat.html`** (temporary
+  `window.__test_*` hooks exposing the otherwise IIFE-scoped
+  `openCreditModal`/`lockForDepleted`/session-state setter, never
+  committed) served locally and driven with Playwright against the
+  pre-installed Chromium, since this is a pure client-side change with no
+  backend round trip to verify against: confirmed the depleted surface
+  shows the correct contextual copy and recommended-pack styling, a casual
+  topbar open shows neither, the zero-messages-this-session case correctly
+  suppresses the context block, zero horizontal overflow at both 1280×900
+  and 390×844 (the pack grid's existing 2-column mobile breakpoint still
+  applies), and zero new console errors (only the sandbox's pre-existing
+  TLS-intercepting-proxy `ERR_CERT_AUTHORITY_INVALID` noise on external
+  Google Fonts/GA requests, already documented elsewhere in this file as
+  a non-bug).
+  **Scope**: pure frontend, no migration, no edge function change — `buy-credits`
+  and `stripe-webhook` are untouched, since the actual checkout mechanics
+  were already correct; this closes the measurement and the one-moment
+  design gap only.
+
 - **2026-10-06** — **Added the return-visit hook (part 2 of the "go deep"
   strategy discussion) — and found a real, previously-undocumented P0 live
   while building it: scheduled routines had never actually run on their
