@@ -168,6 +168,8 @@
   .msg-cost.show{opacity:1;transform:none}
   .msg-cost .mc-credits{color:var(--orange,#ff4d00);font-weight:700}
   .msg-cost .mc-detail{color:var(--t3)}
+  .mc-receipt-link{background:none;border:none;color:var(--t3);font-family:var(--mono);font-size:.66rem;cursor:pointer;padding:0;margin-left:.2rem;text-decoration:underline;text-underline-offset:2px}
+  .mc-receipt-link:hover{color:var(--orange,#ff4d00)}
   .session-cost-badge{margin-left:.5rem;display:flex;align-items:center;gap:.35rem;padding:.3rem .6rem;background:rgba(255,77,0,.07);border:1px solid rgba(255,77,0,.18);border-radius:100px;font-family:var(--mono);font-size:.7rem;color:var(--orange,#ff4d00);white-space:nowrap}
   .msg-copy-btn:hover{color:var(--text);border-color:var(--orange)}
   .msg-copy-btn.copied{color:var(--green);border-color:var(--green)}
@@ -608,6 +610,25 @@ I often need help with: client quotes, contract review, business Instagram posts
       <button class="wm-cancel" id="receiptClose">Close</button>
       <button class="wm-cancel" id="receiptVerifyBtn">Verify signature</button>
       <button class="wm-save" id="receiptDownloadBtn">Download receipt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generation receipt modal -->
+<div class="workspace-modal-backdrop" id="genReceiptModal">
+  <div class="workspace-modal">
+    <h3>📜 Generation Receipt</h3>
+    <p class="wm-sub">This reply's generation was recorded and signed server-side (HMAC-SHA256) the moment it was produced — model, token counts, cost, and what context fed into it. The receipt below can be independently re-verified at any time.</p>
+    <pre id="genReceiptPayload" class="receipt-payload"></pre>
+    <div class="receipt-sig-row">
+      <span class="receipt-sig-label">Signature</span>
+      <code id="genReceiptSig" class="receipt-sig"></code>
+    </div>
+    <div id="genReceiptVerifyResult" class="receipt-verify-result"></div>
+    <div class="wm-actions">
+      <button class="wm-cancel" id="genReceiptClose">Close</button>
+      <button class="wm-cancel" id="genReceiptVerifyBtn">Verify signature</button>
+      <button class="wm-save" id="genReceiptDownloadBtn">Download receipt</button>
     </div>
   </div>
 </div>
@@ -1261,6 +1282,38 @@ I often need help with: client quotes, contract review, business Instagram posts
     URL.revokeObjectURL(url);
   });
 
+  /* ── Signed generation receipts (mirrors the deletion-receipt flow above) ── */
+  var _lastGenReceipt = null;
+  function showGenerationReceipt(receipt){
+    _lastGenReceipt = receipt;
+    $('genReceiptPayload').textContent = JSON.stringify(receipt.payload, null, 2);
+    $('genReceiptSig').textContent = receipt.signature;
+    $('genReceiptVerifyResult').textContent = '';
+    $('genReceiptVerifyResult').className = 'receipt-verify-result';
+    $('genReceiptModal').classList.add('show');
+  }
+  if($('genReceiptClose')) $('genReceiptClose').addEventListener('click',function(){ $('genReceiptModal').classList.remove('show'); });
+  if($('genReceiptVerifyBtn')) $('genReceiptVerifyBtn').addEventListener('click',async function(){
+    if(!_lastGenReceipt) return;
+    var btn=$('genReceiptVerifyBtn'); btn.disabled=true; btn.textContent='Verifying…';
+    try{
+      var vr=await supabase.rpc('verify_generation_receipt',{p_receipt_id:_lastGenReceipt.receipt_id});
+      var out=$('genReceiptVerifyResult');
+      if(vr.error){ out.textContent='Could not verify: '+vr.error.message; out.className='receipt-verify-result invalid'; }
+      else if(vr.data && vr.data.valid){ out.textContent='✓ Signature valid — recomputed server-side from the stored payload and matched exactly.'; out.className='receipt-verify-result valid'; }
+      else { out.textContent='✗ Signature mismatch — this receipt may have been altered.'; out.className='receipt-verify-result invalid'; }
+    } finally { btn.disabled=false; btn.textContent='Verify signature'; }
+  });
+  if($('genReceiptDownloadBtn')) $('genReceiptDownloadBtn').addEventListener('click',function(){
+    if(!_lastGenReceipt) return;
+    var blob=new Blob([JSON.stringify(_lastGenReceipt,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download='aethyro-generation-receipt-'+_lastGenReceipt.receipt_id+'.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
   /* ── Ensure a conversation row exists ── */
   function makeTitle(text){
     var t=text.trim().replace(/^[^a-zA-Z0-9'"(]*/,'');
@@ -1632,6 +1685,18 @@ I often need help with: client quotes, contract review, business Instagram posts
           costEl.className='msg-cost';
           costEl.innerHTML='<span class="mc-credits">'+mc.credits+' credit'+(mc.credits===1?'':'s')+'</span>'+
             '<span class="mc-detail">· '+mc.inputTokens.toLocaleString()+' in / '+mc.outputTokens.toLocaleString()+' out tokens · '+modelLabel+'</span>';
+          /* Signed generation receipt: a tamper-evident record (model, tokens,
+             cost, retrieval/tool context) a user can hold onto and show
+             someone else as proof of what was AI-generated and from what --
+             the generation-side counterpart to the existing deletion receipts. */
+          if(meta.receipt && meta.receipt.receipt_id){
+            var receiptLink=document.createElement('button');
+            receiptLink.type='button';
+            receiptLink.className='mc-receipt-link';
+            receiptLink.textContent='📜 Receipt';
+            receiptLink.addEventListener('click',(function(r){ return function(){ showGenerationReceipt(r); }; })(meta.receipt));
+            costEl.appendChild(receiptLink);
+          }
           bubble.parentNode.appendChild(costEl);
           requestAnimationFrame(function(){ costEl.classList.add('show'); });
           addSessionCost(mc.credits);

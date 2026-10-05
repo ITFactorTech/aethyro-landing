@@ -1,3 +1,11 @@
+// chat v46 — adds signed generation receipts: finalize() now calls the new
+// create_generation_receipt RPC right after billing and includes the
+// result (payload + HMAC-SHA256 signature) in USAGE_MARK as `receipt`, so
+// the client gets a tamper-evident record of model/tokens/cost/context for
+// every reply in the same response, no follow-up round trip. Counterpart
+// to the existing deletion receipts; see that migration's own comment and
+// 20261006000000_generation_receipts.sql for why the RPC only trusts this
+// function's own service-role caller.
 // chat v45 — found live 2026-10-05: a user whose balance went 47 -> -34
 // credits in one Opus reply never got any notification, warning or
 // depleted, since the low-credit email only fires for newBal in 1-30 and
@@ -407,6 +415,11 @@ serve(async (req) => {
 
   let existingMemory: UserMemory = {};
   let systemPrompt = "You are Aethyro, a highly capable AI assistant.";
+  // Counts of retrieved context actually used, surfaced later in this
+  // message's signed generation receipt (see finalize()) -- not just
+  // whether retrieval ran, but how many hits cleared the similarity bar.
+  let memoryContextCount = 0;
+  let documentContextCount = 0;
 
   if (TAVILY_API_KEY) {
     systemPrompt += " You have a web_search tool — use it proactively for current events, news, prices, scores, release dates, or anything time-sensitive. Answer from knowledge for timeless facts.";
@@ -434,6 +447,7 @@ serve(async (req) => {
     if (memHits?.length) {
       const relevant = memHits.filter((h: any) => h.similarity > 0.65).slice(0, 4);
       if (relevant.length) {
+        memoryContextCount = relevant.length;
         systemPrompt += "\n\n--- Relevant past conversations ---";
         for (const h of relevant) {
           systemPrompt += `\n[${h.role}]: ${h.content.slice(0, 400)}`;
@@ -450,6 +464,7 @@ serve(async (req) => {
     if (docHits?.length) {
       const relevant = docHits.filter((h: any) => h.similarity > 0.60).slice(0, 3);
       if (relevant.length) {
+        documentContextCount = relevant.length;
         systemPrompt += "\n\n--- From your knowledge base ---";
         for (const h of relevant) {
           systemPrompt += `\n${h.content.slice(0, 600)}`;
@@ -661,9 +676,40 @@ serve(async (req) => {
       } catch {}
     }
 
+    // Signed generation receipt: a tamper-evident record of exactly what
+    // produced this reply (model, tokens, cost, retrieval/tool context),
+    // the generation-side counterpart to the existing deletion receipts.
+    // Built from data this function just computed itself, not anything a
+    // client supplied -- create_generation_receipt only trusts this
+    // service-role caller (see its own migration's comment). Awaited (not
+    // fire-and-forget) so the receipt is ready to hand to the client in
+    // this same response rather than a follow-up round trip.
+    let receipt: { receipt_id: string; payload: unknown; signature: string } | undefined;
+    try {
+      const { data: receiptData, error: receiptErr } = await supaAdmin.rpc("create_generation_receipt", {
+        p_user_id: user.id,
+        p_conversation_id: conversationId,
+        p_model: modelKey,
+        p_requested_model: requestedModel,
+        p_input_tokens: inputTokens,
+        p_output_tokens: outputTokens,
+        p_credits: cost,
+        p_sources: {
+          tools_used: toolEvents,
+          memory_context_count: memoryContextCount,
+          document_context_count: documentContextCount,
+        },
+      });
+      if (receiptErr) console.error("chat: create_generation_receipt failed", receiptErr.message);
+      else receipt = receiptData as typeof receipt;
+    } catch (e) {
+      console.error("chat: create_generation_receipt threw", (e as Error).message);
+    }
+
     controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({
       balance: newBal,
       title,
+      receipt,
       cost: {
         credits: cost,
         model: modelKey,
