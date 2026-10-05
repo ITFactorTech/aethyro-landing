@@ -67,6 +67,7 @@
   .chat-title{font-size:.9rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
   .balance-pill{margin-left:auto;display:flex;align-items:center;gap:.4rem;padding:.3rem .65rem;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);border-radius:100px;font-family:var(--mono);font-size:.74rem;color:var(--cyan)}
   .balance-pill.balance-deducting{background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.4);color:#fcd34d;transition:background .2s,border-color .2s,color .2s}
+  .balance-estimate{display:flex;align-items:center;font-family:var(--mono);font-size:.68rem;color:var(--t3)}
   .top-link{font-size:.8rem;color:var(--t2);text-decoration:none;padding:.35rem .65rem;border-radius:8px}
   .top-link:hover{color:var(--text);background:rgba(255,255,255,.05);text-decoration:none}
   .cloud-note{font-size:.66rem;color:var(--t3);font-family:var(--mono);text-align:center;padding:.4rem 1rem;border-bottom:1px solid var(--b1)}
@@ -462,6 +463,7 @@
       <a href="/" class="brand" id="anonBrand" style="margin:0;display:none"><span class="dot"></span> Aethyro</a>
       <span class="chat-title" id="chatTitle"></span>
       <span class="balance-pill" id="balancePill" style="display:none">● <span id="balanceVal">—</span> credits</span>
+      <span class="balance-estimate" id="balanceEstimate" style="display:none" title="Estimated from this session's own actual average cost per message -- not a fixed number"></span>
       <span class="session-cost-badge" id="sessionCostBadge" style="display:none" title="Real, computed credit cost of every message this session — no estimates">Σ <span id="sessionCostVal">0</span> credits this session</span>
       <span class="balance-pill trial-badge" id="trialBadge" style="display:none">● Free preview</span>
       <button class="top-link" id="shareBtn" title="Share this conversation" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">↗ Share</button>
@@ -1035,11 +1037,33 @@ I often need help with: client quotes, contract review, business Instagram posts
   }
 
   var sessionCostTotal = 0;
+  var sessionMsgCount = 0;
   function addSessionCost(credits){
     if(typeof credits!=='number'||!isFinite(credits)) return;
     sessionCostTotal += credits;
+    sessionMsgCount += 1;
     var badge=$('sessionCostBadge');
     if(badge){ badge.style.display='flex'; $('sessionCostVal').textContent=sessionCostTotal.toLocaleString(); }
+    updateMessagesLeftEstimate();
+  }
+
+  /* Real-time "runway" estimate -- the cost-transparency badge showed the
+     exact price of a message already paid for, but gave no sense of the
+     wall coming. Built from this session's own actual average cost per
+     message (never a guess or a fixed per-model number), so it tightens
+     or loosens automatically as usage shifts between light/heavy
+     questions or models. Deliberately silent until at least one message
+     has actually been billed this session -- no estimate beats a
+     fabricated one. */
+  function updateMessagesLeftEstimate(){
+    var el=$('balanceEstimate');
+    if(!el) return;
+    if(sessionMsgCount<1 || _prevBalance===null || _prevBalance<=0){ el.style.display='none'; return; }
+    var avg=sessionCostTotal/sessionMsgCount;
+    if(!(avg>0)){ el.style.display='none'; return; }
+    var est=Math.floor(_prevBalance/avg);
+    el.textContent='~'+est+' more at this rate';
+    el.style.display='flex';
   }
 
   var _prevBalance = null;
@@ -1071,6 +1095,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     if(n<=0 && !depleted){ lockForDepleted(); }
     else if(n>0 && depleted){ unlockDepleted(); }
     updateLowBalanceWarning(n);
+    updateMessagesLeftEstimate();
   }
 
   /* Opus/Sonnet reply cost scales with response length (see the model-bar
