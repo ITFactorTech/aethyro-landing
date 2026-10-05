@@ -476,6 +476,15 @@
           <button class="prompt-chip" data-prompt="Write a compelling cold email for a B2B SaaS outreach">Draft a cold outreach email</button>
           <button class="prompt-chip" data-prompt="Review my code for bugs and suggest improvements">Review my code</button>
         </div>
+        <!-- Document RAG and Routines are fully built but had zero real-world
+             usage (0 uploads, 1 routine ever created across 27 real accounts)
+             -- unlike the chips above, these open the actual feature directly
+             instead of just typing a sentence into the composer, since a
+             chip can't open a file picker or switch Intelligence-panel tabs. -->
+        <div class="prompt-chips" id="featureTryouts" style="margin-top:.6rem">
+          <button class="prompt-chip" id="tryUploadDoc" style="border-color:rgba(139,92,246,.35);color:#c4b5fd">📄 Try it: upload a document →</button>
+          <button class="prompt-chip" id="tryRoutine" style="border-color:rgba(34,197,94,.35);color:var(--green)">🔁 Try it: create a routine →</button>
+        </div>
       </div>
     </div>
 
@@ -2021,6 +2030,26 @@ I often need help with: client quotes, contract review, business Instagram posts
   $('intelBtn').addEventListener('click', openIntelPanel);
   $('intelClose').addEventListener('click', closeIntelPanel);
   $('intelOverlay').addEventListener('click', closeIntelPanel);
+
+  /* Empty-state "try it" buttons for Document RAG / Routines -- open the
+     Intelligence panel straight to the relevant tab (and, for documents,
+     the file picker) instead of leaving discovery to the panel's own
+     onboarding-step description, which a new user can dismiss without
+     ever opening the panel at all. */
+  var tryUploadDocBtn=$('tryUploadDoc'), tryRoutineBtn=$('tryRoutine');
+  if(tryUploadDocBtn) tryUploadDocBtn.addEventListener('click',function(){
+    if(!session){ showToast('Sign in to use Intelligence features','err'); return; }
+    openIntelPanel();
+    var kTab=document.querySelector('.intel-tab[data-tab="knowledge"]');
+    if(kTab) kTab.click();
+    $('docFileInput').click();
+  });
+  if(tryRoutineBtn) tryRoutineBtn.addEventListener('click',function(){
+    if(!session){ showToast('Sign in to use Intelligence features','err'); return; }
+    openIntelPanel();
+    var rTab=document.querySelector('.intel-tab[data-tab="routines"]');
+    if(rTab) rTab.click();
+  });
 
   /* ── Onboarding ── */
   (function(){
