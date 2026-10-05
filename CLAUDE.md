@@ -397,6 +397,66 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-05** — **Added signed generation receipts** — the counterpart to
+  the existing deletion receipts, for the same reason: let a user hold a
+  tamper-evident, independently-verifiable record of what Aethyro actually
+  did, instead of asking them to trust a screenshot or the chat UI. Every
+  billed chat reply now gets an HMAC-SHA256-signed receipt recording the
+  model, exact token counts, cost, and what context fed into it (tool
+  calls, memory/document retrieval counts) — assembled and signed
+  server-side in `chat`'s `finalize()` right after billing, using data the
+  edge function itself just computed, never anything a client supplies.
+  New `generation_receipts` table (own HMAC key,
+  `generation_receipt_hmac_key`, separate from `deletion_receipt_hmac_key`
+  so rotating one can never invalidate the other) plus two RPCs mirroring
+  the existing `delete_conversation_with_receipt`/`verify_deletion_receipt`
+  pattern exactly: `create_generation_receipt(...)` (service-role-only,
+  checks `auth.role() = 'service_role'` directly rather than any
+  `auth.uid()` branch — same lesson this file already has multiple times
+  for a function with exactly one legitimate internal caller) and
+  `verify_generation_receipt(uuid)` (authenticated, owner-scoped,
+  recomputes the signature server-side so nothing secret ever leaves the
+  database). `chat.html`'s per-message cost badge gained a "📜 Receipt"
+  button (only shown when a receipt came back) opening a modal — payload,
+  signature, a Verify button, a JSON download — that's a near-exact mirror
+  of the existing deletion-receipt modal, new ids throughout. Migrations:
+  `20261006000000_generation_receipts.sql`,
+  `20261006000100_lock_down_receipts_table_grants.sql`. `chat` now at v46.
+  **Found and fixed a previously-undocumented bug on the *existing*
+  deletion-receipts feature while building this**: `deletion_receipts`
+  (shipped 2026-09-27) had never actually been locked down — it had the
+  same default-privileges over-grant this file already documents multiple
+  times (full `ALL`-privilege access to `anon`/`authenticated`), missed by
+  every prior site-guardian sweep since. Not currently exploitable (RLS
+  denies any command with no matching policy, and the table's one SELECT
+  policy is unreachable for `anon` since `auth.uid()` is null for that
+  role), and `chat.html` never queries either receipts table directly —
+  both are only ever read/written through their `SECURITY DEFINER` RPCs,
+  whose function owner (`postgres`) bypasses table grants entirely
+  regardless of what's revoked from `anon`/`authenticated` — but fixed in
+  the same migration as the new table's lockdown, for consistency with
+  this project's "always lock down" discipline. Confirmed via direct SQL
+  that both RPCs' owner (`postgres`) retains full table access after the
+  revoke, so the existing deletion-receipt flow is provably unaffected —
+  a live re-test of that flow was attempted but blocked by a transient
+  `esm.sh`/`deno.land` dependency-fetch timeout repeatedly bundling the
+  diagnostic helper (not a real bug; same class of sandbox network
+  flakiness this file already notes elsewhere), so this is verified by
+  mechanism (ownership + bypass) rather than a fresh end-to-end run.
+  **Verified live end-to-end for the new feature**, not just code review:
+  a real throwaway account's real `chat` message (Haiku) returned a real
+  `receipt` object with a genuine `receipt_id`/`payload`/`signature`; the
+  row existed in `generation_receipts` with matching data;
+  `verify_generation_receipt` correctly returned `valid: true` against it
+  (first attempt via direct curl 404'd on `api.verify_generation_receipt`
+  — a schema-cache/`Content-Profile` header artifact of calling PostgREST
+  directly rather than through `supabase-js`, which sends the right
+  header automatically and was never actually broken; resolved by adding
+  `Content-Profile: public` to the test curl, not a real bug). Cleaned up:
+  deleted the throwaway account, confirmed zero orphaned rows across
+  `profiles`/`credit_ledger`/`conversations`/`generation_receipts`/
+  `deletion_receipts`, `test-admin-setup` re-stubbed to 410 and confirmed
+  via a live curl (401, matching the established stub pattern).
 - **2026-10-05** — **Fixed: `send-welcome-email`'s day-5 "reengagement"
   email's own targeting gate was silently broken, sending to every
   candidate regardless of real usage.** Found while investigating a
