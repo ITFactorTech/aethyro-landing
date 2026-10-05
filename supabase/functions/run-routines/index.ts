@@ -1,4 +1,14 @@
-// run-routines v2 — Scheduled agent routine executor
+// run-routines v3 — the return-visit hook: after a successful run, if the
+// routine has email_on_result = true, invokes send-routine-result-email so
+// the owner gets a short summary instead of the result sitting silently
+// in the Routines tab. Also: this file's own "Invoked by pg_cron every 15
+// minutes" claim below was false until 2026-10-06 -- no pg_cron job ever
+// actually called this function (confirmed live via `select * from
+// cron.job`, which listed 5 jobs, none targeting run-routines), meaning
+// every routine in this product could only ever run via a manual "Run
+// now" click, a webhook trigger, or a routine chain, never on its own
+// schedule. Fixed with migration 20261006020100_schedule_run_routines_cron.sql.
+// v2 — Scheduled agent routine executor
 // Invoked by pg_cron every 15 minutes (or manually from the dashboard/frontend).
 // Queries user_routines where enabled=true and next_run_at <= now(),
 // runs each routine with Claude, stores result, advances next_run_at.
@@ -197,6 +207,22 @@ serve(async (req) => {
       }).eq("id", routine.id);
 
       results.push({ id: routine.id, name: routine.name, status: "completed" });
+
+      // Return-visit hook: email the owner a short summary of this result
+      // if they've opted in. Awaited (not fire-and-forget) for the same
+      // reason the chained-step invoke below is -- this isolate must not
+      // get frozen/recycled mid-call. Never blocks the routine's own
+      // success on an email failure.
+      if (routine.email_on_result) {
+        try {
+          await supaAdmin.functions.invoke("send-routine-result-email", {
+            headers: { "X-Internal-Key": SERVICE_ROLE_KEY },
+            body: { user_id: routine.user_id, routine_name: routine.name, result_text: resultText },
+          });
+        } catch (emailErr) {
+          console.error("run-routines: send-routine-result-email invoke failed", (emailErr as Error).message);
+        }
+      }
 
       // Chained next step: hand this routine's output to the next one as
       // context and run it immediately, rather than waiting for its own

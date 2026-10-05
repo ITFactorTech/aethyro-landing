@@ -397,6 +397,77 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Added the return-visit hook (part 2 of the "go deep"
+  strategy discussion) — and found a real, previously-undocumented P0 live
+  while building it: scheduled routines had never actually run on their
+  own schedule, ever, for any user.** `run-routines`'s own top-of-file
+  comment claims "Invoked by pg_cron every 15 minutes" — but
+  `select * from cron.job` live showed 5 active jobs, none targeting
+  `run-routines`. This meant a routine could only ever execute via a
+  manual "Run now" click, a webhook trigger, or a chain — never its own
+  cron schedule, since the feature shipped. Confirmed directly: the one
+  real routine in the product (the owner's own account, "Daily AI News",
+  created 2026-09-25, schedule `0 9 * * 1-5`) had `last_run_at: null` —
+  never run, 11 days after creation, despite being enabled the whole
+  time. **Found via a live test that had a real, if harmless, side
+  effect**: while confirming the gateway-auth theory below, a direct curl
+  to `run-routines` with no body actually executed that real routine for
+  the first time — 1 real credit billed to the owner's own account
+  (`leer4030@gmail.com`), not a third party, so no remediation needed,
+  but worth being upfront about: in hindsight this specific probe should
+  have used a throwaway account like every other live check in this
+  session did.
+  **Fixed**: new pg_cron job `run-due-routines` (`*/15 * * * *`,
+  migration `20261006020100_schedule_run_routines_cron.sql`) invoking
+  `run-routines` with the anon key as `Authorization` — matching the
+  pattern `drip-engagement`/`drip-reengagement` already use for
+  `send-welcome-email`. Confirmed live via direct curl *before* writing
+  the migration that the anon key (a validly-signed Supabase JWT, role
+  `anon`) satisfies `run-routines`' `verify_jwt:true` gateway check on
+  its own, and that inside the function's own code a JWT that's neither
+  the literal service-role key nor a resolvable user session (which the
+  anon key, having no session, never is) leaves `userFilter` null —
+  i.e. "run all due routines", identical to a real service-role call.
+  No service-role secret is embedded in the migration.
+  **The actual return-visit hook**: routines ran completely silently
+  before this — the only way to see a result was to open the app and
+  look at the Routines tab, giving zero reason to come back. New
+  `user_routines.email_on_result` column (migration
+  `20261006020000_routine_email_on_result.sql`, owner-writable via the
+  existing `routines_own` RLS policy, no new grants needed) and new
+  `send-routine-result-email` function (same `X-Internal-Key` internal-
+  auth pattern as `send-low-credit-email`) — `run-routines` (now v8)
+  invokes it right after a successful run if the routine opted in,
+  emailing a short preview of the result with a link back to
+  `chat.html`. `chat.html` gained: a "📧 Email me when this runs"
+  checkbox on the routine-creation form; a per-routine "📧 Email: on/off"
+  toggle button on each routine card (same pattern as the existing
+  Publish/Make-private toggle); and a one-click "📰 Try it: daily AI
+  briefing →" quick-start in the empty-state feature-tryouts row
+  (alongside the existing upload-document/create-routine tryouts from
+  PR #124) that creates a pre-filled "Daily Briefing" routine
+  (schedule `0 9 * * *`, haiku, `email_on_result: true`) with one click
+  — no blank form — since the real hook is the email itself, not another
+  tab to discover.
+  **Verified live end-to-end**, not just code review: a real throwaway
+  account's routine (`email_on_result: true`), triggered via the same
+  `run-routines` call shape the "Run now" button and the new cron job
+  both use (anon key as Authorization, no service-role secret needed),
+  correctly ran, billed, advanced `next_run_at`, and fired the email —
+  confirmed via Resend's own send log, which shows `Your "Return-Visit
+  Test" is ready`, status `sent`, timestamped to the same second as the
+  `run-routines` call. Both edge functions' live source fetched back via
+  `get_edge_function` and confirmed byte-for-byte matching local disk.
+  Syntax-checked `chat.html`'s modified inline scripts. Cleaned up:
+  deleted the throwaway account, confirmed zero orphaned rows including
+  `user_routines`, `test-admin-setup` re-stubbed to 410 and confirmed via
+  a live curl.
+  **What this does NOT fix, scoped deliberately narrow**: it doesn't add
+  per-user timezones (the "9am" in both the quick-start and the existing
+  cron-preset buttons is UTC, an existing, unchanged convention — not
+  something this PR introduces or claims to fix), and it doesn't touch
+  the still-open $0-revenue monetization gap from the same strategy
+  discussion, which remains a separate, larger move.
 - **2026-10-06** — **Added a credit-aware router cap, and a real-time "runway"
   estimate on the cost badge** — the first concrete move on a "what would
   make this product substantial" strategy discussion, grounded in a fresh
