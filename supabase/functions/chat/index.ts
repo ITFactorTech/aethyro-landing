@@ -1,3 +1,13 @@
+// chat v47 — credit-aware router cap: model:"auto" no longer resolves to
+// Opus (the most expensive model) once a user's balance drops below
+// AUTO_MODEL_CREDIT_FLOOR (100, half the free signup grant); it tops out
+// at Sonnet instead. Never touches an explicit model choice. Real data
+// motivating this: 82% of all billed messages were Opus against a
+// one-time 200-credit free grant, and 89% of users who ever opened a
+// chat never returned on a second day -- the auto-router had zero
+// balance-awareness, so new users could burn their entire free grant on
+// a handful of auto-routed Opus replies with no runway left to discover
+// anything else the product does.
 // chat v46 — adds signed generation receipts: finalize() now calls the new
 // create_generation_receipt RPC right after billing and includes the
 // result (payload + HMAC-SHA256 signature) in USAGE_MARK as `receipt`, so
@@ -77,6 +87,16 @@ const VOYAGE_MODEL        = "voyage-4-lite";
 const MAX_TOKENS          = 4096;
 const TITLE_TOKENS        = 80;
 const LOW_CREDIT_THRESHOLD = 30;
+// Credit-aware router cap: below this balance, model:"auto" stops
+// offering Opus and tops out at Sonnet -- never affects an explicit
+// model choice. Real data (2026-10-06): 82% of all billed messages were
+// Opus against a one-time 200-credit free grant, and 89% of users who
+// ever chatted never returned on a second day -- the auto-router had no
+// awareness of remaining balance at all, so a low-balance account could
+// still get auto-routed to the most expensive model right before the
+// wall. Set to half the free signup grant, giving real extra runway
+// instead of a last-second warning.
+const AUTO_MODEL_CREDIT_FLOOR = 100;
 const MAX_ATTACHMENTS     = 3;
 const MAX_TOOL_ROUNDS     = 4;
 const CHAT_RATE_LIMIT_PER_MINUTE = 20;
@@ -409,7 +429,10 @@ serve(async (req) => {
     embedText(message),
   ]);
 
-  const modelKey = requestedModel === "auto" ? await classifyModelFromEmbedding(supaAdmin, queryEmbedding, message, attachments) : requestedModel;
+  let modelKey = requestedModel === "auto" ? await classifyModelFromEmbedding(supaAdmin, queryEmbedding, message, attachments) : requestedModel;
+  if (requestedModel === "auto" && modelKey === "opus" && typeof balance === "number" && balance < AUTO_MODEL_CREDIT_FLOOR) {
+    modelKey = "sonnet";
+  }
   const MODEL    = MODEL_MAP[modelKey];
   const rates    = CREDIT_RATES[modelKey];
 

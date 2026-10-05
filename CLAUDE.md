@@ -397,6 +397,53 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Added a credit-aware router cap, and a real-time "runway"
+  estimate on the cost badge** — the first concrete move on a "what would
+  make this product substantial" strategy discussion, grounded in a fresh
+  pull of real usage data rather than a generic brainstorm: 30 total users
+  (28 signed up in the last 7 days — a real, continuing growth spurt), **$0
+  revenue ever**, only 63% of users ever opened a chat, and of those, **89%
+  never returned on a second day**. The same pull showed 82% of all billed
+  messages were Opus (the most expensive model, 7.5cr/1k output tokens)
+  against a one-time 200-credit free grant — `model:"auto"`'s classifier
+  (`classifyModelFromEmbedding`) had zero awareness of the caller's credit
+  balance, so a brand-new account could burn its entire free grant on a
+  handful of auto-routed Opus replies before ever discovering anything else
+  the product does.
+  **Server-side fix** (`chat` now v47): a new `AUTO_MODEL_CREDIT_FLOOR = 100`
+  constant (half the free signup grant) — once a user's balance drops below
+  it, `model:"auto"` stops resolving to Opus and tops out at Sonnet instead.
+  Only affects the `auto` path; an explicit `model:"opus"` choice is never
+  overridden, preserving user autonomy even at a low balance.
+  **Client-side addition**: the existing per-message cost-transparency badge
+  gained a real-time "~N more at this rate" estimate next to the balance
+  pill, computed from this session's own actual average cost-per-message
+  (`sessionCostTotal / sessionMsgCount`) — never a guess or a fixed
+  per-model number, and deliberately hidden until at least one message has
+  actually been billed this session, so no estimate ever beats a fabricated
+  one. This is additive to the existing worst-case `lowBalance` warning
+  banner (which already showed "an Opus reply can cost up to ~80 credits"),
+  giving users an always-visible, continuously-updating sense of the wall
+  coming instead of only a warning once they're already close to it.
+  **Verified live end-to-end** with a real throwaway account across four
+  scenarios, not just code review: balance 60 (below the floor) + a
+  textbook "heavy" prompt (security audit, prove, root cause) → **capped
+  to sonnet** (2 credits, confirmed via the real signed generation receipt
+  this message produced); balance 150 (above the floor) + the same kind of
+  heavy prompt → **opus**, uncapped (10 credits) — proving the cap is
+  balance-conditional, not a global regression; balance 150 + a trivial
+  "thanks!" → **haiku**, unaffected; balance 50 (well below the floor) +
+  **explicit** `model:"opus"` → **opus**, confirming an explicit choice is
+  never silently downgraded. `chat`'s live source fetched back via
+  `get_edge_function` and confirmed byte-for-byte matching local disk
+  before trusting the deploy. Cleaned up: deleted the throwaway account,
+  confirmed zero orphaned rows across `profiles`/`credit_ledger`/
+  `conversations`/`generation_receipts`, `test-admin-setup` re-stubbed to
+  410 and confirmed via a live curl.
+  **What this does NOT fix, by design, scoped deliberately narrow**: it
+  doesn't touch the $0-revenue monetization gap or build a return-visit
+  hook — both flagged in the same strategy discussion as separate, larger
+  moves worth their own PRs, not bundled into this one.
 - **2026-10-05** — **Added signed generation receipts** — the counterpart to
   the existing deletion receipts, for the same reason: let a user hold a
   tamper-evident, independently-verifiable record of what Aethyro actually
