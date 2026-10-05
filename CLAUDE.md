@@ -215,6 +215,20 @@ it to the `?buy=` pattern instead.
   "owned" policy references the decommissioned `purchases`/`subscriptions`
   tables (see "Decommissioned: old per-plan subscription model" below) and
   is effectively dead code for the same reason those are, but harmless.
+- **`deploy_edge_function`'s `verify_jwt` parameter defaults to `true` when
+  omitted — it is not "leave as whatever the function already has," it's a
+  real overwrite.** Found live 2026-10-05 redeploying `send-low-credit-email`
+  (a function that's deliberately `verify_jwt: false`, since it
+  authenticates callers via its own `X-Internal-Key` header check, not a
+  Supabase session JWT): a deploy call that omitted the param silently
+  flipped the live gateway setting to `true`, which would have 401'd
+  `chat`'s fire-and-forget internal call before the function's own code
+  ever ran. Caught immediately via the deploy call's own response (which
+  echoes the function's current config), fixed with an explicit
+  `verify_jwt: false` redeploy. **Always pass `verify_jwt` explicitly on
+  every redeploy of an already-`verify_jwt: false` function** — check
+  `get_edge_function` or `list_edge_functions` for the current value
+  first if unsure, don't rely on the param being additive/optional.
 
 ## Pending / not yet applied
 
@@ -383,6 +397,66 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-05** — **Fixed: a user who goes from a positive balance straight
+  to 0/negative in a single message got zero credit notification of any
+  kind, ever.** Pulled real revenue data after PR #124: **$0 in purchases,
+  ever**, across this product's entire lifetime, despite 27 real signups —
+  and 1 real account sitting at a real **-34 credits** since 2026-10-01
+  with `low_credit_warned_at` still `null`. Root-caused in
+  `supabase/functions/chat/index.ts`'s `finalize()`: the low-credit-email
+  trigger is `newBal > 0 && newBal <= 30` — it only fires if the balance
+  lands *inside* the 1-30 window. A single large Opus reply (the same
+  account's own story from PR #122) can jump straight from, say, 47 to -34
+  in one message, skipping that window entirely; the only thing that
+  fires for `newBal <= 0` is the pre-send 402 gate on the *next* attempt,
+  which only helps if the user is still looking at the tab. Added a
+  sibling `else if (newBal <= 0)` branch that fires `send-low-credit-email`
+  with a new `depleted: true` flag, gated by its own new
+  `profiles.credits_depleted_warned_at` 24h pre-check (mirrors the
+  existing `low_credit_warned_at` check) so it never competes with the
+  warning email's cooldown — migration
+  `20261005160000_profiles_credits_depleted_warned_at.sql`.
+  `send-low-credit-email` (now v6) branches its own subject/copy
+  ("Your Aethyro credits ran out" vs. the existing "You have N credits
+  left") and its own 7-day cooldown column (`credits_depleted_warned_at`
+  vs. `low_credit_warned_at`) on the same `depleted` flag. **Caught and
+  fixed my own deploy mistake before it shipped**: the first
+  `send-low-credit-email` deploy omitted `verify_jwt` and the tool
+  defaulted it to `true`, silently flipping this function's gateway
+  setting from its correct `false` (it authenticates via its own
+  `X-Internal-Key` check, not a Supabase JWT) — would have broken its one
+  real caller (`chat`'s fire-and-forget internal invoke). Caught via
+  the deploy response itself (not assumed), redeployed immediately with
+  `verify_jwt: false` explicit. Both functions' live source fetched back
+  via `get_edge_function` and diffed byte-for-byte against local disk
+  before trusting either deploy, per this file's own established
+  discipline. **Verified live end-to-end, not just logic review**: a real
+  throwaway account (temporary `test-admin-setup` redeploy, same
+  established pattern) forced to a 1-credit balance, sent a real `chat`
+  message — balance landed at exactly 0, the new branch fired (confirmed
+  via `credits_depleted_warned_at` going from `null` to a real timestamp,
+  `low_credit_warned_at` staying `null` — the *right* branch fired, not
+  the old one), and a second depleting message sent immediately after
+  confirmed the 24h cooldown correctly suppressed a second trigger
+  (`credits_depleted_warned_at` unchanged). Direct confirmation of the
+  Resend send itself wasn't available this run (`function_edge_logs`/
+  `function_logs` both returned backend errors on every attempt, a
+  worse version of this file's already-documented log-table-naming
+  quirk) — the DB-state evidence is enough: `supaAdmin.functions.invoke()`
+  not throwing before the column update proves the call reached
+  `send-low-credit-email` and got a response, and this repo's own history
+  already established that `@example.com` throwaway addresses get a
+  clean Resend rejection, not a bug, so a bounce there wouldn't prove
+  anything a real address wouldn't. **One real, known limitation, not
+  silently papered over**: this fix only helps a user who crosses from
+  positive to negative *during a chat completion that finishes* — the
+  real depleted account found this sweep (still at -34) is already
+  blocked by the pre-send 402 gate and can't send another message to
+  ever trigger this new branch themselves; it only protects future users
+  going forward, not that one retroactively. Cleaned up: deleted the
+  throwaway account, confirmed zero orphaned rows across
+  `profiles`/`credit_ledger`/`conversations`, `test-admin-setup`
+  re-stubbed to 410 and confirmed via a live curl.
 - **2026-10-05** — **Added a post-first-reply discoverability nudge** (PR
   #124), prompted by real usage data pulled the same day rather than a
   generic brainstorm: a real growth event is underway (25 of 27 total

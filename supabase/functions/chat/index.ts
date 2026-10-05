@@ -1,3 +1,11 @@
+// chat v45 — found live 2026-10-05: a user whose balance went 47 -> -34
+// credits in one Opus reply never got any notification, warning or
+// depleted, since the low-credit email only fires for newBal in 1-30 and
+// there was no branch at all for newBal <= 0 (only the reactive client-side
+// "No credits left" banner, seen only if the user reopens the tab). Added an
+// else-if branch below that fires send-low-credit-email with depleted:true
+// when newBal <= 0, gated by its own new credits_depleted_warned_at cooldown
+// column so it never competes with the existing warning email's cooldown.
 // chat v37 — Phase 3: model:"auto" now resolves via a real nearest-centroid
 // embedding classifier (classifyModelFromEmbedding -> classify_router_tier()
 // DB function, pgvector) instead of routeAutoModel()'s keyword/length
@@ -688,6 +696,24 @@ serve(async (req) => {
             headers: { "X-Internal-Key": SERVICE_ROLE_KEY },
             body: { user_id: user.id },
           });
+        }
+      } else if (typeof newBal === "number" && newBal <= 0) {
+        // A single large reply (e.g. a long Opus response) can skip the
+        // 1-30 warning window above entirely and land the balance at 0 or
+        // negative in one shot -- found live 2026-10-05: a real account
+        // went 47 -> -34 credits in one message and got zero notification
+        // of any kind, ever, since low_credit_warned_at above never fires
+        // once newBal is <= 0. Own cooldown column so this never competes
+        // with the warning email's cooldown.
+        const { data: prof } = await supaAdmin.from("profiles")
+          .select("credits_depleted_warned_at").eq("id", user.id).single();
+        const lastWarn = prof?.credits_depleted_warned_at ? new Date(prof.credits_depleted_warned_at) : null;
+        if (!lastWarn || lastWarn < new Date(Date.now() - 86_400_000)) {
+          await supaAdmin.functions.invoke("send-low-credit-email", {
+            headers: { "X-Internal-Key": SERVICE_ROLE_KEY },
+            body: { user_id: user.id, balance: newBal, depleted: true },
+          });
+          await supaAdmin.from("profiles").update({ credits_depleted_warned_at: new Date().toISOString() }).eq("id", user.id);
         }
       }
     } catch {}

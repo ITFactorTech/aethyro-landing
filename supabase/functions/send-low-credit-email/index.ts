@@ -13,20 +13,22 @@ const supabase = createClient(
   SERVICE_ROLE_KEY
 );
 
-function emailHtml(firstName: string, balance: number): string {
+function emailHtml(firstName: string, balance: number, depleted: boolean): string {
+  const intro = depleted
+    ? `<p>Hey ${firstName},</p><p>You're out of credits — your AI chat is paused until you top up.</p>`
+    : `<p>Hey ${firstName},</p><p>You're down to <strong>${balance} credits</strong> — enough for a few more conversations before your AI goes quiet.</p>`;
   return `<!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;max-width:600px;margin:40px auto;color:#1a1a1a;line-height:1.6;background:#fff">
   <p style="font-size:13px;color:#888;font-family:monospace;margin-bottom:24px">AETHYRO</p>
-  <p>Hey ${firstName},</p>
-  <p>You're down to <strong>${balance} credits</strong> — enough for a few more conversations before your AI goes quiet.</p>
+  ${intro}
   <p>Top up now and keep going without interruption. Credits never expire, so anything you add stays until you use it.</p>
   <p style="margin:28px 0">
     <a href="${BUY_URL}" style="display:inline-block;background:#ff4d00;color:#fff;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">Top up credits &rarr;</a>
   </p>
   <p style="color:#666;font-size:14px">200 credits &nbsp;&middot;&nbsp; 600 credits &nbsp;&middot;&nbsp; 2,000 credits &nbsp;&middot;&nbsp; 7,000 credits<br/>Starting at $4. No subscription. No expiry.</p>
   <hr style="margin:32px 0;border:none;border-top:1px solid #eee"/>
-  <p style="font-size:12px;color:#999">Aethyro &middot; <a href="https://aethyro.com" style="color:#999">aethyro.com</a><br/>You received this because your credit balance is running low.</p>
+  <p style="font-size:12px;color:#999">Aethyro &middot; <a href="https://aethyro.com" style="color:#999">aethyro.com</a><br/>You received this because your credit balance is ${depleted ? "depleted" : "running low"}.</p>
 </body>
 </html>`;
 }
@@ -47,27 +49,34 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
   }
 
-  let body: { user_id?: string; balance?: number };
+  let body: { user_id?: string; balance?: number; depleted?: boolean };
   try {
     body = await req.json();
   } catch {
     return new Response(JSON.stringify({ error: "invalid JSON" }), { status: 400 });
   }
 
-  const { user_id, balance } = body;
+  const { user_id, balance, depleted } = body;
   if (!user_id || balance === undefined) {
     return new Response(JSON.stringify({ error: "user_id and balance required" }), { status: 400 });
   }
 
+  // "depleted" (balance <= 0) uses its own cooldown column, separate from
+  // the 1-30-credit warning's, so a user who blew past the warning window
+  // in one large reply isn't blocked from this email by an unrelated
+  // cooldown they never actually triggered.
+  const cooldownColumn = depleted ? "credits_depleted_warned_at" : "low_credit_warned_at";
+
   // Check 7-day cooldown
   const { data: profile } = await supabase
     .from("profiles")
-    .select("low_credit_warned_at")
+    .select(cooldownColumn)
     .eq("id", user_id)
     .single();
 
-  if (profile?.low_credit_warned_at) {
-    const daysSince = (Date.now() - new Date(profile.low_credit_warned_at).getTime()) / 86_400_000;
+  const warnedAt = (profile as Record<string, string | null> | null)?.[cooldownColumn];
+  if (warnedAt) {
+    const daysSince = (Date.now() - new Date(warnedAt).getTime()) / 86_400_000;
     if (daysSince < COOLDOWN_DAYS) {
       return new Response(JSON.stringify({ skipped: true, reason: "cooldown" }), {
         headers: { "Content-Type": "application/json" },
@@ -98,8 +107,8 @@ serve(async (req) => {
       from: FROM,
       reply_to: REPLY_TO,
       to: email,
-      subject: `You have ${balance} Aethyro credits left`,
-      html: emailHtml(firstName, balance),
+      subject: depleted ? "Your Aethyro credits ran out" : `You have ${balance} Aethyro credits left`,
+      html: emailHtml(firstName, balance, !!depleted),
     }),
   });
 
@@ -112,7 +121,7 @@ serve(async (req) => {
   // Mark warned
   await supabase
     .from("profiles")
-    .update({ low_credit_warned_at: new Date().toISOString() })
+    .update({ [cooldownColumn]: new Date().toISOString() })
     .eq("id", user_id);
 
   return new Response(JSON.stringify({ sent: true, id: resData.id }), {
