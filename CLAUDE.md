@@ -383,6 +383,40 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-05** — **Added a post-first-reply discoverability nudge** (PR
+  #124), prompted by real usage data pulled the same day rather than a
+  generic brainstorm: a real growth event is underway (25 of 27 total
+  accounts signed up in the last 7 days, spiking right after this
+  project's LinkedIn post), but activation is leaky — 8 of those 25
+  (32%) never opened a chat at all, and of the 17 who did, most sent
+  1-2 messages and left; 0 document uploads and only 1 routine ever
+  created in that window despite both being fully built features. PR
+  #123 (2026-10-05, merged same day) already added "try it" buttons for
+  these, but only in the empty state — before a first message — which
+  is exactly the moment *before* most of this drop-off happens. This PR
+  adds a second, complementary touchpoint: after a signed-in user's
+  first fully-completed assistant reply (inside `send()`'s existing
+  `if(full){...}` block, right after the cost-transparency badge),
+  `app/chat.html` shows a small dismissible banner above the composer —
+  "Aethyro can also read your documents or run this on a schedule" —
+  gated on a one-time `localStorage` flag (`aethyro_post_reply_nudge_v1`)
+  so it shows once ever per browser, never again after being dismissed
+  or clicked. Its two action buttons and the empty-state's original
+  `#tryUploadDoc`/`#tryRoutine` buttons both now call shared
+  `openDocUploadFlow()`/`openRoutineFlow()` functions (refactored out of
+  PR #123's inline handlers) — **necessary, not just cleanup**:
+  `startNewChat()` rebuilds `#emptyState` via `innerHTML` without the
+  `#featureTryouts` buttons at all, so a nudge that tried to
+  `.click()`-forward to those buttons would silently no-op for any user
+  who'd clicked "New chat" first. Frontend-only, no migration, no edge
+  function change. Verified headless (not live-account, matching this
+  repo's established bar for a change this size and this close in shape
+  to the already-verified PR #123): JS syntax-checked, default state
+  hidden, reveals at the correct size with zero horizontal overflow at
+  both 1280×900 and 390×844, dismiss button correctly hides it, and
+  clicking either action button with no real session correctly shows
+  the existing "Sign in to use Intelligence features" toast rather than
+  erroring (same guard `openIntelPanel()` already had).
 - **2026-10-03** — **`site-guardian` sweep, user-requested.** One real
   finding, fixed and verified live; everything else checked clean.
   **Fixed**: `cleanup_old_rate_limit_counters()` — added by the same-day
