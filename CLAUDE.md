@@ -397,6 +397,65 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Homepage visual polish pass** (`atlas-web-design`,
+  user-requested: "make this site better... professional grade... instead
+  of looking like it was built in a garage"). Scoped to `index.html` only
+  per explicit user choice (homepage first, roll out to other marketing
+  pages later) with custom-authored graphics, not stock photography (also
+  explicit user choice — no licensing cost, and fits the "sovereign AI
+  infrastructure" brand better than generic stock photos of people).
+  Audited the live homepage first: zero `<img>` tags anywhere on the page
+  — every bit of "iconography" was raw emoji (🔒💬💳⚡🧠📚🔁🔗🚀🌐💻📄✍️🎯🔢🗂️,
+  ~20 instances across the bento cards, intelligence-layer cards,
+  capability grid, and trust-signal row, plus another 12 in the ⌘K
+  command palette), which is the single biggest "unpolished SaaS
+  template" tell there is.
+  **Replaced every one** with a hand-authored, consistent outline-icon
+  system (feather-weight 1.6px stroke, 24×24 viewBox, `stroke="currentColor"`
+  so each icon inherits its card's existing accent color — cyan/orange/
+  violet/green/amber — with zero per-icon color overrides needed). New
+  `.ic`/`.ic-md`/`.ic-sm` CSS sizing classes. The command-palette icons
+  route through a small `icoSvg(pathData, filled)` JS helper (15×15,
+  same stroke system) rather than literal emoji strings in the `COMMANDS`
+  array.
+  **Found and fixed two real bugs while auditing the page**, not just a
+  skin pass: (1) the `#agentCanvas` orchestration-layer node graph (the
+  "Not a chatbot. An orchestration layer." section's live canvas
+  visualization — this page's one piece of real generative graphics) had
+  satellite nodes orbiting outside the 320px-tall canvas at angles near
+  straight-up/straight-down, visibly clipping the Integrations and
+  Knowledge nodes at the top/bottom edge on every page load. Fixed by
+  squashing the vertical component of the orbit to 0.6× (an elliptical
+  orbit instead of circular), keeping the full horizontal spread for the
+  wide aspect ratio while keeping every node + its glow + label inside
+  the canvas bounds at every angle. (2) Two different `<section>`s both
+  had `id="demo"` (invalid HTML — duplicate ids — and functionally broken:
+  the ⌘K palette's "Intelligence Panel" entry and any other `href="#demo"`
+  could only ever reach whichever one came first in the DOM). Renamed the
+  second one (the "Everything you need, in one window" product-UI
+  mockup) to `id="product-demo"` and repointed the one link that actually
+  meant to reach it.
+  **Verified via a local-served copy** (`python3 -m http.server`, not
+  production — this is an uncommitted-until-PR change) with Playwright:
+  screenshotted every modified section (bento cards, intelligence cards,
+  capability grid, trust-signal row, the fixed orchestration canvas, the
+  ⌘K palette) at 1440×900 and 390×844, confirmed all 5 orchestration-canvas
+  nodes now render fully inside the canvas with no clipping, confirmed
+  zero horizontal overflow on mobile, confirmed all 3 inline `<script>`
+  blocks still parse clean (`node --check`), and re-grepped for emoji
+  afterward — the only survivors are semantically-correct table
+  checkmarks/×-marks in the pricing-comparison table (a real, intentional
+  convention, not an icon gap) and two small in-context severity dots
+  (🔴🟡) and one inline "⚡ Intelligence" badge inside the hand-coded
+  product-UI mockup further down the page, which are deliberately
+  screenshot-style simulated-product-chrome, not primary marketing icons,
+  and were left alone.
+  **Scope note, deliberately narrow**: this PR is the icon/bug-fix pass
+  only. A hero-section ambient visual (the existing `.hero-orb` blur
+  glows are decent but minimal) and extending this same treatment to
+  `pricing.html`/`blog/` are natural next steps, not done here — kept
+  this PR small and independently reviewable rather than bundling a
+  bigger redesign into one diff.
 - **2026-10-06** — **`site-guardian` sweep, user-requested. Swept clean —
   zero bugs found, nothing to fix.** Ran the full checklist against the
   state left by PRs #128/#129/#130 (credit-aware router cap, return-visit
