@@ -397,6 +397,74 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Visual polish pass, part 4: the 3 orphaned-then-relinked
+  SEO landing pages** (`atlas-web-design`, continuing PRs #132/#133/#134 —
+  user asked to "do the SEO pages next (use-cases, claude-opus-alternative,
+  ai-chat-for-developers)"). These three predate the icon-system work
+  entirely (added 2026-09-26, before any session documented in this file)
+  and run on a distinct, older CSS architecture from every other page
+  touched by this workstream so far — `--bg:#0a0a0a`/`--t2`/`--t3` tokens
+  instead of the `--s1`/`--s2`/`--b1`/`--b2` system, and, notably, **the
+  only 3 pages on the entire site with real `prefers-color-scheme:light`
+  support** (a `@media` block redefining the palette for light-mode
+  visitors) — every other page on aethyro.com is dark-only. That meant
+  every change this pass made had to be verified in both color schemes,
+  not just dark, since this is genuinely different surface area from
+  the previous three passes.
+  **Icon audit**: `use-cases.html` had 12 raw-emoji icons across 3
+  four-card use-case grids (🔍🐛🏗️📝 developers / 📄🔬📊⚖️ researchers /
+  ✍️📧🎯🌍 writers) and `ai-chat-for-developers.html` had 6 more
+  (🔍🐛🏗️📝🔄📚, 4 of which are the same concepts as `use-cases.html`'s
+  developer section) — both genuinely needed the icon-replacement
+  treatment this time, unlike `developers.html`/`routines.html` in part 3,
+  since these are marketing feature-grid pages (the same category as
+  `index.html`'s bento cards and `pricing.html`'s feature grid, both
+  already fixed), not docs or user-generated content.
+  `claude-opus-alternative.html` had just one (⚡ in the hero badge).
+  **Treatment**: designed 9 new outline icons in the established 24×24,
+  `stroke-width:1.7`, round-cap/join system (magnifying glass, bug,
+  pencil/edit, flask, bar chart, legal scale, target, globe, book) and
+  reused 3 already-built shapes exactly where the concept matched
+  (building, from `trust.html`'s Infrastructure icon, for both pages'
+  "Architecture"/"Architecture review" cards; envelope, from
+  `trust.html`'s "Found a problem?" icon, for "Professional
+  communication"; the filled lightning bolt, from `index.html`'s bento
+  cards, for the hero badge) — rather than inventing visually
+  inconsistent one-offs. `use-cases.html`'s three 4-card sections each
+  get one accent color (cyan/developers, violet/researchers,
+  orange/writers) instead of 12 individually-chosen colors — a
+  section-level palette, same restraint logic as `trust.html`'s
+  per-section (not per-icon) coloring. `ai-chat-for-developers.html`,
+  being entirely developer-focused, reuses its own existing cyan badge
+  accent for all 6 icons rather than introducing a second color scheme.
+  Added `--cyan`/`--violet` to `use-cases.html`'s `:root` (it had neither;
+  the other two pages already had `--cyan` from their existing badges).
+  **Gradient headlines**: added `.grad-orange` + a headline `<span>` to
+  all three H1s (`use-cases.html`: "with Aethyro"; `claude-opus-
+  alternative.html`: "Claude Opus 5"; `ai-chat-for-developers.html`:
+  "AI pair programmer") — the same cross-page consistency fix applied to
+  `developers.html`/`routines.html`/`trust.html` in part 3. Left the
+  `compare-table`'s `✓` marks in `claude-opus-alternative.html` alone —
+  same accepted semantic-checkmark convention as `pricing.html`'s table.
+  **Verified via a local-served copy** (not production) with Playwright
+  across all three pages at three configurations each — 1280×900 dark,
+  390×844 dark, **and 1280×900 light** (the light-mode check specific to
+  this pass, since no prior pass in this workstream needed one): zero
+  horizontal overflow in all 9 combinations, all 21 new/reused icons
+  render crisp and legible in both color schemes (the accent colors
+  chosen — cyan/violet/orange — all hold reasonable contrast against
+  both the near-black dark cards and the near-white light cards, checked
+  visually in the actual rendered screenshots rather than assumed), all
+  3 inline `<script>` blocks still parse clean, and a re-grep for emoji
+  across all three files afterward found zero remaining (only the
+  intentional `✓` table marks noted above). One icon (the book, for
+  "Library research") read ambiguously at full-page thumbnail scale in
+  the first screenshot pass — zoomed into just that icon region to
+  confirm it renders correctly as a book, not a rendering bug, before
+  trusting the full-page QA pass as sufficient.
+  **Scope note**: pure CSS/markup, no JS logic, no backend/migration/
+  edge-function changes — matching every prior pass in this series.
+
 - **2026-10-06** — **Visual polish pass, part 3: `developers.html`,
   `routines.html`, `trust.html`** (`atlas-web-design`, continuing PRs
   #132/#133 — user asked to "do developers.html, routines.html, and
