@@ -29,6 +29,7 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{--bg:#030303;--s1:#0a0a0a;--s2:#111214;--b1:#1c1c1e;--b2:#2a2a2d;--b3:#3a3a3e;--orange:#ff4d00;--orange2:#ff7a3d;--cyan:#00d4ff;--violet:#8b5cf6;--green:#22c55e;--gold:#f59e0b;--text:#f0f0f0;--t2:#aaaaaa;--t3:#7a7a7a;--font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace}
+    .grad-orange{background:linear-gradient(135deg,#ff4d00,#ff7a3d);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
     body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6}
     nav{position:sticky;top:0;z-index:200;background:rgba(3,3,3,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--b1)}
     .nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:.7rem 1.5rem}
@@ -89,7 +90,7 @@
 <div class="wrap">
   <div class="page-header">
     <div class="eyebrow">Community</div>
-    <h1>Routines people<br/>built. Fork one.</h1>
+    <h1>Routines people<br/><span class="grad-orange">built. Fork one.</span></h1>
     <p>A routine is a scheduled task Claude runs on autopilot — a daily brief, a weekly digest, a recurring check. Publish one from your own account to share it here; fork someone else's into your account in one click.</p>
   </div>
 
