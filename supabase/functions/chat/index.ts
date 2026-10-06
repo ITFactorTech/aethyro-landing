@@ -1,3 +1,12 @@
+// chat v48 — CORS was a bare "*", letting any website make authenticated
+// cross-origin calls against this billed endpoint. Locked to aethyro.com
+// (+ this project's Cloudflare preview subdomains, so branch/commit
+// previews can still exercise live chat) via a per-request origin check
+// that only ever echoes back a recognized Origin; any other caller gets
+// the production origin, which the browser's own CORS enforcement then
+// rejects for them. Audit item, not a live-exploit finding — Bearer
+// tokens aren't auto-attached cross-site the way cookies are, so this is
+// defense-in-depth, not a fix for an active leak.
 // chat v47 — credit-aware router cap: model:"auto" no longer resolves to
 // Opus (the most expensive model) once a user's balance drops below
 // AUTO_MODEL_CREDIT_FLOOR (100, half the free signup grant); it tops out
@@ -70,10 +79,25 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// CORS is locked to aethyro.com + this project's Cloudflare preview
+// subdomains (<branch-or-commit>-aethyro-landing.<account>.workers.dev) —
+// previously a bare "*", which let any site make authenticated
+// cross-origin calls against this billed endpoint. Any other origin falls
+// back to the production origin (not echoed), so the browser's own CORS
+// check rejects the response for a caller we don't recognize.
+const ALLOWED_ORIGINS = ["https://aethyro.com", "https://www.aethyro.com"];
+const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-aethyro-landing\.[a-z0-9-]+\.workers\.dev$/;
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.includes(origin) || PREVIEW_ORIGIN_RE.test(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -351,6 +375,7 @@ function buildUserContent(message: string, attachments: Attachment[]): string | 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 serve(async (req) => {
+  const CORS = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST")
     return new Response("Method Not Allowed", { status: 405, headers: CORS });

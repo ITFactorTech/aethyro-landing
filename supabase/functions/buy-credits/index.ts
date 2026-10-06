@@ -1,3 +1,9 @@
+// buy-credits v15 — CORS was a bare "*", letting any website make
+// authenticated cross-origin calls against this billed endpoint. Locked to
+// aethyro.com (+ this project's Cloudflare preview subdomains) via a
+// per-request origin check — see chat/index.ts v48's comment for the same
+// fix and why it's defense-in-depth rather than a response to a live
+// exploit.
 // buy-credits v14 — creates a Stripe Checkout Session for a one-time credit pack.
 //
 // This is the ONLY supported purchase path. Raw Stripe Payment Link URLs must
@@ -25,12 +31,22 @@ const CREDIT_PACKS: Record<string, { priceId: string; credits: number }> = {
   pro_7k:  { priceId: "price_1UJDrBLSbMeMK2S0vhpUVXCw", credits: 7000 }, // $90
 };
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED_ORIGINS = ["https://aethyro.com", "https://www.aethyro.com"];
+const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-aethyro-landing\.[a-z0-9-]+\.workers\.dev$/;
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.includes(origin) || PREVIEW_ORIGIN_RE.test(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 serve(async (req) => {
+  const CORS = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
