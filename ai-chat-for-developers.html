@@ -52,7 +52,8 @@ a:hover{text-decoration:underline}
 .use-card{background:var(--s2);border:1px solid var(--b1);border-radius:12px;padding:1.1rem 1.25rem}
 .use-card h3{font-size:.92rem;font-weight:700;margin-bottom:.45rem}
 .use-card p{font-size:.82rem;color:var(--t2);line-height:1.55;margin:0}
-.use-card .icon{font-size:1.4rem;margin-bottom:.5rem}
+.use-card .icon{width:1.8rem;height:1.8rem;display:flex;align-items:center;justify-content:center;margin-bottom:.5rem;color:var(--cyan)}
+.use-card .icon svg{width:1.4rem;height:1.4rem;display:block}
 .code-example{background:#0d0d0d;border:1px solid var(--b2);border-radius:10px;padding:1rem 1.25rem;margin-top:1rem;font-family:var(--mono);font-size:.8rem;line-height:1.7;color:#d4d4d4;overflow-x:auto}
 .code-example .comment{color:var(--t3)}
 .prompt-list{display:flex;flex-direction:column;gap:.6rem;margin-top:1rem}
@@ -63,6 +64,7 @@ a:hover{text-decoration:underline}
 .cta-box p{color:var(--t2);font-size:.88rem;margin-bottom:1.5rem;line-height:1.6}
 footer{border-top:1px solid var(--b1);padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--t3);max-width:780px;margin:0 auto}
 footer a{color:var(--t3)}
+.grad-orange{background:linear-gradient(135deg,#ff4d00,#ff7a3d);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 </style>
 </head>
 <body>
@@ -74,7 +76,7 @@ footer a{color:var(--t3)}
 <div class="wrap">
   <div class="hero">
     <div class="badge">// Claude Opus 5 for developers</div>
-    <h1>Your AI pair programmer, code reviewer, and architecture advisor</h1>
+    <h1>Your <span class="grad-orange">AI pair programmer</span>, code reviewer, and architecture advisor</h1>
     <p>Aethyro gives developers instant access to Claude Opus 5 for the tasks that matter: code review, debugging, refactoring, documentation, and architectural decisions.</p>
     <div class="btn-row">
       <a href="/app/signup.html?next=chat" class="btn-primary">Start free — 200 credits →</a>
@@ -85,32 +87,32 @@ footer a{color:var(--t3)}
     <h2>What developers use Aethyro for</h2>
     <div class="use-cases">
       <div class="use-card">
-        <div class="icon">🔍</div>
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></div>
         <h3>Code review</h3>
         <p>Paste a diff or a function and get a thorough review — bugs, edge cases, style issues, and performance concerns in plain English.</p>
       </div>
       <div class="use-card">
-        <div class="icon">🐛</div>
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="8" width="10" height="11" rx="5"/><path d="M12 8V5"/><path d="M9.5 6 8 4.5M14.5 6 16 4.5"/><path d="M7 12H3M7 16H3.5M17 12h4M17 16h3.5"/></svg></div>
         <h3>Debugging</h3>
         <p>Share an error trace and the surrounding code. Claude reasons through the root cause and proposes the fix, not just the symptom.</p>
       </div>
       <div class="use-card">
-        <div class="icon">🏗️</div>
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V9l8-5 8 5v12"/><path d="M4 21h16"/><path d="M9 21v-6h6v6"/><path d="M9 12h.01M9 9h.01M15 12h.01M15 9h.01"/></svg></div>
         <h3>Architecture review</h3>
         <p>Describe your system design and ask for trade-offs. Claude Opus 5 handles systems-level reasoning better than any other model.</p>
       </div>
       <div class="use-card">
-        <div class="icon">📝</div>
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M14 6.5 17.5 10"/></svg></div>
         <h3>Documentation</h3>
         <p>Turn a messy function into clear docstrings, a README, or an RFC. Paste the code and get the docs — no manual writing needed.</p>
       </div>
       <div class="use-card">
-        <div class="icon">🔄</div>
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11A8 8 0 0 0 6.3 6.3L4 8.6"/><path d="M4 4v4.6h4.6"/><path d="M4 13a8 8 0 0 0 13.7 4.7L20 15.4"/><path d="M20 20v-4.6h-4.6"/></svg></div>
         <h3>Refactoring</h3>
         <p>Ask Claude to rewrite legacy code with modern patterns, improve readability, or migrate from one framework to another.</p>
       </div>
       <div class="use-card">
-        <div class="icon">📚</div>
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5V4.5Z"/><path d="M4 19a2.5 2.5 0 0 1 2.5-2.5H20"/></svg></div>
         <h3>Library research</h3>
         <p>Ask deep questions about an API or library. Claude's 200k context window fits entire documentation files in a single conversation.</p>
       </div>

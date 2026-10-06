@@ -18,10 +18,11 @@
 :root{
   --bg:#0a0a0a;--s1:#111;--s2:#161616;--b1:#222;--b2:#2a2a2a;
   --text:#f0f0f0;--t2:#a0a0a0;--t3:#666;
-  --orange:#ff4d00;--orange2:#e04400;
+  --orange:#ff4d00;--orange2:#e04400;--cyan:#00d4ff;--violet:#8b5cf6;
   --font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
   color-scheme:dark;
 }
+.grad-orange{background:linear-gradient(135deg,#ff4d00,#ff7a3d);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 @media(prefers-color-scheme:light){:root:not([data-theme="dark"]){
   --bg:#f8f8f6;--s1:#fff;--s2:#f3f3f0;--b1:#e0e0dc;--b2:#d0d0cc;
   --text:#111;--t2:#444;--t3:#888;color-scheme:light;
@@ -46,7 +47,8 @@ a:hover{text-decoration:underline}
 @media(max-width:620px){.uc-grid{grid-template-columns:1fr}}
 .uc-card{background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:1.4rem 1.5rem;display:flex;flex-direction:column;gap:.6rem}
 .uc-card:hover{border-color:rgba(255,77,0,.3)}
-.uc-icon{font-size:1.6rem}
+.uc-icon{width:1.9rem;height:1.9rem;display:flex;align-items:center;justify-content:center}
+.uc-icon svg{width:1.5rem;height:1.5rem;display:block}
 .uc-title{font-size:1rem;font-weight:700}
 .uc-desc{font-size:.85rem;color:var(--t2);line-height:1.6;flex:1}
 .uc-prompts{display:flex;flex-direction:column;gap:.35rem;margin-top:.25rem}
@@ -67,7 +69,7 @@ footer a{color:var(--t3)}
 
 <div class="wrap">
   <div class="hero">
-    <h1>What people build and do with Aethyro</h1>
+    <h1>What people build and do <span class="grad-orange">with Aethyro</span></h1>
     <p>Claude Opus 5 is the world's most capable AI model for complex tasks. Here's how researchers, developers, writers, and professionals put it to work.</p>
     <a href="/app/signup.html?next=chat" class="btn-primary">Start for free — 200 credits →</a>
   </div>
@@ -75,7 +77,7 @@ footer a{color:var(--t3)}
   <div class="section-head">For developers</div>
   <div class="uc-grid">
     <div class="uc-card">
-      <div class="uc-icon">🔍</div>
+      <div class="uc-icon" style="color:var(--cyan)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></div>
       <div class="uc-title">Code review</div>
       <div class="uc-desc">Paste a function or diff and get a thorough review covering correctness, edge cases, security, and style.</div>
       <div class="uc-prompts">
@@ -84,7 +86,7 @@ footer a{color:var(--t3)}
       </div>
     </div>
     <div class="uc-card">
-      <div class="uc-icon">🐛</div>
+      <div class="uc-icon" style="color:var(--cyan)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="8" width="10" height="11" rx="5"/><path d="M12 8V5"/><path d="M9.5 6 8 4.5M14.5 6 16 4.5"/><path d="M7 12H3M7 16H3.5M17 12h4M17 16h3.5"/></svg></div>
       <div class="uc-title">Debugging</div>
       <div class="uc-desc">Share an error trace and Claude reasons to the root cause — not just pattern-matching on the error message.</div>
       <div class="uc-prompts">
@@ -93,7 +95,7 @@ footer a{color:var(--t3)}
       </div>
     </div>
     <div class="uc-card">
-      <div class="uc-icon">🏗️</div>
+      <div class="uc-icon" style="color:var(--cyan)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V9l8-5 8 5v12"/><path d="M4 21h16"/><path d="M9 21v-6h6v6"/><path d="M9 12h.01M9 9h.01M15 12h.01M15 9h.01"/></svg></div>
       <div class="uc-title">Architecture design</div>
       <div class="uc-desc">Describe your system constraints and get honest trade-off analysis across multiple design options.</div>
       <div class="uc-prompts">
@@ -102,7 +104,7 @@ footer a{color:var(--t3)}
       </div>
     </div>
     <div class="uc-card">
-      <div class="uc-icon">📝</div>
+      <div class="uc-icon" style="color:var(--cyan)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M14 6.5 17.5 10"/></svg></div>
       <div class="uc-title">Documentation</div>
       <div class="uc-desc">Turn undocumented code into clean API docs, READMEs, runbooks, or RFCs in minutes.</div>
       <div class="uc-prompts">
@@ -115,7 +117,7 @@ footer a{color:var(--t3)}
   <div class="section-head">For researchers and analysts</div>
   <div class="uc-grid">
     <div class="uc-card">
-      <div class="uc-icon">📄</div>
+      <div class="uc-icon" style="color:var(--violet)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2.4"/><path d="M2.5 10h19"/><path d="M6 14.6h4"/></svg></div>
       <div class="uc-title">Document analysis</div>
       <div class="uc-desc">Paste entire PDFs, papers, or reports into a 200k-token context. Ask questions, extract key points, or compare sections.</div>
       <div class="uc-prompts">
@@ -124,7 +126,7 @@ footer a{color:var(--t3)}
       </div>
     </div>
     <div class="uc-card">
-      <div class="uc-icon">🔬</div>
+      <div class="uc-icon" style="color:var(--violet)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2h6"/><path d="M10 2v6.5L4.5 18a2 2 0 0 0 1.7 3h11.6a2 2 0 0 0 1.7-3L14 8.5V2"/><path d="M7.5 14h9"/></svg></div>
       <div class="uc-title">Research synthesis</div>
       <div class="uc-desc">Claude can read multiple sources at once and synthesize them into a coherent analysis with citations tracked.</div>
       <div class="uc-prompts">
@@ -133,7 +135,7 @@ footer a{color:var(--t3)}
       </div>
     </div>
     <div class="uc-card">
-      <div class="uc-icon">📊</div>
+      <div class="uc-icon" style="color:var(--violet)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="16" y="3" width="4" height="17" rx="1"/></svg></div>
       <div class="uc-title">Data interpretation</div>
       <div class="uc-desc">Paste CSV data, charts, or query results and ask Claude to interpret patterns, anomalies, and implications.</div>
       <div class="uc-prompts">
@@ -142,7 +144,7 @@ footer a{color:var(--t3)}
       </div>
     </div>
     <div class="uc-card">
-      <div class="uc-icon">⚖️</div>
+      <div class="uc-icon" style="color:var(--violet)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><path d="M7 21h10"/><path d="M5 7h5M14 7h5"/><path d="M5 7 2.5 12.5a2.5 2.5 0 0 0 5 0L5 7Z"/><path d="M19 7l-2.5 5.5a2.5 2.5 0 0 0 5 0L19 7Z"/></svg></div>
       <div class="uc-title">Legal and contract review</div>
       <div class="uc-desc">Identify risky clauses, unusual terms, and missing provisions in contracts without sending docs to a stranger's API.</div>
       <div class="uc-prompts">
@@ -155,7 +157,7 @@ footer a{color:var(--t3)}
   <div class="section-head">For writers and content creators</div>
   <div class="uc-grid">
     <div class="uc-card">
-      <div class="uc-icon">✍️</div>
+      <div class="uc-icon" style="color:var(--orange)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M14 6.5 17.5 10"/></svg></div>
       <div class="uc-title">Long-form writing</div>
       <div class="uc-desc">Draft essays, reports, proposals, and articles that read like a human wrote them — then iterate with the full context preserved.</div>
       <div class="uc-prompts">
@@ -164,7 +166,7 @@ footer a{color:var(--t3)}
       </div>
     </div>
     <div class="uc-card">
-      <div class="uc-icon">📧</div>
+      <div class="uc-icon" style="color:var(--orange)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div>
       <div class="uc-title">Professional communication</div>
       <div class="uc-desc">Draft emails, Slack messages, performance reviews, or investor updates that strike the right tone the first time.</div>
       <div class="uc-prompts">
@@ -173,7 +175,7 @@ footer a{color:var(--t3)}
       </div>
     </div>
     <div class="uc-card">
-      <div class="uc-icon">🎯</div>
+      <div class="uc-icon" style="color:var(--orange)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg></div>
       <div class="uc-title">Content strategy</div>
       <div class="uc-desc">Generate content calendars, SEO briefs, social copy, and ad copy that match your brand voice and audience.</div>
       <div class="uc-prompts">
@@ -182,7 +184,7 @@ footer a{color:var(--t3)}
       </div>
     </div>
     <div class="uc-card">
-      <div class="uc-icon">🌍</div>
+      <div class="uc-icon" style="color:var(--orange)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.8 2.5 4.3 5.8 4.3 9s-1.5 6.5-4.3 9c-2.8-2.5-4.3-5.8-4.3-9S9.2 5.5 12 3Z"/></svg></div>
       <div class="uc-title">Translation and localization</div>
       <div class="uc-desc">Translate content with cultural context preserved — Claude understands nuance, idioms, and register better than generic translation tools.</div>
       <div class="uc-prompts">
