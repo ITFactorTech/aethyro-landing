@@ -397,6 +397,56 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Homepage hero headline rewrite — the brand-identity
+  decision held back from the resurfacing pass directly above.** Offered
+  the user 3 headline options that repositioned the hero around
+  orchestration instead of the model (A: directly promote the existing
+  "Not a chatbot. An orchestration layer." line into the H1; B: lead with
+  outcome ("One request. Five systems working."); C: minimal change,
+  keep "Your AI assistant" and only swap the second line). User picked
+  **A**. Replaced the H1 (`Your AI assistant. / Powered by / Claude Opus
+  5.` → `Not a chatbot. / An orchestration layer.`) and the hero
+  sub-paragraph (now leads with "Powered by Claude Opus 5, but built to
+  do more than answer" — the model demoted from subject to supporting
+  detail, not removed entirely, since dropping it altogether was its own
+  identified risk in the original feedback).
+  **Found and fixed a direct consequence of the rewrite, not a separate
+  bug**: the agent-visualizer section immediately below the hero had used
+  that exact same phrase — "Not a chatbot. An orchestration layer." — as
+  its own `<h2>` (added before this project adopted the icon/gradient
+  workstream's current section-naming conventions). With the identical
+  phrase now also the H1, a visitor would have read the same four words
+  twice in a row scrolling past one ticker strip. Reworded that section's
+  eyebrow + h2 to build on the hero instead of repeating it verbatim:
+  "The actual differentiator" → "How it actually works",
+  "Not a chatbot. An orchestration layer." → "Five specialized systems.
+  One message in." — left its body paragraph and the 4 subsystem cards
+  (Tasks/Knowledge/Routines/Integrations) untouched, since those were
+  never duplicative. Also removed the `#orchestration`-linked kicker line
+  added in the resurfacing pass (directly above the old H1) — it existed
+  specifically to preview the "not a chatbot" line before a reader
+  reached it; now the H1 *is* that line, so the kicker above it would
+  have been pure duplication. The `id="orchestration"` anchor itself was
+  left in place (harmless, and still a reasonable in-page target even
+  with nothing currently linking to it).
+  **Deliberately out of scope, left as-is**: `<title>`/OG/Twitter meta
+  tags still read "AI Assistant Powered by Claude Opus 5" — these are a
+  different risk class (search ranking / share-card signals, not
+  something a visitor reads on the page itself) and weren't part of what
+  the user approved; changing them wasn't requested. Every other
+  "Powered by Claude Opus 5" mention elsewhere on the page (the trust-
+  signal row, the role-picker sub-copy, the FAQ) are supporting-detail
+  mentions, not headline-level claims, so they're consistent with the
+  new "model as engine, not identity" framing without needing a rewrite.
+  **Verified via a local-served copy** with Playwright: zero horizontal
+  overflow at 1440×1700 and 390×1700, a dedicated element-level
+  screenshot of the `#orchestration` section confirmed the new heading no
+  longer duplicates the hero, and all real inline `<script>` blocks parse
+  clean (re-confirmed the page's 3 JSON-LD blocks are expected non-JS
+  "failures" under a syntax check, same as the resurfacing pass above —
+  this page has structured-data blocks most others touched by the
+  workstream don't).
+
 - **2026-10-06** — **Homepage messaging resurfacing pass**, from external
   review-style feedback on 5 points (model dependence, differentiation
   position, credit ambiguity, social proof, comparison friction). Checked
