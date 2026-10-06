@@ -16,16 +16,27 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
+// CORS locked to aethyro.com (+ preview subdomains); was a bare "*". See
+// chat/index.ts v48's comment for the rationale.
+const ALLOWED_ORIGINS = ["https://aethyro.com", "https://www.aethyro.com"];
+const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-aethyro-landing\.[a-z0-9-]+\.workers\.dev$/;
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.includes(origin) || PREVIEW_ORIGIN_RE.test(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
 }
 
 serve(async (req) => {
+  const CORS = corsHeadersFor(req);
+  function json(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
+  }
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   const token = req.headers.get("Authorization")?.replace("Bearer ", "");
