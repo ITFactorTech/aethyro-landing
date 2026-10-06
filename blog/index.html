@@ -35,7 +35,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#030303;--s1:#0a0a0a;--s2:#111214;--b1:#1c1c1e;--b2:#2a2a2d;--orange:#ff4d00;--orange2:#ff7a3d;--text:#f0f0f0;--t2:#aaaaaa;--t3:#555;--font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace}
+    :root{--bg:#030303;--s1:#0a0a0a;--s2:#111214;--b1:#1c1c1e;--b2:#2a2a2d;--orange:#ff4d00;--orange2:#ff7a3d;--cyan:#00d4ff;--text:#f0f0f0;--t2:#aaaaaa;--t3:#555;--font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace}
+    .grad-orange{background:linear-gradient(135deg,#ff4d00,#ff7a3d);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
     body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6}
     nav{position:sticky;top:0;z-index:200;background:rgba(3,3,3,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--b1)}
     .nav-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:.7rem 1.5rem}
@@ -52,6 +53,9 @@
     .posts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1rem}
     .post-card{display:flex;flex-direction:column;gap:.6rem;background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:1.6rem;text-decoration:none;color:inherit;transition:border-color .18s,transform .15s}
     .post-card:hover{border-color:var(--orange);transform:translateY(-2px)}
+    .post-icon{width:2.1rem;height:2.1rem;border-radius:9px;display:flex;align-items:center;justify-content:center;background:rgba(255,77,0,.08);border:1px solid rgba(255,77,0,.2);color:var(--orange);margin-bottom:.2rem}
+    .post-icon svg{width:1.15rem;height:1.15rem;display:block}
+    .post-card:nth-child(2) .post-icon{background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.2);color:var(--cyan)}
     .post-date{font-family:var(--mono);font-size:.64rem;color:var(--t3)}
     .post-card h2{font-size:1.05rem;font-weight:700;color:#fff;line-height:1.35}
     .post-card p{font-size:.83rem;color:var(--t2);line-height:1.65;flex:1}
@@ -71,19 +75,21 @@
 <div class="blog-wrap">
   <div class="blog-header">
     <div class="eyebrow">Aethyro Blog</div>
-    <h1>AI that actually<br/>works for you.</h1>
+    <h1>AI that actually<br/><span class="grad-orange">works for you.</span></h1>
     <p>Practical guides on AI tools, Claude Opus 5, and workflows for professionals. No hype, no 47-step frameworks — just what's real and what's working.</p>
     <div class="post-count">// 2 articles published</div>
   </div>
   <div class="posts-grid">
     
     <a href="/blog/test-your-ai-connection-critical-for-families-and-small-businesses.html" class="post-card">
+      <div class="post-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/><path d="M9 12l2 2 4-4"/></svg></div>
       <div class="post-date">September 24, 2026</div>
       <h2>How to Evaluate an AI Tool Before You Commit</h2>
       <p>Privacy policies, training opt-outs, cost structures, and quality tests — what to actually check before you hand over your data and your credit card.</p>
       <span class="read-more">Read article →</span>
     </a>
     <a href="/blog/local-ai-for-families-and-small-businesses.html" class="post-card">
+      <div class="post-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div>
       <div class="post-date">September 24, 2026</div>
       <h2>How AI Can Save Working Families & Small Businesses Time</h2>
       <p>Real use cases, honest tradeoffs, and why a credit-based model fits most people better than a $20/month subscription that resets whether you use it or not.</p>
