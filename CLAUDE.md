@@ -397,6 +397,55 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Homepage messaging resurfacing pass**, from external
+  review-style feedback on 5 points (model dependence, differentiation
+  position, credit ambiguity, social proof, comparison friction). Checked
+  each claim against the actual page before acting, rather than assuming
+  the feedback was accurate as given: 3 of the 5 were already substantially
+  built — a full "How we compare" table (Aethyro vs. ChatGPT Plus vs.
+  Claude.ai Pro) already existed, the "Not a chatbot. An orchestration
+  layer." section is literally the very next section after the hero (not
+  "mid-page" as claimed), and the fabricated-testimonials-vs-honest-
+  early-stage-copy tradeoff was already a deliberate, previously-made
+  product decision (see the 2026-09-28 testimonials-removal entry) — a
+  public routines gallery (`/routines.html`) already exists too. The real
+  gap in those three was **visibility**, not missing content: everything
+  was built but positioned below the fold with no hook in the hero
+  pointing to it. Fixed that specifically, as pure additions with zero
+  rewriting of existing sections: (1) added `id="orchestration"` to the
+  agent-visualizer section and a new linked eyebrow-style kicker
+  ("Not a chatbot — an orchestration layer ↓") directly above the H1 —
+  same literal phrase as the section it jumps to, a deliberate callback
+  rather than a model-identity rewrite, since demoting "Powered by Claude
+  Opus 5" from the headline itself is a real brand-identity call being
+  held for a separate, explicit decision (see directly below); (2) added
+  `id="compare"` to the comparison-table section and a new hero caption
+  line ("vs. Claude.ai Pro & ChatGPT Plus — see the comparison →")
+  directly under the existing credit-signup caption.
+  **Credit ambiguity was a genuine, unaddressed gap** — the hero's "200
+  free credits" badge had no unit explanation anywhere near it. Fixed
+  with real, already-published numbers pulled from `pricing.html`'s own
+  FAQ (not invented): "(~13 Opus replies, or ~200 quick ones)" — the
+  exact same figures that page already uses to describe the free grant,
+  so this doesn't introduce a second, possibly-drifting claim about what
+  200 credits buys.
+  **Verified via a local-served copy** with Playwright at 1440×1600
+  (desktop) and 390×1600 (mobile): both new anchor ids resolve
+  (`getElementById` check, not just visual), zero horizontal overflow at
+  either width, the new kicker/caption lines wrap cleanly on mobile
+  without crowding the existing CTAs, and all inline `<script>` blocks
+  still parse clean (confirmed the 3 JSON-LD `<script type="application/
+  ld+json">` blocks are expected non-JS parse "failures" under a
+  JS-syntax check, not a regression — this page has structured-data
+  blocks the other pages touched by this workstream don't).
+  **Deliberately not done this pass, held for a separate decision**:
+  rewriting the H1 itself to lead with "orchestration layer" instead of
+  "Powered by Claude Opus 5" — offered the user 2-3 headline options
+  that reposition identity around orchestration rather than the model,
+  for an explicit pick before any of that copy ships, since unlike the
+  resurfacing fixes above this is a real brand-identity decision, not an
+  additive/reversible one.
+
 - **2026-10-06** — **Visual polish pass, part 4: the 3 orphaned-then-relinked
   SEO landing pages** (`atlas-web-design`, continuing PRs #132/#133/#134 —
   user asked to "do the SEO pages next (use-cases, claude-opus-alternative,
