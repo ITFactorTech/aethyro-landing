@@ -397,6 +397,61 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Extended the CORS-wildcard fix to the remaining 19 edge
+  functions** (the user explicitly asked to "do the same CORS fix for the
+  other 18 functions" after the `chat`/`buy-credits` fix below merged —
+  re-grepping found 19, not 18, since one more function had landed with the
+  same wildcard between the two passes). Applied the identical
+  `corsHeadersFor(req)` allowlist pattern (echo `aethyro.com`/
+  `www.aethyro.com`/preview-subdomain origins, fall back to the production
+  origin for anything else, `Vary: Origin`) to every function, preserving
+  each one's own existing `Access-Control-Allow-Headers`/`-Methods` list
+  exactly (several differ: `trial-chat` only allows `apikey, content-type`,
+  `webhook-routine-trigger` only `content-type`, the decommissioned stubs
+  and `send-newsletter` carry an extra `Access-Control-Allow-Methods`).
+  Functions touched: `activate-license`, `api-chat`, `connector-proxy`,
+  `create-checkout`, `customer-portal`, `embed-content`, `redeem-referral`,
+  `run-agent-task`, `run-routines`, `send-low-credit-email`,
+  `send-newsletter`, `send-onboarding-email`, `send-routine-result-email`,
+  `send-welcome-email`, `setup-auto-topup`, `team-manage`, `trial-chat`,
+  `validate-license`, `webhook-routine-trigger`.
+  **Two functions (`send-low-credit-email`, `send-routine-result-email`)
+  had no module-level CORS const at all** — only an inline wildcard on the
+  OPTIONS preflight, with every other response carrying zero CORS headers
+  (internal-only, `X-Internal-Key`-authenticated, never called from a
+  browser). Fixed the same way, scoped to just that preflight — no new
+  behavior added to responses that never had CORS headers to begin with.
+  **`embed-content` needed one structural change beyond the others**: its
+  `ok`/`err` closures live inside a separate `handleRequest()` function
+  called from the main handler, not inline — threaded the per-request
+  `CORS` object through as an explicit parameter rather than relying on a
+  module-level const.
+  **`api-chat` is the one function in this batch with a legitimate external
+  (non-aethyro.com) usage pattern** — it's the public, API-key-authenticated
+  endpoint meant for a user's own scripts/backends (see `developers.html`).
+  Locking its CORS down doesn't restrict that usage at all: CORS is a
+  browser-only enforcement mechanism, so a server-side script or backend
+  calling with an API key was never gated by this header either way — only
+  a browser-based cross-origin caller is affected, which isn't this
+  endpoint's documented usage pattern. Noted this explicitly in the
+  function's own comment so a future session doesn't assume the lockdown
+  needs reverting.
+  **Verified**: all 19 deployed with their pre-existing `verify_jwt`
+  settings passed explicitly (10 were `true`, 9 `false` — confirmed via
+  `list_edge_functions` before any deploy); all 19 fetched back via
+  `get_edge_function` and diffed byte-for-byte clean against local disk;
+  curl OPTIONS allow/deny checks against 8 functions spanning every
+  structural variant present (`api-chat`, `trial-chat`,
+  `webhook-routine-trigger`, `send-low-credit-email`, `create-checkout`,
+  `send-newsletter`, `embed-content`, `run-routines`) all showed the
+  correct echoed-vs-fallback behavior, never a wildcard — the remaining 11
+  weren't individually curl-tested since their `corsHeadersFor` logic is
+  mechanically identical to the tested set and already diff-verified
+  against disk. No business logic changed in any of the 19 — only CORS
+  header computation — so no throwaway-account functional smoke test was
+  run, matching the same reasoning as the `chat`/`buy-credits` PR.
+  **Scope note**: this closes the CORS-wildcard pattern across every edge
+  function in the repo — nothing left with a bare `"*"` as of this PR.
 - **2026-10-06** — **Closed the CORS-wildcard gap on `chat` and `buy-credits`**
   (one of the 5 remaining items from the 2026-10-03 audit re-run — "CORS
   wildcard on `chat`/`buy-credits`" — selected explicitly by the user out of

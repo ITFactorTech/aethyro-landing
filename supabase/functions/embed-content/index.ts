@@ -1,13 +1,24 @@
-// embed-content v2 — voyage-4-lite (1024-dim), chunking + memory storage
+// embed-content v3 — CORS locked to aethyro.com (+ preview subdomains); was
+// a bare "*". See chat/index.ts v48's comment for the rationale.
+// v2 — voyage-4-lite (1024-dim), chunking + memory storage
 // Stores memory turn embeddings and document-chunk embeddings in pgvector.
 // Called fire-and-forget from chat (memory) and from the frontend (doc upload).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED_ORIGINS = ["https://aethyro.com", "https://www.aethyro.com"];
+const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-aethyro-landing\.[a-z0-9-]+\.workers\.dev$/;
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.includes(origin) || PREVIEW_ORIGIN_RE.test(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -56,6 +67,7 @@ function chunkText(text: string): string[] {
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 serve(async (req) => {
+  const CORS = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST")
     return new Response("Method Not Allowed", { status: 405, headers: CORS });
@@ -79,7 +91,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "user_id required" }), {
         status: 400, headers: { ...CORS, "Content-Type": "application/json" },
       });
-    return handleRequest(body, userId, supaAdmin);
+    return handleRequest(body, userId, supaAdmin, CORS);
   }
 
   // User JWT path
@@ -99,13 +111,14 @@ serve(async (req) => {
     });
   }
 
-  return handleRequest(body, user.id, supaAdmin);
+  return handleRequest(body, user.id, supaAdmin, CORS);
 });
 
 async function handleRequest(
   body: any,
   userId: string,
   supaAdmin: ReturnType<typeof createClient>,
+  CORS: Record<string, string>,
 ): Promise<Response> {
   const ok = (data: any) =>
     new Response(JSON.stringify(data), {

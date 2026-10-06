@@ -7,10 +7,21 @@ const DASH = "https://aethyro.com/app/dashboard.html";
 const CHAT = "https://aethyro.com/app/chat.html";
 const PRICING = "https://aethyro.com/#pricing";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// CORS locked to aethyro.com (+ preview subdomains); was a bare "*". See
+// chat/index.ts v48's comment for the rationale.
+const ALLOWED_ORIGINS = ["https://aethyro.com", "https://www.aethyro.com"];
+const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-aethyro-landing\.[a-z0-9-]+\.workers\.dev$/;
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.includes(origin) || PREVIEW_ORIGIN_RE.test(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 function wrap(body: string) {
   return `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:600px;margin:40px auto;color:#1a1a1a;line-height:1.6">${body}<hr style="margin-top:40px;border:none;border-top:1px solid #eee"/><p style="font-size:12px;color:#999">Aethyro · <a href="https://aethyro.com">aethyro.com</a></p></body></html>`;
@@ -69,6 +80,7 @@ const emails: Record<number, { subject: string; html: (name: string) => string }
 };
 
 serve(async (req) => {
+  const CORS = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {

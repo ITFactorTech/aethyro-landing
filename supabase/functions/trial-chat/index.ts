@@ -19,10 +19,24 @@ const MAX_MESSAGE_LEN = 600;
 
 const SYSTEM_PROMPT = `You are Aethyro, a private AI assistant that helps with code, research, writing, strategy, and everyday problem-solving. This is a free, unauthenticated preview embedded on the homepage — keep answers short and concrete (a few sentences, or a short code snippet), and if the question deserves a longer answer, give the most useful short version and mention that signing up unlocks full-length, ongoing conversations.`;
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "apikey, content-type",
-};
+// CORS locked to aethyro.com (+ preview subdomains); was a bare "*". See
+// chat/index.ts v48's comment for the rationale. This endpoint is only
+// ever called from the homepage inline try-box and chat.html's anonymous
+// trial mode, both aethyro.com pages, so this doesn't change its real
+// usage pattern.
+const ALLOWED_ORIGINS = ["https://aethyro.com", "https://www.aethyro.com"];
+const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-aethyro-landing\.[a-z0-9-]+\.workers\.dev$/;
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.includes(origin) || PREVIEW_ORIGIN_RE.test(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 const USAGE_MARK = "\u0000";
 
@@ -33,6 +47,7 @@ function getClientIp(req: Request): string {
 }
 
 serve(async (req) => {
+  const CORS = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   let body: { message?: string };

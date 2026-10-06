@@ -1,5 +1,24 @@
+// CORS locked to aethyro.com (+ preview subdomains); was a bare "*" on the
+// OPTIONS preflight. See chat/index.ts v48's comment for the rationale.
+// This function's actual data responses never carried CORS headers at
+// all (internal-only, auth'd via X-Internal-Key, never called from a
+// browser), so this only tightens the OPTIONS preflight, not a real gap.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
+
+const ALLOWED_ORIGINS = ["https://aethyro.com", "https://www.aethyro.com"];
+const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-aethyro-landing\.[a-z0-9-]+\.workers\.dev$/;
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.includes(origin) || PREVIEW_ORIGIN_RE.test(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "content-type, x-internal-key",
+    "Vary": "Origin",
+  };
+}
 
 const RESEND_KEY = Deno.env.get("RESEND_API_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -35,12 +54,7 @@ function emailHtml(firstName: string, balance: number, depleted: boolean): strin
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "content-type, x-internal-key",
-      },
-    });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   // Require the service role key as a shared internal secret
