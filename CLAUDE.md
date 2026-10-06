@@ -397,6 +397,62 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Visual polish pass, part 3: `developers.html`,
+  `routines.html`, `trust.html`** (`atlas-web-design`, continuing PRs
+  #132/#133 — user asked to "do developers.html, routines.html, and
+  trust.html next"). Audited all three before touching anything, and this
+  pass split differently than the first two: `developers.html` (API docs)
+  and `routines.html` (public gallery of user-submitted routine cards)
+  had **zero emoji and zero icon usage at all**, not a drift case — a
+  real, restrained scope call, not an oversight. API docs conventionally
+  stay text/table-focused (Stripe's and GitHub's docs don't iconify every
+  section either), and routine cards are user-generated content with no
+  natural per-card icon mapping. Decorating either with invented icons
+  would have been the exact over-design `atlas-web-design`'s restraint
+  principle warns against — neither got icon treatment. The one real,
+  genuine gap on both: no `grad-orange` headline span, while every other
+  marketing/docs page on the site (homepage, pricing, blog) uses it for
+  brand-consistent emphasis. Added `.grad-orange` CSS + a headline
+  `<span>` wrap to both (`developers.html`: "One API key." / "Every
+  model."; `routines.html`: "Routines people" / "built. Fork one.").
+  `trust.html` was the one page in this batch that actually needed icon
+  work — it already uses an icon-per-section convention (6 emoji-prefixed
+  `<h2>`s: 🗑️🔒💳🧠🏗️📬), the same pattern PRs #132/#133 already fixed
+  elsewhere. Replaced all 6 with the established 24×24 outline-SVG system,
+  reusing shapes directly where topically exact (lock for "Account &
+  access security," credit-card for "Payments," brain for "What your
+  conversations are used for") and designing three new icons for shapes
+  that didn't exist yet (trash can for "Verifiable deletion," a simple
+  gabled building for "Infrastructure," an envelope for "Found a
+  problem?"). Each icon takes its color from the section's own semantic
+  accent (green for security, cyan for payments, violet for the AI/brain
+  section, gold for infrastructure, orange for the two brand-adjacent
+  sections) rather than one flat color across all six, matching how the
+  homepage/pricing bento cards already vary accent per card. Also added
+  the same `.grad-orange` headline treatment ("What actually happens" /
+  "to your data."). **Deliberately left alone**: the `✓`/`✗` characters
+  in `trust.html`'s checklist and "what we don't do" box — these are
+  pure CSS `::before` content on list items, the same accepted
+  checkmark-as-semantic-marker convention already established for
+  `pricing.html`'s comparison table in PR #133, not an icon gap calling
+  for SVG replacement.
+  **Verified via a local-served copy** (not production) with Playwright
+  across all three pages at 1280×900 and 390×844: all 6 `trust.html`
+  icons render crisp in their correct accent color with no clipping, the
+  gradient headlines render correctly on all three pages, zero horizontal
+  overflow at any combination (6/6 clean), zero real console errors, and
+  all inline `<script>` blocks (`developers.html` ×1, `routines.html`
+  ×2, `trust.html` ×1) still parse clean via `node --check`-equivalent
+  syntax validation. Re-grepped all three files for emoji after editing —
+  zero remain anywhere. `routines.html`'s local-served Supabase fetch
+  correctly shows its loading state in this QA pass (the live Supabase
+  call was deliberately blocked in the test harness to avoid this
+  session's already-documented sandbox proxy TLS-interception artifact,
+  not a page bug — the page's actual community-routines fetch logic is
+  unchanged from what PR #98 already shipped and verified live).
+  **Scope note**: pure CSS/markup changes, no JS logic touched on any of
+  the three pages, no backend/migration/edge-function involvement.
+
 - **2026-10-06** — **Visual polish pass, part 2: `pricing.html` and
   `blog/`** (`atlas-web-design`, continuing PR #132's homepage pass —
   user asked to "do pricing.html and blog next"). Same audit, same
