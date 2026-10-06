@@ -397,6 +397,54 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Visual polish pass, part 2: `pricing.html` and
+  `blog/`** (`atlas-web-design`, continuing PR #132's homepage pass —
+  user asked to "do pricing.html and blog next"). Same audit, same
+  pattern found: `pricing.html` had 10 raw-emoji icon instances across
+  the "Everything included" feature grid and the trust-signal strip
+  (🎁🧠📄⚡⏰🔗🔒💳, same tell as the homepage before PR #132) — replaced
+  all of them with the same hand-authored outline-icon system (reusing
+  the exact icon shapes already built for the homepage's matching
+  features — memory/docs/zap/routines/link/lock/credit-card — for visual
+  consistency between the two pages, plus a new gift-box icon for
+  "Referral Rewards"/"200 free credits"). Left the `✓`/`✗` comparison-
+  table checkmarks alone — same accepted convention as the homepage's
+  pricing-comparison table, not an icon gap.
+  `blog/index.html` and the two actual posts had **zero emoji** already
+  (not a false-clean — genuinely never used any), but a real, different
+  gap: zero gradient-text treatment anywhere in the blog, while every
+  other page on the site (homepage, pricing) leans on `grad-orange`/
+  `grad-cyan` spans for headline emphasis — the blog looked like a
+  flatter, slightly different product. Added `.grad-orange` to the blog
+  index's h1 (`AI that actually` / `works for you.`) — deliberately
+  **not** applied to the two individual article H1s, which stay plain:
+  editorial post titles get restrained treatment, the hub/index page
+  gets the marketing treatment, matching how most content sites
+  (Stripe's blog, Vercel's blog) draw this line. Also added a small
+  topic icon (shield-check / clock) to each post card on the blog index
+  for visual distinction — there was no way to tell the two posts apart
+  at a glance before, just two identical text blocks.
+  **Found and fixed one real, if minor, inconsistency while auditing
+  the individual posts**: the "How to Evaluate an AI Tool" post's
+  red-flag/green-flag checklist (10 items) used 🚩/✅ emoji inside an
+  already-semantic `.red`/`.green`/`.icon` wrapper structure — swapped
+  for a matching outline alert-triangle/check-circle pair, same
+  treatment as everything else fixed this pass, now the only page on
+  the whole site with zero emoji-as-UI anywhere.
+  **Verified via a local-served copy** (not production) with Playwright:
+  screenshotted the pricing feature grid and trust strip, the blog
+  index, and the fixed checklist, all at full resolution — every icon
+  renders crisp and in its correct accent color; confirmed zero
+  horizontal overflow at 390px on `pricing.html` and all 3 blog pages;
+  confirmed all 4 pages' inline `<script>` blocks still parse clean
+  (`node --check`); re-grepped all 4 files for emoji afterward — zero
+  remaining anywhere except pricing's intentional `✓`/`✗` table marks.
+  **Scope note**: `developers.html`, `routines.html`, `trust.html`, and
+  `use-cases.html`/`claude-opus-alternative.html`/
+  `ai-chat-for-developers.html` weren't audited this pass — not asked
+  for, and each is a narrower, more technical page than the three
+  marketing surfaces (homepage, pricing, blog) this two-part pass
+  targeted; worth a similar emoji/imagery sweep if they come up next.
 - **2026-10-06** — **Homepage visual polish pass** (`atlas-web-design`,
   user-requested: "make this site better... professional grade... instead
   of looking like it was built in a garage"). Scoped to `index.html` only
