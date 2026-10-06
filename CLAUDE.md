@@ -397,6 +397,51 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **Closed the CORS-wildcard gap on `chat` and `buy-credits`**
+  (one of the 5 remaining items from the 2026-10-03 audit re-run — "CORS
+  wildcard on `chat`/`buy-credits`" — selected explicitly by the user out of
+  that list, not a broader sweep). Both functions had a bare
+  `"Access-Control-Allow-Origin": "*"`, letting any website make
+  authenticated cross-origin calls against these two billed endpoints.
+  Replaced with a per-request origin check: `corsHeadersFor(req)` echoes
+  back the request's `Origin` only if it's `https://aethyro.com`,
+  `https://www.aethyro.com`, or matches this project's Cloudflare preview-
+  subdomain pattern (`<branch-or-commit>-aethyro-landing.<account>.workers.dev`,
+  so branch/commit previews can still exercise live chat/checkout);
+  any other origin gets the production origin back instead (never echoed,
+  never a wildcard), which the browser's own CORS enforcement then rejects
+  for that caller. Added `Vary: Origin` on both. `chat` now at v48,
+  `buy-credits` at v15 — both deployed with their pre-existing `verify_jwt`
+  settings passed explicitly (`true` for `chat`, `false` for `buy-credits`,
+  confirmed via `list_edge_functions` before deploying) per this file's own
+  deploy-gotcha above.
+  **Severity framing, stated directly in both functions' own version-history
+  comments**: this is defense-in-depth, not a fix for an active exploit —
+  both endpoints are Bearer-token-authenticated (not cookie-based), so a
+  malicious cross-origin page can't automatically attach a victim's
+  Authorization header the way it could a cookie; it would need the token
+  via some other means (e.g. XSS) regardless of this CORS header. Still
+  worth closing since a wildcard origin on a billed endpoint is exactly the
+  kind of finding that shows up in any outside security review.
+  **Verified live**: fetched both functions' deployed source back via
+  `get_edge_function` and diffed byte-for-byte against local disk (clean on
+  both) before trusting either deploy. Then a real curl-based OPTIONS check
+  against both functions with three Origin cases each — `https://aethyro.com`
+  (echoed back correctly), `https://evil.com` (correctly falls back to the
+  production origin, not echoed), and a real preview-subdomain shape
+  (`https://abc123-aethyro-landing.leer4030.workers.dev`, correctly echoed) —
+  plus a no-`Origin`-header case on `chat` (correctly falls back, doesn't
+  error). All matched the intended allowlist behavior exactly.
+  **Scope note**: 18 other edge functions share the same `"*"` wildcard
+  pattern (grepped repo-wide for completeness) but were deliberately left
+  untouched — the user selected specifically "CORS wildcard fix," and this
+  project's own audit only ever named `chat`/`buy-credits` as the tracked
+  gap (the two functions that actually move money or do billed work from a
+  browser context). The other 18 are a separate, not-yet-scoped cleanup if
+  wanted later. No business logic changed in either function — only the
+  CORS header computation — so no throwaway-account chat/purchase smoke
+  test was run for this PR; the curl-based header verification above is the
+  right-sized check for a change this narrow.
 - **2026-10-06** — **Homepage hero headline rewrite — the brand-identity
   decision held back from the resurfacing pass directly above.** Offered
   the user 3 headline options that repositioned the hero around
