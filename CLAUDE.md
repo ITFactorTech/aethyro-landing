@@ -397,6 +397,67 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-06** — **`site-guardian` sweep, user-requested. Swept clean —
+  zero bugs found, nothing to fix.** Ran the full checklist against the
+  state left by PRs #128/#129/#130 (credit-aware router cap, return-visit
+  hook, purchase-moment instrumentation), all merged the same day.
+  `get_advisors` (security+performance): no new finding beyond this
+  project's existing accepted classes (the 4 zero-policy tables —
+  `admin_users`/`app_secrets`/`model_router_centroids`/
+  `rate_limit_counters` — GraphQL-exposure boilerplate, the 2 intentional
+  anon-executable 0-arg functions, and leaked-password protection still
+  off at the Auth-service level — still correctly explained by the Free
+  plan, not a regression). `list_edge_functions` (28) vs.
+  `supabase/functions/` (24 committed): zero drift — the 4-function gap is
+  exactly the known diagnostic set (`test-admin-setup`,
+  `test-voyage-probe`, `test-embed-probe`, `test-embed-batch`), all still
+  correctly inert. `pg_trigger` on `auth.users` (4, all enabled) and
+  `pg_cron.job` (now 6, including `run-due-routines` added by PR #129
+  earlier the same day) both matched this file's documentation exactly —
+  no drift. Hard security constraint re-grepped clean (zero
+  `buy.stripe.com` matches). Live smoke test with two real throwaway
+  accounts: signup produced exactly one `profiles`/`referral_codes`/
+  `signup_bonus` row each, zero `subscriptions` rows (no regression of
+  the old double-bonus bug); a real chat message on all three
+  `MODEL_MAP` keys (haiku/sonnet/opus) succeeded with correct billing and
+  a real signed generation receipt for each; referral redemption happy
+  path (+100 both sides), duplicate (409), self-referral (400), and
+  invalid code (404) all correct; `buy-credits` resolved to a real
+  `checkout.stripe.com` URL, never a bare Stripe link; **the credit-aware
+  router cap from PR #128 re-verified still live**: an account forced to
+  a 60-credit balance (below the 100-credit floor) with `model:"auto"`
+  on a textbook-heavy prompt correctly capped to `sonnet`, while the same
+  account's explicit `model:"opus"` choice was correctly left
+  uninterfered with; a real routine (`email_on_result:true`) triggered
+  via `run-routines` correctly ran, billed `-1 reason:'routine'`,
+  advanced `next_run_at`, and attempted the result-email send (the send
+  itself hit Resend's already-documented, non-bug rejection of
+  `@example.com` test addresses — same pattern this file has noted
+  multiple times before, not investigated further for that reason).
+  `chat.html`'s 3 inline `<script>` blocks all syntax-checked clean.
+  Static pages (`/`, `/robots.txt`, `/sitemap.xml`, `/terms.html`,
+  `/privacy.html`, `/trust.html`, `/developers.html`, `/routines.html`)
+  all live, a real unknown path still 404s. The 4 decommissioned-plan
+  stub functions (`create-checkout`/`activate-license`/
+  `validate-license`/`customer-portal`) all still correctly inert (3 of
+  4 gateway-401 due to `verify_jwt:true` before even reaching the stub
+  body; `validate-license` is `verify_jwt:false` and reaches its stub
+  directly, returning `410` — both are the expected, documented behavior
+  per function, not drift). **Not completed this sweep, same as every
+  prior attempt**: the edge-function error-rate log check — tried
+  `function_edge_logs`, `edge_logs`, and `function_logs` again, all three
+  still error or return a backend error on this project's log backend;
+  this has now failed identically across at least 3 separate sweeps
+  (2026-10-03, 2026-10-03, 2026-10-06) and is a standing tooling
+  limitation, not something worth retrying again without a different
+  approach. Cleaned up: deleted both throwaway accounts (and the one test
+  routine via cascade — a direct `DELETE` on the routine row itself hit
+  the same intermittently-flaky `execute_sql` DELETE quirk this file
+  already documents, resolved by letting the account deletion cascade
+  it instead), confirmed zero orphaned rows across
+  `profiles`/`credit_ledger`/`referral_codes`/`referral_events`/
+  `user_routines`/`auth.users`, `test-admin-setup` re-stubbed to 410 and
+  confirmed via a live curl.
 - **2026-10-06** — **Instrumented and redesigned the post-depletion purchase
   moment** (part 3 of the "go deep" strategy discussion — part 1 was #128,
   the credit-aware router cap; part 2 was #129, the return-visit hook).
