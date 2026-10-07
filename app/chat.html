@@ -30,6 +30,7 @@
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
   .app{display:flex;height:100vh;overflow:hidden}
+  .ic{width:1em;height:1em;flex-shrink:0;vertical-align:-.15em}
 
   /* ── Sidebar ── */
   .sidebar{width:220px;min-width:220px;display:flex;flex-direction:column;border-right:1px solid var(--b1);background:var(--s1);overflow:hidden}
@@ -240,6 +241,7 @@
   .tool-cards{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.5rem}
   .tool-card{display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .75rem;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.18);border-radius:8px;font-size:.76rem;color:var(--t2);max-width:100%}
   .tool-card-icon{font-size:.95rem;flex-shrink:0}
+  .tool-card-icon svg{width:1em;height:1em;display:block}
   .tool-card-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .tool-card-label em{color:var(--cyan);font-style:normal}
 
@@ -330,7 +332,8 @@
   .onboard-steps{display:flex;justify-content:center;gap:.5rem;margin-bottom:1.5rem}
   .onboard-step-dot{width:8px;height:8px;border-radius:50%;background:var(--b2);transition:background .2s}
   .onboard-step-dot.active{background:var(--orange)}
-  .onboard-icon{font-size:2.5rem;margin-bottom:.75rem}
+  .onboard-icon{font-size:2.5rem;margin-bottom:.75rem;color:var(--orange)}
+  .onboard-icon svg{width:2.5rem;height:2.5rem;display:block;margin:0 auto}
   .onboard-modal h3{font-size:1.1rem;font-weight:700;margin-bottom:.4rem}
   .onboard-modal p{font-size:.86rem;color:var(--t2);line-height:1.6;margin-bottom:1.5rem}
   .onboard-btn{display:block;width:100%;padding:.7rem;background:var(--orange);color:#fff;font-weight:700;border:none;border-radius:10px;font-family:var(--font);font-size:.9rem;cursor:pointer;transition:background .15s}
@@ -453,8 +456,8 @@
     <div class="sidebar-foot">
       <a href="/app/dashboard.html">Dashboard →</a>
       <button class="sidebar-workspace-btn" id="workspaceBtn">Workspace</button>
-      <button class="sidebar-workspace-btn" id="referralBtn">🎁 Share &amp; Earn</button>
-      <button class="sidebar-workspace-btn" id="intelBtn">⚡ Intelligence</button>
+      <button class="sidebar-workspace-btn" id="referralBtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="13" rx="1.5"/><path d="M3 12h18"/><path d="M12 8v13"/><path d="M12 8c-1.5 0-3.5-1-3.5-2.8A2.2 2.2 0 0 1 10.7 3c1.7 0 1.3 3 1.3 5Z"/><path d="M12 8c1.5 0 3.5-1 3.5-2.8A2.2 2.2 0 0 0 13.3 3c-1.7 0-1.3 3-1.3 5Z"/></svg> Share &amp; Earn</button>
+      <button class="sidebar-workspace-btn" id="intelBtn"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L10 22l9-12h-6.5L13 2z"/></svg> Intelligence</button>
       <div class="balance-sm" id="balanceSm">— credits</div>
     </div>
   </div>
@@ -462,7 +465,7 @@
   <!-- Main chat -->
   <div class="chat-main">
     <div class="chat-top">
-      <button class="sidebar-toggle" id="sidebarToggle" style="display:none" title="Open conversations">☰</button>
+      <button class="sidebar-toggle" id="sidebarToggle" style="display:none" title="Open conversations"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <!-- shown in anon mode only -->
       <a href="/" class="brand" id="anonBrand" style="margin:0;display:none"><span class="dot"></span> Aethyro</a>
       <span class="chat-title" id="chatTitle"></span>
@@ -495,25 +498,25 @@
              instead of just typing a sentence into the composer, since a
              chip can't open a file picker or switch Intelligence-panel tabs. -->
         <div class="prompt-chips" id="featureTryouts" style="margin-top:.6rem">
-          <button class="prompt-chip" id="tryDailyBriefing" style="border-color:rgba(255,179,0,.35);color:#ffd966">📰 Try it: daily AI briefing →</button>
-          <button class="prompt-chip" id="tryUploadDoc" style="border-color:rgba(139,92,246,.35);color:#c4b5fd">📄 Try it: upload a document →</button>
-          <button class="prompt-chip" id="tryRoutine" style="border-color:rgba(34,197,94,.35);color:var(--green)">🔁 Try it: create a routine →</button>
+          <button class="prompt-chip" id="tryDailyBriefing" style="border-color:rgba(255,179,0,.35);color:#ffd966;display:inline-flex;align-items:center;gap:.4rem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5h13l3 3v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1Z"/><path d="M7 9.5h8M7 13h10M7 16.5h6"/></svg> Try it: daily AI briefing →</button>
+          <button class="prompt-chip" id="tryUploadDoc" style="border-color:rgba(139,92,246,.35);color:#c4b5fd;display:inline-flex;align-items:center;gap:.4rem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h2"/></svg> Try it: upload a document →</button>
+          <button class="prompt-chip" id="tryRoutine" style="border-color:rgba(34,197,94,.35);color:var(--green);display:inline-flex;align-items:center;gap:.4rem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11A8 8 0 0 0 6.3 6.3L4 8.6"/><path d="M4 4v4.6h4.6"/><path d="M4 13a8 8 0 0 0 13.7 4.7L20 15.4"/><path d="M20 20v-4.6h-4.6"/></svg> Try it: create a routine →</button>
         </div>
       </div>
     </div>
 
     <div class="composer-wrap">
       <div class="low-balance" id="lowBalance" style="display:none">
-        ⚠ Low balance (<span id="lowBalanceVal">0</span> credits)<span id="lowBalanceModelNote"></span>. <a href="#" id="lowBalanceBuy">Buy more →</a>
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 9v5M12 16.5h.01"/></svg> Low balance (<span id="lowBalanceVal">0</span> credits)<span id="lowBalanceModelNote"></span>. <a href="#" id="lowBalanceBuy">Buy more →</a>
       </div>
       <div class="low-balance" id="trialLimitBar" style="display:none">
-        🔒 That's today's 3 free preview messages. <a href="./signup.html?next=chat" id="trialLimitBarLink">Sign up free for 200 credits →</a>
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg> That's today's 3 free preview messages. <a href="./signup.html?next=chat" id="trialLimitBarLink">Sign up free for 200 credits →</a>
       </div>
       <div class="depleted-bar" id="depletedBar" style="display:none">
-        🔴 No credits left. <a href="#" id="depletedBuy">Buy credits →</a>
+        <svg class="ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg> No credits left. <a href="#" id="depletedBuy">Buy credits →</a>
       </div>
       <div class="post-reply-nudge" id="postReplyNudge" style="display:none">
-        ✨ Aethyro can also <button type="button" class="nudge-link" id="nudgeDoc">read your documents</button> or <button type="button" class="nudge-link" id="nudgeRoutine">run this on a schedule</button>.
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 15 15 9"/><path d="M11 6.5 13 4.4a3.6 3.6 0 0 1 5.1 5.1L16 11.6"/><path d="M13 17.5 11 19.6a3.6 3.6 0 0 1-5.1-5.1L8 12.4"/></svg> Aethyro can also <button type="button" class="nudge-link" id="nudgeDoc">read your documents</button> or <button type="button" class="nudge-link" id="nudgeRoutine">run this on a schedule</button>.
         <button type="button" class="nudge-dismiss" id="nudgeDismiss" aria-label="Dismiss">×</button>
       </div>
       <div class="model-bar" id="modelBar">
@@ -524,7 +527,7 @@
       </div>
       <div id="attachChips" style="display:none"></div>
       <form class="composer" id="composer">
-        <button type="button" id="attachBtn" title="Attach file (txt, md, csv, pdf, image)">📎</button>
+        <button type="button" id="attachBtn" title="Attach file (txt, md, csv, pdf, image)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 11.05 12.2 19.2a5 5 0 0 1-7.07-7.07l8.08-8.1a3.5 3.5 0 0 1 4.95 4.96l-7.9 7.9a1.5 1.5 0 0 1-2.12-2.13l6.9-6.9"/></svg></button>
         <input type="file" id="fileInput" accept=".txt,.md,.csv,.pdf,.png,.jpg,.jpeg,.webp,.gif" multiple style="display:none"/>
         <button type="button" id="voiceBtn" title="Voice input" style="display:none">🎙</button>
         <textarea id="input" placeholder="Message Aethyro…" rows="1" required></textarea>
@@ -606,7 +609,7 @@ I often need help with: client quotes, contract review, business Instagram posts
 <!-- Deletion receipt modal -->
 <div class="workspace-modal-backdrop" id="receiptModal">
   <div class="workspace-modal">
-    <h3>🔏 Deletion Receipt</h3>
+    <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg> Deletion Receipt</h3>
     <p class="wm-sub">This conversation and its associated memory were permanently deleted. The receipt below is signed server-side (HMAC-SHA256) — it proves what was deleted and when, and can be independently re-verified at any time.</p>
     <pre id="receiptPayload" class="receipt-payload"></pre>
     <div class="receipt-sig-row">
@@ -625,7 +628,7 @@ I often need help with: client quotes, contract review, business Instagram posts
 <!-- Generation receipt modal -->
 <div class="workspace-modal-backdrop" id="genReceiptModal">
   <div class="workspace-modal">
-    <h3>📜 Generation Receipt</h3>
+    <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h2"/></svg> Generation Receipt</h3>
     <p class="wm-sub">This reply's generation was recorded and signed server-side (HMAC-SHA256) the moment it was produced — model, token counts, cost, and what context fed into it. The receipt below can be independently re-verified at any time.</p>
     <pre id="genReceiptPayload" class="receipt-payload"></pre>
     <div class="receipt-sig-row">
@@ -645,7 +648,7 @@ I often need help with: client quotes, contract review, business Instagram posts
 <div class="intel-panel" id="intelPanel">
   <div class="intel-drag-handle"></div>
   <div class="intel-header">
-    <span class="intel-header-title">⚡ Intelligence</span>
+    <span class="intel-header-title" style="display:inline-flex;align-items:center;gap:.4rem"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L10 22l9-12h-6.5L13 2z"/></svg> Intelligence</span>
     <button class="intel-close" id="intelClose">×</button>
   </div>
   <div class="intel-tabs">
@@ -706,7 +709,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       <p class="intel-section-title">Upload Document</p>
       <p style="font-size:.8rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">Files are chunked and embedded — Claude will automatically retrieve relevant sections in your conversations.</p>
       <input type="file" id="docFileInput" accept=".txt,.md,.csv,.pdf" multiple style="display:none"/>
-      <button class="intel-btn" id="docUploadBtn">📄 Choose files…</button>
+      <button class="intel-btn" id="docUploadBtn" style="display:inline-flex;align-items:center;gap:.4rem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h2"/></svg> Choose files…</button>
       <hr class="intel-divider">
       <p class="intel-section-title">Your Knowledge Base</p>
       <div id="docList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">No documents yet.<br/>Upload files above — Claude will reference them automatically in every conversation.</p></div>
@@ -753,7 +756,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         </div>
         <div class="intel-form-group" style="display:flex;align-items:center;gap:.5rem">
           <input type="checkbox" id="routineEmailOnResult" style="width:auto;margin:0"/>
-          <label class="intel-label" for="routineEmailOnResult" style="margin:0">📧 Email me when this runs</label>
+          <label class="intel-label" for="routineEmailOnResult" style="margin:0;display:inline-flex;align-items:center;gap:.35rem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg> Email me when this runs</label>
         </div>
         <div class="intel-btn-row">
           <button class="intel-btn" type="submit" id="routineSaveBtn">Save Routine</button>
@@ -763,7 +766,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       <p class="intel-section-title">Your Routines</p>
       <div id="routineList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">No routines yet.<br/>Schedule a prompt above and Aethyro will run it automatically on your cron.</p></div>
       <hr class="intel-divider">
-      <p class="intel-section-title">🌐 Community Gallery <span style="font-size:.68rem;color:var(--t3);font-weight:400">— fork anyone's public routine into your own</span></p>
+      <p class="intel-section-title" style="display:flex;align-items:center;gap:.35rem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.8 2.5 4.3 5.8 4.3 9s-1.5 6.5-4.3 9c-2.8-2.5-4.3-5.8-4.3-9S9.2 5.5 12 3Z"/></svg> Community Gallery <span style="font-size:.68rem;color:var(--t3);font-weight:400">— fork anyone's public routine into your own</span></p>
       <div id="communityRoutineList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">Loading…</p></div>
     </div>
 
@@ -840,7 +843,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         <input id="searchQuery" type="search" placeholder="e.g. &quot;that pricing discussion from last month&quot;" style="flex:1;min-width:0;box-sizing:border-box;padding:.5rem .6rem;background:rgba(255,255,255,.05);border:1px solid var(--b2);border-radius:6px;color:var(--text);font-size:.82rem;outline:none"/>
         <button type="submit" class="btn-primary" id="searchGoBtn" style="padding:.5rem .9rem;background:var(--orange);color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer;white-space:nowrap">Search</button>
       </form>
-      <div id="searchResults"><div class="intel-empty" style="padding:2rem 1rem"><div style="font-size:1.5rem;margin-bottom:.4rem">🔍</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">Search your whole history</div><div>Ask in plain language — results are ranked by meaning, not just keywords.</div></div></div>
+      <div id="searchResults"><div class="intel-empty" style="padding:2rem 1rem"><div style="margin-bottom:.4rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.6rem;height:1.6rem"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">Search your whole history</div><div>Ask in plain language — results are ranked by meaning, not just keywords.</div></div></div>
     </div>
 
   </div>
@@ -855,7 +858,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       <div class="onboard-step-dot"></div>
       <div class="onboard-step-dot"></div>
     </div>
-    <div class="onboard-icon" id="onboardIcon">👋</div>
+    <div class="onboard-icon" id="onboardIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 13.5 9 20 10.5 13.5 12 12 18 10.5 12 4 10.5 10.5 9 12 3Z"/></svg></div>
     <h3 id="onboardTitle">Welcome to Aethyro</h3>
     <p id="onboardBody">You're powered by Claude Opus 5 — the world's most capable AI. Start by typing any question below.</p>
     <button class="onboard-btn" id="onboardNext">Next →</button>
@@ -1731,7 +1734,7 @@ I often need help with: client quotes, contract review, business Instagram posts
             var receiptLink=document.createElement('button');
             receiptLink.type='button';
             receiptLink.className='mc-receipt-link';
-            receiptLink.textContent='📜 Receipt';
+            receiptLink.textContent='Receipt';
             receiptLink.addEventListener('click',(function(r){ return function(){ showGenerationReceipt(r); }; })(meta.receipt));
             costEl.appendChild(receiptLink);
           }
@@ -1794,7 +1797,7 @@ I often need help with: client quotes, contract review, business Instagram posts
   function appendContextNudge(container){
     var nudge = document.createElement('div');
     nudge.className = 'context-nudge';
-    nudge.innerHTML = '<strong>💡 Personalize your AI</strong>&nbsp;— tell Claude who you are so every response fits your context.';
+    nudge.innerHTML = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--cyan);flex-shrink:0"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8.9.9 1.6h5.2c.1-.7.4-1.2.9-1.6A6 6 0 0 0 12 3Z"/></svg><span><strong>Personalize your AI</strong>&nbsp;— tell Claude who you are so every response fits your context.</span>';
     nudge.addEventListener('click', openWorkspaceModal);
     container.appendChild(nudge);
   }
@@ -1942,13 +1945,17 @@ I often need help with: client quotes, contract review, business Instagram posts
   });
 
   /* ── Tool call card rendering ── */
-  var TOOL_ICONS={web_search:'🔍',github_list_repos:'🐙',github_list_issues:'🐛',github_search_code:'🔎',github_read_file:'📄',github_list_prs:'🔀',notion_search:'📓',notion_read_page:'📄'};
+  var ICON_SEARCH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>';
+  var ICON_GITHUB='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>';
+  var ICON_DOC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h2"/></svg>';
+  var ICON_WRENCH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 1 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2.6-.6-.6-2.6 2.3-2.3Z"/></svg>';
+  var TOOL_ICONS={web_search:ICON_SEARCH,github_list_repos:ICON_GITHUB,github_list_issues:ICON_GITHUB,github_search_code:ICON_GITHUB,github_read_file:ICON_GITHUB,github_list_prs:ICON_GITHUB,notion_search:ICON_DOC,notion_read_page:ICON_DOC};
   function renderToolCards(container, events){
     container.innerHTML='';
     (events||[]).forEach(function(ev){
       var card=document.createElement('div');
       card.className='tool-card';
-      var icon=TOOL_ICONS[ev.tool]||'🛠';
+      var icon=TOOL_ICONS[ev.tool]||ICON_WRENCH;
       var label=ev.tool;
       if(ev.tool==='web_search'&&ev.input&&ev.input.query) label='Searched: '+ev.input.query;
       else if(ev.tool==='github_list_repos') label='GitHub: listing repos';
@@ -2191,7 +2198,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       if(rTab) rTab.click();
       loadRoutines();
     }catch(e){ showToast('Could not schedule briefing','err'); }
-    finally{ if(btn){ btn.disabled=false; btn.textContent='📰 Try it: daily AI briefing →'; } }
+    finally{ if(btn){ btn.disabled=false; btn.innerHTML='<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5h13l3 3v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1Z"/><path d="M7 9.5h8M7 13h10M7 16.5h6"/></svg> Try it: daily AI briefing →'; } }
   }
   var tryDailyBriefingBtn=$('tryDailyBriefing'), tryUploadDocBtn=$('tryUploadDoc'), tryRoutineBtn=$('tryRoutine');
   if(tryDailyBriefingBtn) tryDailyBriefingBtn.addEventListener('click',openDailyBriefingFlow);
@@ -2224,15 +2231,16 @@ I often need help with: client quotes, contract review, business Instagram posts
   /* ── Onboarding ── */
   (function(){
     var ONBOARD_KEY='aethyro_onboarded_v1';
+    var ICON_SVG='<svg viewBox="0 0 24 24" aria-hidden="true">';
     var steps=[
-      {icon:'👋',title:'Welcome to Aethyro',body:'You\'re powered by Claude Opus 5 — the world\'s most capable AI. Start by typing any question below.'},
-      {icon:'⚡',title:'Intelligence Panel',body:'Tap "Intelligence" in the sidebar to run agentic tasks, upload documents to your knowledge base, set up scheduled routines, and connect GitHub or Notion.'},
-      {icon:'🧠',title:'Semantic Memory',body:'Aethyro remembers context across conversations using vector embeddings — no need to re-explain yourself each time you open a chat.'},
+      {icon:ICON_SVG+'<path fill="currentColor" d="M12 3 13.5 9 20 10.5 13.5 12 12 18 10.5 12 4 10.5 10.5 9 12 3Z"/></svg>',title:'Welcome to Aethyro',body:'You\'re powered by Claude Opus 5 — the world\'s most capable AI. Start by typing any question below.'},
+      {icon:ICON_SVG+'<path fill="currentColor" d="M13 2 4.5 13.5H11L10 22l9-12h-6.5L13 2z"/></svg>',title:'Intelligence Panel',body:'Tap "Intelligence" in the sidebar to run agentic tasks, upload documents to your knowledge base, set up scheduled routines, and connect GitHub or Notion.'},
+      {icon:ICON_SVG+'<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8A3.5 3.5 0 0 0 7 19a3 3 0 0 0 5-2V6a3 3 0 0 0-3-2Z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5.8A3.5 3.5 0 0 1 17 19a3 3 0 0 1-5-2"/></svg>',title:'Semantic Memory',body:'Aethyro remembers context across conversations using vector embeddings — no need to re-explain yourself each time you open a chat.'},
     ];
     var step=0;
     function showStep(i){
       var s=steps[i];
-      $('onboardIcon').textContent=s.icon;
+      $('onboardIcon').innerHTML=s.icon;
       $('onboardTitle').textContent=s.title;
       $('onboardBody').textContent=s.body;
       var dots=$('onboardDots').children;
@@ -2297,8 +2305,7 @@ I often need help with: client quotes, contract review, business Instagram posts
           showToast(msg,'err');
           if(msg.toLowerCase().indexOf('credit')!==-1||msg.toLowerCase().indexOf('insufficient')!==-1){
             var lb=$('lowBalance'); lb.style.display='';
-            lb.textContent='';
-            lb.appendChild(document.createTextNode('💳 '+msg+' '));
+            lb.innerHTML='<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2.4"/><path d="M2.5 10h19"/><path d="M6 14.6h4"/></svg> '+intelEsc(msg)+' ';
             var lba=document.createElement('a');
             lba.href='#'; lba.className='task-buy-link'; lba.style.cssText='color:var(--orange);font-weight:700';
             lba.textContent='Buy credits →';
@@ -2405,7 +2412,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     var list=$('taskList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
     var r=await supabase.from('agent_tasks').select('id,goal,status,result,credits_used,created_at').order('created_at',{ascending:false}).limit(10);
-    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="font-size:1.8rem;margin-bottom:.5rem">🤖</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No tasks yet</div><div style="margin-bottom:1rem">Set a goal above and Aethyro will research, plan, and execute it step by step.</div></div>'; return; }
+    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="margin-bottom:.5rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.8rem;height:1.8rem"><rect x="4" y="9" width="16" height="11" rx="2"/><circle cx="9" cy="14.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="14.5" r="1.3" fill="currentColor" stroke="none"/><path d="M12 9V5"/><circle cx="12" cy="3.5" r="1.3"/></svg></div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No tasks yet</div><div style="margin-bottom:1rem">Set a goal above and Aethyro will research, plan, and execute it step by step.</div></div>'; return; }
     list.innerHTML='';
     var hasRunning=r.data.some(function(t){ return t.status==='running'||t.status==='pending'; });
     /* sidebar badge */
@@ -2435,7 +2442,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         var stepsEl=document.createElement('div'); stepsEl.className='task-steps';
         sr.data.forEach(function(step){
           var s=document.createElement('div'); s.className='task-step';
-          var tools=Array.isArray(step.tool_calls)&&step.tool_calls.length?'<span style="font-size:.65rem;color:var(--t3);margin-left:.4rem">'+step.tool_calls.map(function(tc){return '🔧 '+intelEsc(tc.tool);}).join(' ')+'</span>':'';
+          var tools=Array.isArray(step.tool_calls)&&step.tool_calls.length?'<span style="font-size:.65rem;color:var(--t3);margin-left:.4rem">'+step.tool_calls.map(function(tc){return intelEsc(tc.tool);}).join(' · ')+'</span>':'';
           s.innerHTML='<span class="step-status-dot '+step.status+'"></span><span class="step-desc">'+intelEsc(step.description)+tools+'</span>';
           stepsEl.appendChild(s);
         });
@@ -2504,7 +2511,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     var list=$('docList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
     var r=await supabase.from('user_documents').select('id,name,file_type,size_bytes,chunk_count,created_at').order('created_at',{ascending:false}).limit(20);
-    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="font-size:1.8rem;margin-bottom:.5rem">📚</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No documents yet</div><div style="margin-bottom:1rem">Upload PDFs, text files, or code — Aethyro will embed them for semantic retrieval in every chat.</div></div>'; return; }
+    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="margin-bottom:.5rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.8rem;height:1.8rem"><path d="M3 5.5c1.5-.8 3.4-1.2 5-1.2 1.4 0 2.8.3 4 .9 1.2-.6 2.6-.9 4-.9 1.6 0 3.5.4 5 1.2v12.6c-1.5-.7-3.3-1.1-5-1.1-1.4 0-2.8.3-4 .9-1.2-.6-2.6-.9-4-.9-1.7 0-3.5.4-5 1.1V5.5Z"/><path d="M12 5.2v13.1"/></svg></div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No documents yet</div><div style="margin-bottom:1rem">Upload PDFs, text files, or code — Aethyro will embed them for semantic retrieval in every chat.</div></div>'; return; }
     list.innerHTML='';
     r.data.forEach(function(doc){
       var icon=docTypeIcon(doc.file_type,doc.name);
@@ -2572,7 +2579,7 @@ I often need help with: client quotes, contract review, business Instagram posts
           nextRunStr+
         '</div>'+
         '<div class="intel-card-meta"><span class="routine-sched-human">'+intelEsc(cronHuman(rt.schedule))+'</span> · Last: '+lastRun+
-          (rt.is_public?' · <span style="color:var(--cyan)">🌐 public'+(rt.fork_count?' · '+rt.fork_count+' fork'+(rt.fork_count===1?'':'s'):'')+'</span>':'')+
+          (rt.is_public?' · <span style="color:var(--cyan)">public'+(rt.fork_count?' · '+rt.fork_count+' fork'+(rt.fork_count===1?'':'s'):'')+'</span>':'')+
           (rt.forked_from?' · <span style="color:var(--t3)">forked</span>':'')+
           (rt.next_routine_id?' · <span style="color:#c4b5fd">➜ then: '+intelEsc(routineNameById[rt.next_routine_id]||'(deleted)')+'</span>':'')+
         '</div>'+
@@ -2601,7 +2608,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         togLabel.textContent=rt.enabled?'On':'Off'; togLabel.style.color=rt.enabled?'var(--green)':'var(--t3)';
         await supabase.from('user_routines').update({enabled:rt.enabled}).eq('id',rt.id);
       });
-      var emailBtn=document.createElement('button'); emailBtn.className='intel-btn intel-btn-sm'; emailBtn.textContent=rt.email_on_result?'📧 Email: on':'📧 Email: off';
+      var emailBtn=document.createElement('button'); emailBtn.className='intel-btn intel-btn-sm'; emailBtn.textContent=rt.email_on_result?'Email: on':'Email: off';
       emailBtn.title='Email you a short summary every time this routine produces a result';
       emailBtn.addEventListener('click',async function(){
         emailBtn.disabled=true;
@@ -2609,7 +2616,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         var ur=await supabase.from('user_routines').update({email_on_result:next}).eq('id',rt.id);
         if(ur.error){ showToast('Could not update','err'); emailBtn.disabled=false; return; }
         rt.email_on_result=next;
-        emailBtn.textContent=next?'📧 Email: on':'📧 Email: off';
+        emailBtn.textContent=next?'Email: on':'Email: off';
         showToast(next?'Will email you when this runs':'Email notifications off','ok');
         emailBtn.disabled=false;
       });
@@ -2628,7 +2635,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         }catch(e){ showToast('Network error','err'); }
         finally{ runBtn.disabled=false; runBtn.textContent='Run now'; }
       });
-      var hookBtn=document.createElement('button'); hookBtn.className='intel-btn intel-btn-sm'; hookBtn.textContent='🔗 Webhook';
+      var hookBtn=document.createElement('button'); hookBtn.className='intel-btn intel-btn-sm'; hookBtn.textContent='Webhook';
       hookBtn.title='Get a URL that lets an external system (GitHub Actions, Zapier, a script) trigger this routine on demand';
       hookBtn.addEventListener('click',function(){ openWebhookModal(rt.id); });
       var chainBtn=document.createElement('button'); chainBtn.className='intel-btn intel-btn-sm'; chainBtn.textContent='➜ Chain';
@@ -2674,7 +2681,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     var r=await supabase.from('user_routines').select('id,name,prompt,schedule,model,fork_count,user_id')
       .eq('is_public',true).neq('user_id',session.user.id).order('fork_count',{ascending:false}).limit(20);
     if(r.error||!r.data||!r.data.length){
-      list.innerHTML='<div class="intel-empty" style="padding:2rem 1rem"><div style="font-size:1.5rem;margin-bottom:.4rem">🌐</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No public routines yet</div><div>Publish one of your own routines above to be the first in the gallery.</div></div>';
+      list.innerHTML='<div class="intel-empty" style="padding:2rem 1rem"><div style="margin-bottom:.4rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.5rem;height:1.5rem"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.8 2.5 4.3 5.8 4.3 9s-1.5 6.5-4.3 9c-2.8-2.5-4.3-5.8-4.3-9S9.2 5.5 12 3Z"/></svg></div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No public routines yet</div><div>Publish one of your own routines above to be the first in the gallery.</div></div>';
       return;
     }
     list.innerHTML='';
@@ -2685,11 +2692,11 @@ I often need help with: client quotes, contract review, business Instagram posts
         '<div class="intel-card-meta"><span class="routine-sched-human">'+intelEsc(cronHuman(rt.schedule))+'</span> · '+(rt.model||'haiku')+' · '+(rt.fork_count||0)+' fork'+(rt.fork_count===1?'':'s')+'</div>'+
         '<div class="intel-card-result" style="margin-top:.4rem;color:var(--t2)">'+intelEsc(rt.prompt.length>160?rt.prompt.slice(0,160)+'…':rt.prompt)+'</div>';
       var actions=document.createElement('div'); actions.className='intel-card-actions';
-      var forkBtn=document.createElement('button'); forkBtn.className='intel-btn intel-btn-sm'; forkBtn.textContent='🍴 Fork';
+      var forkBtn=document.createElement('button'); forkBtn.className='intel-btn intel-btn-sm'; forkBtn.textContent='Fork';
       forkBtn.addEventListener('click',async function(){
         forkBtn.disabled=true; forkBtn.textContent='Forking…';
         var fr=await supabase.rpc('fork_routine',{p_routine_id:rt.id});
-        if(fr.error){ showToast(fr.error.message||'Could not fork routine','err'); forkBtn.disabled=false; forkBtn.textContent='🍴 Fork'; return; }
+        if(fr.error){ showToast(fr.error.message||'Could not fork routine','err'); forkBtn.disabled=false; forkBtn.textContent='Fork'; return; }
         showToast('Forked into your routines (disabled by default)','ok');
         loadRoutines(); loadIntelStats();
       });
@@ -2831,7 +2838,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     list.innerHTML='<div class="intel-loading">Loading…</div>';
     var mr=await supabase.from('memory_embeddings').select('id,role,content,created_at').order('created_at',{ascending:false}).limit(20);
     if(mr.error||!mr.data||!mr.data.length){
-      list.innerHTML='<div class="intel-empty" style="padding:2rem 1rem"><div style="font-size:1.5rem;margin-bottom:.4rem">🧠</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No memory yet</div><div>Semantic embeddings appear here after your first chat — used for long-context retrieval.</div></div>';
+      list.innerHTML='<div class="intel-empty" style="padding:2rem 1rem"><div style="margin-bottom:.4rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.5rem;height:1.5rem"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8A3.5 3.5 0 0 0 7 19a3 3 0 0 0 5-2V6a3 3 0 0 0-3-2Z"/><path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5.8A3.5 3.5 0 0 1 17 19a3 3 0 0 1-5-2"/></svg></div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No memory yet</div><div>Semantic embeddings appear here after your first chat — used for long-context retrieval.</div></div>';
       return;
     }
     /* Count by role */
@@ -2890,7 +2897,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       .slice(0,15);
 
     if(!merged.length){
-      out.innerHTML='<div class="intel-empty" style="padding:2rem 1rem"><div style="font-size:1.5rem;margin-bottom:.4rem">🔍</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No matches</div><div>Nothing in your history seems related to that — try rephrasing.</div></div>';
+      out.innerHTML='<div class="intel-empty" style="padding:2rem 1rem"><div style="margin-bottom:.4rem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.5rem;height:1.5rem"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No matches</div><div>Nothing in your history seems related to that — try rephrasing.</div></div>';
       return;
     }
 
@@ -2906,7 +2913,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       var card=document.createElement('div'); card.className='search-result';
       var pct=Math.round(r.similarity*100);
       var metaLabel = r.kind==='conversation' ? (r.role||'message') : (docNameCache[r.document_id]||'document');
-      card.innerHTML='<div class="search-result-head"><span class="search-result-kind '+r.kind+'">'+(r.kind==='conversation'?'💬 chat':'📄 doc')+'</span>'+
+      card.innerHTML='<div class="search-result-head"><span class="search-result-kind '+r.kind+'">'+(r.kind==='conversation'?'chat':'doc')+'</span>'+
         '<span class="search-result-meta">'+intelEsc(metaLabel)+' · '+pct+'% match</span></div>'+
         '<div class="search-result-text">'+intelEsc(r.content.length>220?r.content.slice(0,220)+'…':r.content)+'</div>'+
         '<div class="search-result-score" style="width:'+pct+'%"></div>';

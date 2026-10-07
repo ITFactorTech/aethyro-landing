@@ -397,6 +397,92 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-07** — **Site-guardian sweep: swept clean, no issues found** (user
+  asked to "Run the site-guardian" the same day the 19-function CORS fix
+  merged). Full 7-item checklist run: Supabase advisors (only previously
+  -accepted finding classes), edge-function drift (28 live vs 24 committed —
+  the gap is exactly the known 4-function diagnostic-stub set, no drift),
+  24h error-rate check (exactly one stray `401` on `chat` — a gateway JWT
+  rejection, not a pattern), schema drift (`pg_trigger` on `auth.users` and
+  `pg_cron.job` both match this file's documented baseline exactly), a live
+  smoke test with two real throwaway accounts (signup → exactly one
+  `profiles`/`referral_codes`/`signup_bonus` row; real chat sends on all
+  three `MODEL_MAP` keys succeeded with correct billing and signed
+  generation receipts; referral redemption happy/duplicate/self/invalid
+  paths all correct; `buy-credits` resolved to a real `checkout.stripe.com`
+  URL), static-page liveness, and the hard-security-constraint grep (zero
+  `buy.stripe.com` matches). Cleaned up: both throwaway accounts deleted,
+  zero orphaned rows confirmed, `test-admin-setup` re-stubbed to 410 and
+  confirmed via a live curl. No PRs needed.
+- **2026-10-07** — **Visual polish pass, part 5: the app surfaces**
+  (`app/chat.html`, `app/dashboard.html` — user asked to "go ahead with the
+  app-surface visual pass" after being offered a choice between this and
+  waiting on purchase-funnel instrumentation data). `app/login.html` and
+  `app/signup.html` were audited too and found already clean (proper SVG
+  OAuth icons, only the accepted semantic `✓` checkmark convention) — no
+  changes needed on either.
+  **`dashboard.html`**: 3 raw-emoji icons (⚠ load-failure message, ✅
+  auto-topup-on card, ⚡ every buy-credits pack card) replaced with the
+  established outline-icon system (alert-triangle, check-circle, filled
+  lightning bolt — all reused shapes, colors matched to each context's
+  existing accent).
+  **`chat.html`** (the largest single-page icon audit in this workstream —
+  ~50 raw-emoji instances across sidebar nav, composer banners, receipt/
+  onboarding modals, and all 6 Intelligence-panel tabs): replaced every
+  *primary-chrome* icon (sidebar nav, prompt chips, low-balance/trial-limit/
+  depleted/post-reply-nudge banners, attach button, receipt modal headers,
+  Intelligence panel header, doc-upload button, routine email-notify label,
+  Community Gallery title, all empty-state icons across Tasks/Knowledge/
+  Routines/Memory/Search, the 3-step onboarding modal, and the tool-call
+  card icon map for web_search/GitHub/Notion) with the hand-authored 24×24
+  outline-SVG system, reusing shapes already established elsewhere in the
+  repo wherever the concept matched (document, globe, magnifying glass,
+  brain, envelope, lock, GitHub logo mark) rather than inventing one-offs.
+  New small `.ic{width:1em;height:1em}` utility class scales each icon to
+  its container's own font-size automatically.
+  **Deliberately left alone, two different reasons**: (1) the voice-input
+  button's 🎙/🔴 recording-state toggle — a small, self-contained
+  functional widget where converting only the SVG-eligible states would
+  have created a worse visual inconsistency than leaving it as emoji
+  throughout; (2) `✓`/`✗`/`➜`/`✎`/`×` used as plain monochrome status
+  glyphs (signature-verify results, "Connected"/"Copied" confirmations,
+  "then:" chain arrows, conversation rename, close buttons) — left alone
+  as the same accepted dingbat-as-UI-symbol convention already established
+  repo-wide (pricing.html's comparison table, trust.html's checklist). Also
+  found a related, smaller internal-consistency issue while auditing the
+  routine-card action row: 3 of its 7 buttons (Email on/off, Webhook, Fork)
+  carried emoji while the other 4 siblings (Publish, the On/Off toggle, Run
+  now, Delete) never did — rather than adding icons to all 7 (over-designing
+  a small secondary toolbar), dropped the emoji from those 3 to match the
+  row's own established plain-text convention; the same drop-not-convert
+  call was made for two other small inline badges (the routine list's
+  "public" marker, the search-result "chat"/"doc" kind pill) for the same
+  reason — both sit beside plain-text sibling labels with no icon at all.
+  **Verified via a locally-served copy** (not production) with Playwright:
+  `node --check` on every inline `<script>` block (both files) and a full
+  `html.parser` pass over `chat.html`'s ~3100 lines, both clean; zero
+  `pageerror`/console errors on load; every edited element's live
+  `outerHTML` pulled directly from the DOM and confirmed correct (not just
+  source-code review) for the Intelligence-panel static markup, modal
+  headers, and composer banners; the 3-step onboarding modal screenshotted
+  step-by-step (sparkle/lightning/brain icons, all crisp and correctly
+  colored); the Knowledge, Routines, Search, and Memory tabs screenshotted
+  individually; the sidebar's gift-box icon (for "Share & Earn") read
+  ambiguously at default screen-capture scale — zoomed in at 4x device
+  scale to confirm it renders correctly, not a rendering bug; the 3
+  composer-banner icons and attach-button paperclip screenshotted together
+  forced-visible; the 3 prompt-chip icons (daily-briefing/upload-doc/
+  create-routine) screenshotted by re-injecting the original static markup
+  into a live page (since anonymous/trial mode rebuilds `#emptyState`'s
+  `innerHTML` without them — pre-existing, documented behavior, not
+  something this pass touched). `dashboard.html`'s 3 icons verified by
+  rendering its exact CSS + markup in isolation (no live backend needed for
+  a pure CSS/icon check) — all three crisp and correctly colored.
+  **Scope note**: pure CSS/markup + a handful of JS string-literal changes
+  (icon markup swapped in place of emoji in existing `textContent`/
+  `innerHTML` assignments); no business logic, API shape, or DB/edge
+  -function change anywhere in this PR.
+
 - **2026-10-06** — **Extended the CORS-wildcard fix to the remaining 19 edge
   functions** (the user explicitly asked to "do the same CORS fix for the
   other 18 functions" after the `chat`/`buy-credits` fix below merged —
