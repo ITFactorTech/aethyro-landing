@@ -232,6 +232,23 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **`user_integrations.access_token` is stored as plaintext server-side**
+  (GitHub/Notion PATs) — the column's own migration comment says
+  `-- stored as-is (PAT or API key); encrypt at app layer`, but that
+  encryption was apparently never actually implemented. Found
+  2026-10-08 while fact-checking an external report's claim that
+  `index.html` said "nothing stored server-side" for these integrations
+  (the copy claim was fixed the same day; this is the underlying real
+  gap behind why it was false). RLS (`integrations_own`,
+  `auth.uid() = user_id`) already restricts read access to the owner,
+  so this isn't directly client-exploitable today, but a token sitting
+  in plaintext in the database is still worth encrypting at the app
+  layer before this feature sees real usage at any scale. Needs a
+  deliberate `codex`/`backend-reviewer` pass (choosing an encryption
+  scheme, a migration to re-encrypt existing rows if any exist, and
+  updating `connector-proxy`'s read/write paths) — not something to fix
+  as a drive-by inside an unrelated PR.
+
 ~~- Four pages (`/marketplace/`, `/builder/`, `/community/`,
   `/contractors.html`) were live/indexed but pitched a different, pre-pivot
   product~~ — **confirmed pre-"Aethyro Cloud" via git history and removed
@@ -396,6 +413,79 @@ active functions when only 10 were documented anywhere.
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-08** — **Graded an uploaded external "pricing page audit"
+  report against the live site before acting on it (same pattern as
+  every other external review this project has received), and found a
+  real bug the report itself didn't correctly describe.** The report's
+  headline claim — a "best value" badge sits on the wrong pack — turned
+  out to have the pack *names* backwards when checked against the real
+  page. Digging into why surfaced the actual, worse, previously-
+  undocumented bug: **the same two packs ($30/2000cr and $90/7000cr) are
+  called "Pro"/"Power" on `index.html` but swapped to "Power"/"Pro" on
+  `pricing.html` and in `app/dashboard.html`'s `PACK_LABELS`** — a real
+  cross-page AND in-app inconsistency (a signed-in user's purchase
+  history/auto-topup settings on the dashboard would show the *opposite*
+  pack names from what they saw on the pricing page before buying).
+  Normalized every surface to `index.html`'s convention
+  (`power`=$30/2000cr, `pro_7k`=$90/7000cr), which already matches the
+  backend's own Stripe/metadata key names (confirmed in
+  `buy-credits/index.ts`'s `CREDIT_PACKS`) and this file's own prior
+  documentation.
+  **Fixed, once correctly named**: moved the "Best value" badge to the
+  pack that's actually cheapest per credit ($90/7000cr = $0.0129/cr vs.
+  $30/2000cr = $0.015/cr) on both `index.html` and `pricing.html` — the
+  real arithmetic bug underneath the report's confused claim. Also fixed
+  `pricing.html`'s JSON-LD structured data (same Pro/Power swap, plus an
+  unrelated stale Starter-pack Opus-message count of 20 that should be
+  13 at the site's own consistent ~15cr/message rate).
+  **Two real overclaims found and fixed** while verifying the report's
+  other claims: `index.html`'s "nothing/zero data stored server-side"
+  for GitHub/Notion integrations was flatly false — checked
+  `user_integrations.access_token` directly, and it's stored as
+  plaintext server-side per its own migration comment
+  (`-- stored as-is (PAT or API key); encrypt at app layer` — that
+  encryption was apparently never done). Removed the false claim rather
+  than leave an inaccurate security statement live; **flagging the
+  plaintext-at-rest token storage itself as a separate, real, not-yet-
+  fixed security gap** worth a dedicated hardening pass, not something
+  silently patched inside a copy-accuracy PR. Also softened "No data
+  used for training — Guaranteed" (Aethyro's own column) to "Per
+  Anthropic's API policy" — Aethyro relies on, but doesn't itself
+  control, that policy — and `pricing.html`'s "the world's most capable
+  model" (unverifiable against every model globally) to "Anthropic's
+  most capable model" (true, and matches `index.html`'s own existing
+  phrasing of the same claim).
+  **Checked and confirmed NOT a bug**, despite the report's "high
+  confidence" framing: its claim that "~13 Opus replies" contradicts the
+  page's own "~18cr deep review" example. The ~13/~40/~130/~460 Opus-
+  message counts across all four packs are self-consistent at this
+  site's own stated ~15cr/Opus-message rate (`pricing.html`'s model-tier
+  panel literally says "~15 cr/msg" for Opus) — the 18cr figure
+  describes a specifically heavier "deep review of a long doc" task on
+  a separate `index.html` panel, not a contradiction once the whole site
+  is read together rather than two numbers in isolation. Left unchanged.
+  The report's other LOW-severity items (GPT-4o dating, ✗-as-demerit
+  framing on credit rows, "10/60 seconds" puffery) were checked and
+  either already correctly handled (`pricing.html`'s comparison table
+  already uses "— N/A" for competitor credit rows, not a bare ✗) or too
+  low-value/low-confidence to act on — skipped, consistent with this
+  project's standing practice of fixing the real findings from an
+  external review and explicitly declining the rest rather than fixing
+  everything indiscriminately.
+  **Also noted**: the report's proposed "credits never expire vs.
+  monthly plans reset to zero" growth experiment is **already shipped**
+  — `index.html`'s comparison table already has a "Credits that never
+  expire" row with exactly this framing. Its proposed formal A/B-test
+  methodology (run until ~200 completed checkouts per variant) is not
+  realistic at this product's current scale — $0 lifetime purchase
+  revenue — so no experiment infrastructure was built for it.
+  Verified: `node --check` on every inline script in all 3 touched
+  files, JSON-LD blocks in both `index.html` and `pricing.html` re-
+  validated as parseable JSON after editing, and a full repo grep
+  confirming no remaining "Pro"/"Power" naming mismatch anywhere else
+  (`developers.html`'s mentions are generic, name no dollar amount, and
+  needed no change).
 
 - **2026-10-08** — **First real mission run through the "agent team" built
   earlier the same day (see the entry directly below): `nexus` was given
