@@ -401,6 +401,10 @@ svg.sparkline { width: 100%; height: 100%; overflow: visible; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Credits
       </div>
+      <div class="nav-item" onclick="showSection('team')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/><circle cx="4" cy="9" r="2"/><circle cx="20" cy="9" r="2"/><path d="M1 19c.3-2.2 1.9-4 3.8-4.6"/><path d="M23 19c-.3-2.2-1.9-4-3.8-4.6"/></svg>
+        Team
+      </div>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user" id="sidebar-email">—</div>
@@ -659,6 +663,57 @@ svg.sparkline { width: 100%; height: 100%; overflow: visible; }
         </div>
       </div>
     </div>
+
+    <div id="section-team" hidden>
+      <div class="kpi-grid">
+        <div class="kpi-card blue">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/></svg></div>
+          <div class="kpi-value" id="team-total">—</div>
+          <div class="kpi-label">Missions logged</div>
+          <div class="kpi-sub">All divisions, all time</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="kpi-value" id="team-merged">—</div>
+          <div class="kpi-label">Merged</div>
+          <div class="kpi-sub">Shipped to main</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
+          <div class="kpi-value" id="team-rejected">—</div>
+          <div class="kpi-label">Rejected / closed</div>
+          <div class="kpi-sub">Didn't pan out — kept, not hidden</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+          <div class="kpi-value" id="team-divisions">—</div>
+          <div class="kpi-label">Divisions active</div>
+          <div class="kpi-sub">nexus · oracle · codex · avery · sentinel · support · forge</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><div class="section-title">By division</div></div>
+        <div class="chart-card">
+          <table class="users-table" id="team-division-table">
+            <thead><tr><th>Division</th><th>Total</th><th>Merged</th><th>Rejected/closed</th></tr></thead>
+            <tbody id="team-division-tbody">
+              <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><div class="section-title">Recent missions</div></div>
+        <div class="chart-card" style="padding:0">
+          <table class="users-table" id="team-missions-table">
+            <thead><tr><th>When</th><th>Division</th><th>Goal</th><th>Outcome</th><th>PR</th></tr></thead>
+            <tbody id="team-missions-tbody">
+              <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -673,7 +728,8 @@ const SECTION_LABELS = {
   overview: 'Dashboard',
   users: 'User Management',
   drip: 'Email Drip',
-  credits: 'Credits'
+  credits: 'Credits',
+  team: 'Team'
 };
 
 let currentSection = 'overview';
@@ -691,7 +747,7 @@ function fmt(n) {
 
 // ── Section nav ──────────────────────────────────────────────────────────────
 function showSection(name) {
-  ['overview','users','drip','credits'].forEach(s => {
+  ['overview','users','drip','credits','team'].forEach(s => {
     document.getElementById('section-' + s).hidden = (s !== name);
   });
   document.querySelectorAll('.nav-item').forEach(el => {
@@ -703,6 +759,8 @@ function showSection(name) {
   if (name === 'users') {
     userPage = 1;
     loadUsers();
+  } else if (name === 'team') {
+    loadTeam();
   } else if (statsCache) {
     renderSection(name, statsCache);
   }
@@ -710,7 +768,64 @@ function showSection(name) {
 
 function refreshCurrent() {
   if (currentSection === 'users') { loadUsers(); }
+  else if (currentSection === 'team') { loadTeam(); }
   else { loadStats(); }
+}
+
+// ── Agent team ───────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+const OUTCOME_BADGE = {
+  merged:       '<span class="badge badge-green">merged</span>',
+  in_progress:  '<span class="badge badge-blue">in progress</span>',
+  escalated:    '<span class="badge" style="background:var(--amber-dim);color:var(--amber)">escalated</span>',
+  report_only:  '<span class="badge badge-purple">report only</span>',
+  rejected:     '<span class="badge" style="background:var(--bg-3);color:var(--text-muted)">rejected</span>',
+  closed:       '<span class="badge" style="background:var(--bg-3);color:var(--text-muted)">closed</span>'
+};
+
+async function loadTeam() {
+  const divTbody = document.getElementById('team-division-tbody');
+  const misTbody = document.getElementById('team-missions-tbody');
+  const { data, error } = await sb.rpc('get_agent_missions', { p_limit: 50 });
+
+  if (error) {
+    divTbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--accent)">${escapeHtml(error.message)}</td></tr>`;
+    misTbody.innerHTML = '';
+    return;
+  }
+
+  const total = data.total || 0;
+  const missions = data.missions || [];
+  const byDivision = data.by_division || [];
+
+  document.getElementById('team-total').textContent    = fmt(total);
+  document.getElementById('team-merged').textContent   = fmt(missions.filter(m => m.outcome === 'merged').length);
+  document.getElementById('team-rejected').textContent = fmt(missions.filter(m => m.outcome === 'rejected' || m.outcome === 'closed').length);
+  document.getElementById('team-divisions').textContent = fmt(byDivision.length);
+
+  divTbody.innerHTML = byDivision.length === 0
+    ? '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted)">No missions recorded yet — the agent team hasn\'t run anything yet.</td></tr>'
+    : byDivision.map(d => `
+        <tr>
+          <td style="font-weight:600">${escapeHtml(d.division)}</td>
+          <td class="num">${fmt(d.total)}</td>
+          <td class="num"><span class="badge badge-green">${fmt(d.merged)}</span></td>
+          <td class="num">${fmt(d.rejected)}</td>
+        </tr>`).join('');
+
+  misTbody.innerHTML = missions.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--text-muted)">No missions logged yet. Nexus records a row here every time a division is dispatched.</td></tr>'
+    : missions.map(m => `
+        <tr>
+          <td class="num" style="color:var(--text-muted)">${escapeHtml(m.created_at)}</td>
+          <td style="font-weight:600">${escapeHtml(m.division)}</td>
+          <td>${escapeHtml(m.goal)}${m.notes ? `<div style="color:var(--text-muted);font-size:12px;margin-top:2px">${escapeHtml(m.notes)}</div>` : ''}</td>
+          <td>${OUTCOME_BADGE[m.outcome] || escapeHtml(m.outcome)}</td>
+          <td>${m.pr_url ? `<a href="${escapeHtml(m.pr_url)}" target="_blank" rel="noopener" style="color:var(--accent)">PR →</a>` : '—'}</td>
+        </tr>`).join('');
 }
 
 // ── Sparklines ───────────────────────────────────────────────────────────────
