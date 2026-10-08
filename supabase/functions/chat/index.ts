@@ -697,7 +697,26 @@ serve(async (req) => {
     }
   }
 
-  async function finalize(controller: ReadableStreamDefaultController, firstMsg: string, assistantReply = "") {
+  async function finalize(controller: ReadableStreamDefaultController, firstMsg: string, assistantReply = "", stopReason?: string) {
+    // A refusal, or the model's (extended-thinking) budget running out before
+    // it ever emits answer text, both leave assistantReply empty with no
+    // client-visible explanation otherwise -- the user just sees a dead-end
+    // "(no response)" after being billed at least 1 credit. Found live
+    // 2026-10-08 investigating a real user report ("no response" on a
+    // confusing/garbled prompt): thinking_delta chunks were captured into
+    // thinkingText, but the reasoning panel only ever gets flushed to the
+    // client on the FIRST text_delta chunk (see the streaming loop below) --
+    // if the model never gets that far, the client receives literally zero
+    // bytes before this USAGE_MARK block. This mirrors the equivalent check
+    // trial-chat/index.ts already has, broadened beyond just "refusal".
+    const replyIsEmpty = !assistantReply || !assistantReply.trim();
+    const responseError = replyIsEmpty
+      ? (stopReason === "refusal"
+          ? "Aethyro declined to answer that request."
+          : stopReason === "max_tokens"
+            ? "Aethyro ran out of room thinking that one through before it could answer — try asking more directly, or split it into smaller questions."
+            : "Aethyro didn't generate a reply to that — try rephrasing your question.")
+      : undefined;
     const cost = Math.max(
       1,
       Math.ceil((inputTokens / 1000) * rates.input + (outputTokens / 1000) * rates.output)
@@ -758,6 +777,7 @@ serve(async (req) => {
       balance: newBal,
       title,
       receipt,
+      error: responseError,
       cost: {
         credits: cost,
         model: modelKey,
@@ -908,7 +928,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
               emitToolPrefix(controller);
               const text = r.content.filter(b => b.type === "text").map(b => (b as any).text).join("");
               controller.enqueue(encoder.encode(text));
-              await finalize(controller, message, text);
+              await finalize(controller, message, text, r.stop_reason);
               return;
             }
 
@@ -962,7 +982,15 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
         inputTokens += finalMsg.usage.input_tokens;
         outputTokens += finalMsg.usage.output_tokens;
 
-        await finalize(controller, message, fullText);
+        // Extended-thinking budget exhausted before the model ever reached a
+        // text_delta chunk -- thinkingEmitted never fires in the loop above,
+        // so the client would otherwise receive zero bytes and no visibility
+        // into what happened. Flush it now so the reasoning panel still shows.
+        if (!fullText.trim() && thinkingText && !thinkingEmitted) {
+          controller.enqueue(encoder.encode(THINK_MARK + thinkingText + THINK_MARK));
+        }
+
+        await finalize(controller, message, fullText, finalMsg.stop_reason);
       } catch (e) {
         try {
           controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({ error: "Server error: " + (e as Error).message })));

@@ -1753,7 +1753,12 @@ I often need help with: client quotes, contract review, business Instagram posts
           $('chatTitle').textContent=aiTitle;
         }
       } else if(!bubble.classList.contains('error')){
-        bubble.textContent='(no response)';
+        /* Last-resort fallback -- normally meta.error (set server-side for a
+           refusal or an empty/budget-exhausted completion) already caught
+           this above. Kept actionable rather than a bare dead-end in case
+           the USAGE_MARK JSON ever fails to parse. */
+        bubble.classList.add('error');
+        bubble.textContent="Aethyro didn't generate a reply to that — try rephrasing your question or sending it again.";
       }
     }catch(err){
       bubble.classList.add('error');

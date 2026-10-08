@@ -397,6 +397,64 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-08** — **Fixed a real live bug: a user ("Dj") reported chat.html
+  showing "(no response)" twice in a row on an unusual/garbled message.**
+  Traced from a screenshot, not just a description — the pill text matched
+  `app/chat.html`'s own dead-end fallback (`bubble.textContent='(no
+  response)'`), which fires when the stream completes with zero HTTP error
+  but the accumulated reply text (`full`) ends up empty. Root-caused in
+  both edge functions that can produce this:
+  - **`trial-chat`** only ever set an explanatory `error` field when
+    `stop_reason === "refusal"` literally — any other stop reason (e.g.
+    `"end_turn"`) with zero `text_delta` events fell straight through to
+    the client's generic fallback with no explanation. Broadened the check
+    to any empty final text, regardless of `stop_reason`.
+  - **`chat` (authenticated) was worse: `finalize()` never sent an `error`
+    field in its USAGE_MARK JSON at all**, for any reason — meaning a
+    signed-in user hitting a refusal, or extended thinking's 8192-token
+    budget running out before the model ever reached a `text_delta` chunk
+    (the thinking content is only ever flushed to the client on the FIRST
+    text_delta — if none comes, the client gets literally zero bytes), got
+    "(no response)" **after still being billed at least 1 credit**, with
+    no way to know why. `finalize()` now takes a `stopReason` param and
+    includes an explicit, stop-reason-aware `error` message
+    ("declined to answer" / "ran out of room thinking that one through,
+    try asking more directly or splitting it up" / generic rephrase
+    prompt); the main streaming branch also flushes `thinkingText` via
+    `THINK_MARK` if the budget ran out before `thinkingEmitted` ever
+    fired, so the reasoning panel shows instead of nothing.
+  - **Separate, confirmed-reproducible bug found live while investigating**:
+    `trial-chat`'s 400-token cap can cut a real, substantive answer off
+    mid-word with zero indication to the user it was truncated rather than
+    the model just stopping (reproduced live: a real answer ended
+    `"...If you're after something adj"`). Added a visible note
+    (`*(cut short — this is the free preview; sign up for full-length
+    answers)*`) appended to the stream when `stop_reason === "max_tokens"`
+    on a non-empty reply.
+  - `app/chat.html`'s last-resort `(no response)` fallback (for any future
+    gap that still slips past both server-side checks) was hardened to an
+    actionable message instead of a dead end.
+  **Verified live** with a real throwaway account: a normal message still
+  returns `error: null` and bills/receipts correctly (no regression,
+  confirmed by parsing the raw USAGE_MARK JSON directly, not just visual
+  inspection); a reconstructed version of the reported garbled prompt
+  against `model:"opus"` (to engage extended thinking) returned a real,
+  non-empty reply this run — expected, since the underlying empty-response
+  case is inherently non-deterministic LLM behavior, not something a curl
+  replay can force on demand; the fix is in the code path regardless and
+  will catch it next time it happens. Both functions' live source fetched
+  back via `get_edge_function` and diffed byte-for-byte against local disk
+  before trusting either deploy (`chat` now v49, `trial-chat` v16, both
+  deployed with their pre-existing `verify_jwt` passed explicit). Cleaned
+  up: deleted the throwaway account (zero orphaned rows confirmed across
+  `profiles`/`credit_ledger`/`generation_receipts`/`auth.users`),
+  `test-admin-setup` re-stubbed to 410 and confirmed via a live curl.
+  **What this does NOT establish**: whether Dj's exact message hit the
+  refusal path or the thinking-budget-exhaustion path specifically — both
+  are now covered either way, and both previously produced the identical
+  symptom with zero way to tell them apart, which is itself part of what
+  this fix closes.
+
 - **2026-10-08** — **Acted on three of the cheap/accurate items from an
   external homepage-feedback review** (user pasted a 3rd-party critique,
   asked "Does this help" — graded each claim against the live page before
