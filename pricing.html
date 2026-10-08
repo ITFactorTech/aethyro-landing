@@ -17,7 +17,7 @@
   <meta name="twitter:description" content="No subscriptions. Buy credits and spend them as you go. New accounts start with 200 free credits."/>
   <meta name="twitter:image" content="https://aethyro.com/og-image.png"/>
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Aethyro","url":"https://aethyro.com","applicationCategory":"ProductivityApplication","operatingSystem":"Web","offers":[{"@type":"Offer","name":"Starter","price":"4.00","priceCurrency":"USD","description":"200 credits — ~20 Opus or ~200 Haiku messages"},{"@type":"Offer","name":"Standard","price":"10.00","priceCurrency":"USD","description":"600 credits — ~40 Opus or ~600 Haiku messages"},{"@type":"Offer","name":"Pro","price":"30.00","priceCurrency":"USD","description":"2000 credits — ~130 Opus or ~2000 Haiku messages"},{"@type":"Offer","name":"Power","price":"90.00","priceCurrency":"USD","description":"7000 credits — ~460 Opus or ~7000 Haiku messages"}]}
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Aethyro","url":"https://aethyro.com","applicationCategory":"ProductivityApplication","operatingSystem":"Web","offers":[{"@type":"Offer","name":"Starter","price":"4.00","priceCurrency":"USD","description":"200 credits — ~13 Opus or ~200 Haiku messages"},{"@type":"Offer","name":"Standard","price":"10.00","priceCurrency":"USD","description":"600 credits — ~40 Opus or ~600 Haiku messages"},{"@type":"Offer","name":"Power","price":"30.00","priceCurrency":"USD","description":"2000 credits — ~130 Opus or ~2000 Haiku messages"},{"@type":"Offer","name":"Pro","price":"90.00","priceCurrency":"USD","description":"7000 credits — ~460 Opus or ~7000 Haiku messages"}]}
   </script>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
@@ -194,9 +194,9 @@
       <a href="/app/signup.html" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'standard',value:10,currency:'USD'})">Get started →</a>
     </div>
 
-    <div class="plan featured">
-      <span class="plan-badge badge-violet">Pro — Best Value</span>
-      <div class="plan-name">Pro Pack</div>
+    <div class="plan">
+      <span class="plan-badge badge-gold">Power</span>
+      <div class="plan-name">Power Pack</div>
       <div class="plan-price"><span class="amt">$30</span></div>
       <div class="plan-credits">2,000 credits</div>
       <ul class="plan-features">
@@ -205,12 +205,12 @@
         <li><span class="ck">✓</span>~130 Opus messages</li>
         <li><span class="ck">✓</span>Credits never expire</li>
       </ul>
-      <a href="/app/signup.html" class="plan-cta cta-orange" onclick="gtag('event','begin_checkout',{plan:'pro',value:30,currency:'USD'})">Get started →</a>
+      <a href="/app/signup.html" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'power',value:30,currency:'USD'})">Get started →</a>
     </div>
 
-    <div class="plan">
-      <span class="plan-badge badge-gold">Power</span>
-      <div class="plan-name">Power Pack</div>
+    <div class="plan featured">
+      <span class="plan-badge badge-violet">Pro — Best Value</span>
+      <div class="plan-name">Pro Pack</div>
       <div class="plan-price"><span class="amt">$90</span></div>
       <div class="plan-credits">7,000 credits</div>
       <ul class="plan-features">
@@ -219,7 +219,7 @@
         <li><span class="ck">✓</span>~460 Opus messages</li>
         <li><span class="ck">✓</span>Credits never expire</li>
       </ul>
-      <a href="/app/signup.html" class="plan-cta cta-ghost" onclick="gtag('event','begin_checkout',{plan:'power',value:90,currency:'USD'})">Get started →</a>
+      <a href="/app/signup.html" class="plan-cta cta-orange" onclick="gtag('event','begin_checkout',{plan:'pro_7k',value:90,currency:'USD'})">Get started →</a>
     </div>
 
   </div>
@@ -246,7 +246,7 @@
         <div class="model-name">claude opus 5.5</div>
         <div class="model-title">Opus</div>
         <div class="model-cost">~15 cr/msg</div>
-        <div class="model-desc">Frontier intelligence. The world's most capable model for complex, demanding work.</div>
+        <div class="model-desc">Frontier intelligence. Anthropic's most capable model, for complex, demanding work.</div>
       </div>
     </div>
   </div>
