@@ -93,15 +93,33 @@ serve(async (req) => {
           messages: [{ role: "user", content: message }],
         });
 
+        let streamedText = "";
         for await (const event of anthropicStream) {
           if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
             controller.enqueue(enc.encode(event.delta.text));
+            streamedText += event.delta.text;
           }
         }
 
         const final = await anthropicStream.finalMessage();
-        if (final.stop_reason === "refusal") {
-          errorMessage = "Aethyro declined to answer that request.";
+        // Broadened beyond the original "refusal"-only check (found live
+        // 2026-10-08 investigating a real user report of a dead-end "(no
+        // response)" on an unusual prompt): Claude can occasionally land on
+        // a stop_reason other than the literal "refusal" while still
+        // emitting zero visible text, and the old check silently fell
+        // through to chat.html's generic "(no response)" fallback with no
+        // explanation either way.
+        if (!streamedText.trim()) {
+          errorMessage = final.stop_reason === "refusal"
+            ? "Aethyro declined to answer that request."
+            : "Aethyro didn't generate a reply to that — try rephrasing your question.";
+        } else if (final.stop_reason === "max_tokens") {
+          // The free preview's 400-token cap can cut a real answer off
+          // mid-sentence with no indication to the user that it was
+          // truncated rather than just ending there. Append a visible note
+          // so it reads as an intentional preview limit, not a broken reply.
+          const note = "\n\n*(cut short — this is the free preview; [sign up](/app/signup.html) for full-length answers)*";
+          controller.enqueue(enc.encode(note));
         }
       } catch (err) {
         errorMessage = err instanceof Error ? err.message : String(err);
