@@ -4,6 +4,12 @@
 // zero-messages check permanently true. Now scopes through conversations
 // like every other per-user messages query in this codebase, and fails
 // closed (skips the send) on an unexpected lookup error.
+// v3 — 2026-10-08: the day-2 "engagement" email is now personalized with
+// the user's earliest real conversation (title + a deep link back into it
+// via chat.html's existing `?c=<id>` handling) when one exists with a
+// usable title, falling back to the original generic copy otherwise. See
+// `engagementHtml()`. Prompted by a real data finding: of 46 users, only 3
+// ever returned on a second day.
 // Called by a Postgres trigger (via pg_net) when a new row appears in auth.users.
 // Sends a 3-step drip:
 //   day 0 — welcome + starter prompts
@@ -95,7 +101,54 @@ function welcomeHtml(email: string): string {
 </html>`;
 }
 
-function engagementHtml(): string {
+// Minimal HTML-escaping for a value interpolated into an email template.
+// `conversations.title` is AI-generated (chat.html's `aiTitle`, ~line 1749)
+// and normally a short plain string, but it's still untrusted user-session
+// data -- escape it rather than assume it's safe to drop into markup raw.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Personalized (title + conversationId both present, title non-empty): a
+// direct line naming the user's own first conversation, CTA deep-links
+// straight back into it via chat.html's existing `?c=<id>` handling
+// (confirmed live: chat.html already reads `?c=` via URLSearchParams and
+// calls loadConversation() with it -- no new deep-link mechanism needed).
+// Otherwise (no conversation yet, null/empty title, or the caller's lookup
+// errored): exact original generic copy, unchanged. Fail closed/generic --
+// never guess or fabricate a topic the user didn't actually ask about.
+function engagementHtml(ctx?: { title?: string | null; conversationId?: string | null }): string {
+  const title = ctx?.title;
+  const conversationId = ctx?.conversationId;
+  if (title && conversationId) {
+    const ctaUrl = `${BASE_URL}/app/chat.html?c=${encodeURIComponent(conversationId)}`;
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',sans-serif;color:#f0f0f0">
+<div style="max-width:560px;margin:0 auto;padding:40px 24px">
+  <div style="font-size:1.1rem;font-weight:700;margin-bottom:32px">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff4d00;margin-right:6px;vertical-align:middle"></span>
+    Aethyro
+  </div>
+  <h1 style="font-size:1.5rem;font-weight:800;margin:0 0 12px">Pick up where you left off</h1>
+  <p style="color:#a0a0a0;line-height:1.65;margin:0 0 24px">
+    You were asking about <strong style="color:#f0f0f0">${escapeHtml(title)}</strong> — want to pick that back up?
+  </p>
+  <a href="${ctaUrl}" style="display:inline-block;padding:12px 28px;background:#ff4d00;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;font-size:.9rem">
+    Continue the conversation →
+  </a>
+  <hr style="border:none;border-top:1px solid #222;margin:28px 0"/>
+  <p style="font-size:.78rem;color:#555">Reply any time — we'd love to hear what you're working on.</p>
+</div>
+</body>
+</html>`;
+  }
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"/></head>
@@ -188,7 +241,29 @@ serve(async (req) => {
         welcome_sent_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
     } else if (emailType === "engagement") {
-      await sendEmail(email, "A few things Aethyro does really well", engagementHtml());
+      // Personalize with the user's earliest real conversation when it has
+      // a usable title, so the day-2 nudge references what they actually
+      // asked about instead of generic copy (Oracle's finding: only 3 of 46
+      // users ever returned a second day). Fail closed to the original
+      // generic copy on no conversation, a null/empty title, or any lookup
+      // error -- never guess at a topic.
+      let engagementCtx: { title?: string | null; conversationId?: string | null } = {};
+      try {
+        const { data: firstConvo, error: convoErr } = await supabase
+          .from("conversations")
+          .select("id,title")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: true })
+          .limit(1);
+        if (convoErr) {
+          console.error("send-welcome-email: engagement conversation lookup failed", convoErr.message);
+        } else if (firstConvo && firstConvo.length > 0 && firstConvo[0].title) {
+          engagementCtx = { title: firstConvo[0].title, conversationId: firstConvo[0].id };
+        }
+      } catch (lookupErr) {
+        console.error("send-welcome-email: engagement conversation lookup threw", lookupErr);
+      }
+      await sendEmail(email, "A few things Aethyro does really well", engagementHtml(engagementCtx));
       await supabase.from("email_drip_state").upsert({
         user_id: userId,
         engagement_sent_at: new Date().toISOString(),
