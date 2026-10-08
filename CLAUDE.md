@@ -397,6 +397,64 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-08** — **First real mission run through the "agent team" built
+  earlier the same day (see the entry directly below): `nexus` was given
+  "grow signups," re-pointed it to the real bottleneck the data showed,
+  and `codex` shipped a fix.** Grounding check before dispatching anything
+  found the literal goal was wrong: 42 of 46 total users signed up in the
+  last 7 days (top-of-funnel is fine), but only 3/46 (6.5%) ever returned
+  on a second distinct day — re-pointed the goal to that. Dispatched
+  `oracle`, which found the actual mechanism, not just the symptom: the
+  2026-10-06 return-visit email hook (`email_on_result` on routines) has
+  had **zero possible reach** — all 45 real accounts have 0 rows in
+  `user_routines`, ever, so the feature has never once had a chance to
+  fire, not just "not enough time to prove out." The 3 people who did
+  return weren't shallow users either (8-12 messages in their first
+  session), so this isn't "tried it, didn't like it" — it's "no trigger
+  to come back." Proposal: personalize the existing day-2 drip email
+  (`send-welcome-email`'s `engagement` branch) with a deep-link to the
+  user's own first conversation instead of generic copy.
+  User approved the proposal and picked the tone ("Direct & helpful").
+  Dispatched `codex`, which built it: before sending, looks up the
+  user's **earliest** conversation (`id,title`, ordered by `created_at`
+  asc) and personalizes with "You were asking about **[title]** — want
+  to pick that back up?" linking to `${BASE_URL}/app/chat.html?c=
+  ${conversationId}` (confirmed live that `chat.html` already reads
+  `?c=` via `URLSearchParams` and calls `loadConversation()` — no new
+  deep-link mechanism needed). Falls back to the exact original generic
+  copy, byte-for-byte unchanged, on no conversation/null title/any
+  lookup error — fails closed, never fabricates a topic. `welcome`/
+  `reengagement` branches untouched. Deployed (`verify_jwt` checked
+  first, passed explicit; live source diffed byte-for-byte against
+  local disk after). **Verified live with real delivered email content,
+  not just logs**: two real throwaway accounts with real AgentMail
+  inboxes (so the actual delivered HTML could be read, sidestepping the
+  documented `@example.com`-Resend-rejection non-bug) — one with a real
+  conversation (title "Fitting a turbo intercooler on a 1998 Civic")
+  got the personalized copy with a correctly-formed `?c=<real id>` link;
+  one with zero conversations got the exact unchanged generic copy.
+  Cleanup confirmed zero orphaned rows, both AgentMail inboxes deleted,
+  `test-admin-setup` re-stubbed to 410 and confirmed via a live curl.
+  Draft PR #148, not merged — left for the user to review.
+  **Every mission from this run logged in `agent_missions`** (two
+  `nexus` rows — the ledger-infrastructure build and this dispatch — one
+  `oracle` row, one `codex` row — all `outcome:'report_only'` except the
+  infrastructure build itself, which is `'merged'`), visible in
+  `app/admin.html`'s Team panel. One cosmetic-only gap hit while
+  recording this: the `oracle` row's `notes` field failed to persist
+  after 6 retries with varying content (short/long, plain/quoted text)
+  — the same intermittent `execute_sql`-mutation-cancellation quirk this
+  file already documents for DELETEs, now also seen on an UPDATE;
+  `outcome`/`value_tag`/`pr_url` all landed correctly on every row, this
+  was purely one `notes` field, and the finding itself is still fully
+  captured in the `nexus` row's own notes, so nothing was actually lost.
+  **Scope note**: this is the first proof the nexus→oracle→codex loop
+  actually works end-to-end (ground → dispatch → build → verify → PR),
+  not a claim that retention is now fixed — PR #148 hasn't merged yet,
+  and even once it does, whether it moves the real 6.5% number is
+  something only real user behavior over the following days can answer,
+  not this session.
+
 - **2026-10-08** — **Built the "agent team": a real mission ledger + three
   new Claude Code skills (`nexus`, `oracle`, `support-triage`) + an admin
   Team panel**, from the user asking whether the superagent-economy
