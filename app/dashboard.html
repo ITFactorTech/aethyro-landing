@@ -69,7 +69,8 @@
   }
   .action-card:hover { border-color: rgba(255,77,0,.4); }
   .action-card.primary { border-color: rgba(255,77,0,.35); background: rgba(255,77,0,.06); }
-  .action-icon { font-size: 1.3rem; }
+  .action-icon { font-size: 1.3rem; display: flex; align-items: center; }
+  .action-icon svg { width: 1.3rem; height: 1.3rem; display: block; }
   .action-title { font-size: .9rem; font-weight: 700; color: var(--text, #f0f0f0); }
   .action-desc { font-size: .75rem; color: var(--muted, #888); line-height: 1.4; }
   .pack-row {
@@ -384,7 +385,7 @@
   function fail(m){
     if(done) return;
     var l=$('loading');
-    if(l){ l.innerHTML='⚠ '+m+'<br><span style="font-size:.8rem;color:var(--t3)">reload to retry</span>'; l.style.color='#fca5a5'; }
+    if(l){ l.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#fca5a5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:1.1rem;height:1.1rem;vertical-align:-.2rem;margin-right:.35rem"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 9v5M12 16.5h.01"/></svg>'+m+'<br><span style="font-size:.8rem;color:var(--t3)">reload to retry</span>'; l.style.color='#fca5a5'; }
   }
 
   setTimeout(function(){ if(!done && $('content').style.display==='none') fail('timed out reaching the server (network/firewall?)'); }, 12000);
@@ -552,7 +553,7 @@
           var packLabel = PACK_LABELS[autoProf.auto_topup_pack] || autoProf.auto_topup_pack || 'your saved pack';
           body.innerHTML =
             '<div class="action-card primary" style="cursor:default">'
-            +'<div class="action-icon">✅</div>'
+            +'<div class="action-icon" style="color:#22c55e"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5 11 15.5 16 9"/></svg></div>'
             +'<div class="action-title">Auto-topup is on</div>'
             +'<div class="action-desc">Charges '+packLabel+' automatically when your balance drops low.</div>'
             +'</div>'
@@ -827,7 +828,7 @@
         var card = document.createElement('a');
         card.href = './chat.html?buy='+encodeURIComponent(p.pack);
         card.className = 'action-card';
-        card.innerHTML = '<div class="action-icon">⚡</div>'
+        card.innerHTML = '<div class="action-icon" style="color:#ff4d00"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11L10 22l9-12h-6.5L13 2z"/></svg></div>'
           +'<div class="action-title">'+p.price+' — '+p.label+'</div>'
           +'<div class="action-desc">'+p.credits.toLocaleString()+' credits · never expire</div>';
         buyEl.appendChild(card);
