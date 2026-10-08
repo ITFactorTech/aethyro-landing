@@ -397,6 +397,50 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-08** — **Granted a real user ("Dj", `lee947204@gmail.com`, user_id
+  `9dda3dd8-6669-4555-88fa-2a9c7ca53e28`) 100 goodwill credits** for the
+  "(no response)" inconvenience (see the fix entry directly below) — his
+  balance went 195 → 295. Looking him up by email first surfaced something
+  worth recording: his real conversation (6 exchanges, all billed, all with
+  real saved replies) shows the "(no response)" he hit never happened on
+  the authenticated path — it only shows up server-side on an empty
+  completion, and `chat.html` never persists an empty reply to `messages`
+  at all, so there's no trace of a failed exchange anywhere in his signed-in
+  history. He almost certainly hit it on the anonymous free-trial path
+  (`trial-chat`, which keeps no DB record at all) before signing up.
+  **Found and fixed a second, real, previously-undocumented bug going to
+  grant this**: `admin_adjust_credits` (the RPC `app/admin.html`'s credit-
+  adjustment panel calls) has been **completely broken since it was
+  written** — it inserts `reason: 'admin:' || p_reason` (e.g.
+  `'admin:manual adjustment'`), but `credit_ledger_reason_check` only
+  allows a fixed set of bare literals (`purchase`, `chat_usage`,
+  `signup_bonus`, `admin_adjustment`, `referral_bonus`, `routine`,
+  `agent_task`, `api_usage`) — every single call has always raised a
+  `23514` check-constraint violation and aborted before `RETURN`, with no
+  caller ever around to surface it until now. Same root-cause class this
+  file already documents multiple times (run-routines/run-agent-task
+  billing) — a `reason` value that doesn't literally match the CHECK
+  constraint. Confirmed the `is_admin()` auth gate itself was already
+  correctly fixed by `20260927020000_admin_users_table.sql` (that part
+  was fine); only the reason-format bug was new. Fixed with
+  `20261008190000_fix_admin_adjust_credits_reason_format.sql` — now
+  inserts the bare `'admin_adjustment'` literal and moves the human-
+  readable reason into `metadata.note`, matching how every other ledger
+  row in this schema separates its strict-enum `reason` from free-text
+  `metadata`. Checked `app/admin.html` and `app/dashboard.html` before
+  shipping: the admin panel just passes `p_reason` through (no client-side
+  parsing of the stored string), and the dashboard's credit-history
+  `REASON_LABELS` map already has a correct `admin_adjustment: 'Admin
+  adjustment'` entry — zero client changes needed either way. Applied
+  live via `apply_migration`, then verified the new INSERT shape succeeds
+  against the live CHECK constraint by using it directly for Dj's actual
+  grant (not a separate throwaway test — the real goodwill credit *is*
+  the live verification). **Dormant bug, not yet used for anything real**:
+  zero rows in `credit_ledger` had `reason` starting with `'admin:'`
+  before this fix, confirming the admin credit-adjust feature has never
+  actually been used successfully on this project, by anyone, until Dj's
+  grant just now.
+
 - **2026-10-08** — **Fixed a real live bug: a user ("Dj") reported chat.html
   showing "(no response)" twice in a row on an unusual/garbled message.**
   Traced from a screenshot, not just a description — the pill text matched
