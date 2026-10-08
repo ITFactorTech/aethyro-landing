@@ -397,6 +397,84 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-08** — **Built the "agent team": a real mission ledger + three
+  new Claude Code skills (`nexus`, `oracle`, `support-triage`) + an admin
+  Team panel**, from the user asking whether the superagent-economy
+  design doc they shared (a standalone Node.js orchestrator with a
+  simulated-currency "treasury", local-LLM divisions, goal/budget
+  tracking) could be adapted for this site, then explicitly approving a
+  reworked version and asking to "add more to enhance and advance."
+  Deliberately **not** a port of that design — it would have added a
+  second, weaker, disconnected LLM system with no access to this
+  project's own institutional memory (this file) when the stronger,
+  already-available primitive is a Claude Code skill dispatched through
+  the `Agent` tool. Mapped every "division" from the shared doc onto
+  something that already exists or a new skill scoped the same way:
+  `sentinel`→`site-guardian`, `codex`→`backend-reviewer`, `avery`→
+  `atlas-web-design`, `oracle`/`support`→two new skills (below),
+  `forge`→no fixed skill, scoped `Agent`-tool dispatch for build work too
+  varied to checklist, `nexus`→the new orchestrator skill itself.
+  **Rejected the simulated-currency "treasury" concept outright** — a
+  frontier model doesn't need bounty/budget shaping to try hard, and
+  fabricating a fake economy metric for a product that already has a
+  hard-learned, repeatedly-enforced anti-fabrication policy (testimonials
+  removal, routines-gallery "Starter ideas" disclaimer, the explicitly-
+  labeled pricing example) would have been a direct contradiction of it.
+  Built the honest version instead: a real Supabase ledger table,
+  `agent_missions` (`division` CHECK'd to the 7 role names, `goal`,
+  `scope`, `pr_url`, `outcome` CHECK'd to `in_progress/merged/closed/
+  rejected/escalated/report_only`, `value_tag`, `notes`), following this
+  project's own established zero-policy-table + `is_admin()`-gated
+  `SECURITY DEFINER` RPC pattern exactly (`20260927020000_admin_users_table.sql`
+  is the template) — `REVOKE ALL ... FROM PUBLIC, anon, authenticated` on
+  the table itself (no client write path exists at all; a mission is only
+  ever written via this session's own direct Supabase/SQL access, by
+  design — see the migration's own comment), and `get_agent_missions(int)`
+  revoked from `PUBLIC`/`anon`, granted to `authenticated` only, with the
+  usual `IF NOT is_admin() THEN RAISE EXCEPTION 'Forbidden'` gate inside.
+  Migration: `20261008211500_agent_missions_ledger.sql`.
+  **New skills**: `nexus` (orchestrator — grounds a goal in real data,
+  decomposes it into scoped per-division subtasks, dispatches each via
+  the `Agent` tool, records every mission in the ledger); `oracle`
+  (growth/data strategy — pulls real usage numbers before recommending
+  anything, same anti-fabrication discipline, explicitly distinguishes a
+  real statistic from a labeled illustrative example); `support-triage`
+  (root-causes one real user report the way the Dj/Lee chat-quality
+  investigation two entries below was actually done — pull their real
+  `messages`/`credit_ledger` history first, root-cause in code, fix or
+  escalate, never guess from the paraphrase alone). All three carry the
+  same hard boundaries as every other automated role in this repo: never
+  merge own PR, never push to `main`, never fabricate a metric/
+  testimonial, never contact a real customer directly.
+  **New `app/admin.html` "Team" panel**: sidebar nav item, `#section-team`
+  (4 KPI cards — missions logged, merged, rejected/closed, divisions
+  active — a by-division breakdown table, a recent-missions table with
+  outcome badges and PR links), `loadTeam()` calling
+  `sb.rpc('get_agent_missions', {p_limit: 50})`, wired into
+  `SECTION_LABELS`/`showSection()`/`refreshCurrent()` exactly like the
+  existing Overview/Users/Drip/Credits sections. Shows an honest empty
+  state ("No missions logged yet") rather than any fabricated activity —
+  deliberately not a public-facing dashboard, since nothing about this is
+  meant to look like real traction to anyone but the person running the
+  project.
+  **Verified live**: `has_table_privilege`/`has_function_privilege`
+  checked directly (not inferred from the migration text) — `anon`/
+  `authenticated` both `false` on every `agent_missions` table privilege,
+  `authenticated` correctly `true` and `anon` correctly `false` on
+  `get_agent_missions(int)`, `service_role` `true`. Called the RPC twice
+  under a simulated JWT via `set_config('request.jwt.claims', ...)` +
+  `SET LOCAL ROLE authenticated`: the real admin's `sub` correctly
+  returned real data, a random non-admin `sub` correctly raised
+  `Forbidden`. Seeded one real mission row for this build itself
+  (`division:'nexus'`, `outcome:'in_progress'`) rather than leaving the
+  ledger's first-ever read empty or backfilling fake history — will
+  update to `merged` with the real PR URL once it lands. `node --check`
+  on `app/admin.html`'s inline script, clean.
+  **Scope note**: this is infrastructure only — no division has been
+  dispatched on a real goal yet through `nexus`. The next natural step is
+  giving `nexus` an actual goal to decompose, not building further
+  plumbing.
+
 - **2026-10-08** — **Made `chat`'s `model:"auto"` routing and system prompt
   "more intelligent"** after a direct user complaint about a real exchange:
   Dj (see the two entries directly below) asked a detailed car-parts-fitment
