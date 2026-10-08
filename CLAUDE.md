@@ -397,6 +397,63 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-08** — **Acted on three of the cheap/accurate items from an
+  external homepage-feedback review** (user pasted a 3rd-party critique,
+  asked "Does this help" — graded each claim against the live page before
+  acting rather than assuming it was accurate; see that assessment for the
+  full breakdown). Three findings were real and cheap to fix, shipped here:
+  (1) **Unified the 4 primary (`btn-lg btn-orange`) CTAs** — they'd drifted
+  to 4 different wordings ("Start Free — No Card →", "Try it free — 200
+  credits →", "Start Free — 200 credits, no card →", "Start for Free →")
+  across the hero, post-steps, post-calculator, and final-CTA sections. All
+  4 now read identically: "Start free — 200 credits, no card →". Smaller
+  secondary CTAs (`btn-sm`/`btn-ghost`, e.g. the nav pill, the two
+  Intelligence-section mini-CTAs, the pricing-panel "Get started free →")
+  were deliberately left alone — they sit right next to explanatory text
+  that already states the credits/no-card details, so their brevity is
+  correct, not an inconsistency. (2) **Added a "Risk of forgetting to
+  cancel" row to the `#compare` table** — a real, previously-missing angle
+  (commitment/lock-in anxiety) distinct from the existing "Monthly
+  subscription" and "Pay only when you use it" rows, worded accurately
+  (ChatGPT Plus/Claude.ai Pro *can* be canceled anytime too — the honest
+  framing is "recurs until you do," not "can't be canceled," since
+  overstating a competitor's lock-in would violate this project's own
+  no-overclaiming policy). (3) **Added a concrete weekly-usage example**
+  under the existing "What a task actually costs" panel in `#pricing`:
+  "15 quick questions, 5 longer explanations, and 1 deep review a week ≈
+  40 credits — about $3/month on the Value pack ($10/600 credits)" — the
+  credit/dollar math is derived arithmetically from the exact per-task
+  numbers already published two lines above it (15×1 + 5×2 + 1×18 = 43cr/
+  week ≈ 186cr/month at the Value pack's $0.0167/credit rate ≈ $3.11,
+  rounded), explicitly framed as "Example:" rather than a claimed
+  real-usage statistic — this project has a standing, hard-learned policy
+  against fabricating usage/social-proof numbers (see the 2026-09-28
+  testimonials-removal entry), so a plausible invented-but-labeled
+  illustration was the right call, not a bare "most users spend X" claim
+  with no data behind it.
+  **Explicitly NOT done, flagged back to the user rather than built
+  unilaterally**: a "For business" / "For developers" tab split under the
+  hero (a genuinely good, novel idea, but nothing like it exists today —
+  real scope, not a quick fix) and reversing the "Not a chatbot. An
+  orchestration layer." H1 (that headline was a deliberate, explicit
+  brand-identity choice — offered 3 options, user picked this one, on
+  2026-10-06 — reversing it needs the same kind of explicit go-ahead, not
+  a drive-by edit riding on unrelated feedback). Also explicitly declined:
+  a fabricated "N queries processed this week" trust stat the original
+  feedback suggested — directly the same mistake this project already
+  corrected once; real usage is still near-zero, so there's no honest
+  number to show yet.
+  **Verified via a locally-served copy** (not production) with Playwright:
+  zero console errors on load; confirmed via `page.locator(...).
+  allTextContents()` that exactly the 4 intended buttons now read
+  identically (the Discord CTA, picked up by the same broad selector
+  pattern, correctly stayed untouched); screenshotted the new comparison
+  row and the new pricing example line individually — both render cleanly
+  with no layout breakage; a full `html.parser` pass over the whole file
+  and `node --check` on all 3 inline `<script>` blocks both still clean.
+  **Scope**: pure copy/markup changes to `index.html` only — no CSS
+  structure change, no JS logic, no backend/migration/edge-function
+  involvement.
 - **2026-10-07** — **Site-guardian sweep: swept clean, no issues found** (user
   asked to "Run the site-guardian" the same day the 19-function CORS fix
   merged). Full 7-item checklist run: Supabase advisors (only previously
