@@ -455,6 +455,93 @@ that). Newest first.
   symptom with zero way to tell them apart, which is itself part of what
   this fix closes.
 
+- **2026-10-08** — **Graded a pasted NotebookLM-generated strategic roadmap
+  against the live site/DB (same fact-check-before-acting pattern as the
+  homepage-feedback review below), then built the 3 items that survived
+  the check.** The roadmap (built from the public-page source list given
+  to the user for their own NotebookLM session) got one recommendation
+  flatly wrong — "Introduce Optional Auto Top-Up" — because auto-topup
+  already shipped live in PR #99 (2026-09-28); its public sources, being
+  logged-out marketing pages, have no way to see a `dashboard.html`-only
+  feature. Two more were real, correctly-scoped gaps, confirmed live
+  before building: `select count(*) from user_routines where is_public =
+  true` returned 0 (the community gallery had zero real public routines,
+  only the 4 hardcoded "Starter ideas"), and `developers.html`'s own
+  "known v1 gaps" card already documented `api-chat` as having no
+  streaming and no `auto` routing. Built both, plus linked `/trust.html`
+  from the auth pages (the roadmap's "promote privacy differentiators on
+  signup" ask) since it was a 10-minute addition in the same pass. Also
+  caught, not from the DB but by re-reading the roadmap's own numbers:
+  it stated the Power/Pro pack prices backwards ("Pro ($30) or Power
+  ($90)" — the real pricing, confirmed in `index.html`'s FAQ and this
+  file, is Power=$30/2000cr, Pro=$90/7000cr) — a correction given back to
+  the user in chat, not something to fix in this repo since the error
+  lived in the roadmap document, not in any Aethyro source.
+  **(1) Seeded the community routines gallery** with 12 real template
+  routines (migration `20261008160000_seed_official_routine_templates.sql`),
+  owned by the admin account, spanning planning/writing/code-review/
+  interview-prep/learning/journaling tasks. All 12 land `enabled = false`
+  — confirmed via `run-routines/index.ts`'s own `where enabled = true`
+  query that this makes them structurally unable to ever run or bill the
+  admin's credits; they exist only to be read (`routines_public_read` RLS)
+  and forked (`fork_routine()`, which already lands forks `enabled =
+  false` too). Written as single-shot generative/drafting tasks, not
+  "fetch today's X" tasks — confirmed by reading `run-routines/index.ts`
+  that it has no `TOOLS` array at all (no `web_search`, unlike `chat`),
+  so a routine that assumed live data access would silently return stale
+  guesses. Verified live: anon-key REST call matching `routines.html`'s
+  exact query (`is_public=eq.true`, `order=fork_count.desc`) returned 3
+  real seeded templates — confirms the `20260928040000` anon-grant
+  migration still correctly serves new rows with no further grant
+  changes needed.
+  **(2) `api-chat` v4** — added `model:"auto"` (reuses `chat/index.ts`'s
+  embedding classifier — `classify_router_tier()` RPC + the same
+  `AUTO_HEAVY_SIGNALS`/length-heuristic fallback — copied deliberately
+  close to verbatim so a developer gets the same routing behavior as
+  chat.html, not a second, silently-different auto-router), `stream:true`
+  (standard SSE `data: {...}\n\n` framing + `data: [DONE]`, not
+  chat.html's internal marker-byte protocol — this is a public API for
+  arbitrary external clients, so it uses the conventional shape instead),
+  and a lifetime-purchase rate-limit tier (90 req/min instead of the
+  default 30, for any account with a real `credit_ledger` row
+  `reason='purchase'` and `metadata->>credit_pack` of `power` or
+  `pro_7k` — a one-time-purchase check, not a subscription-tier check,
+  since this product has no subscriptions). Deployed with `verify_jwt:
+  false` passed explicit (per this file's own established gotcha), live
+  source fetched back and diffed byte-for-byte against local disk.
+  **Verified live end-to-end** with a real throwaway account + a real
+  API key (via `create_api_key`): explicit `model:"haiku"` billed
+  correctly; `model:"auto"` on `"thanks so much!"` → haiku, on a
+  security-audit/root-cause/step-by-step prompt → opus — both billed
+  correctly with `requested_model:"auto"` present in the response;
+  `stream:true` produced real incremental `delta` events followed by one
+  `done` event carrying accurate `usage`/`credits_charged`/
+  `credits_remaining`, then `[DONE]`; an invalid key correctly 401s; an
+  unrecognized `model` value correctly falls back to sonnet (no
+  regression). The rate-limit tier's `.in('metadata->>credit_pack', [...])`
+  filter was verified against the real PostgREST endpoint directly
+  (`Accept-Profile: public` header needed for a raw curl, same artifact
+  this file's `verify_generation_receipt` note from 2026-10-05 already
+  documents) rather than by spamming 90 real paid requests to trip the
+  cap — confirmed the filter correctly matched a seeded `power`-pack
+  purchase row. `developers.html` updated: the request table now
+  documents `model:"auto"` and `stream`, a new "Streaming" section shows
+  the real event shapes, the 429 row and the "known v1 gaps" card both
+  rewritten to reflect what's fixed vs. still genuinely absent (no
+  conversation history, no attachments, no tool use on this endpoint).
+  Cleaned up: deleted the throwaway account (zero orphaned rows across
+  `profiles`/`credit_ledger`/`api_keys`/`auth.users` confirmed),
+  `test-admin-setup` re-stubbed to 410 and confirmed via a live curl.
+  **(3) Linked `/trust.html`** from `app/signup.html` (the existing
+  "no data sold" note is now a real link) and `app/login.html` (a new
+  note line: "row-level security on every table · verifiable deletion
+  receipts · see how we protect your data").
+  **Scope note**: the roadmap's other sections (broader integrations
+  beyond GitHub/Notion, landing pages for new verticals, growing the
+  newsletter/blog) were left alone — correctly-scoped future work, not
+  cheap/clear-cut enough to build without a separate go-ahead, consistent
+  with how the homepage-feedback review below was triaged the same way.
+
 - **2026-10-08** — **Acted on three of the cheap/accurate items from an
   external homepage-feedback review** (user pasted a 3rd-party critique,
   asked "Does this help" — graded each claim against the live page before
