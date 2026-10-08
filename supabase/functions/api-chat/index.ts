@@ -11,9 +11,17 @@
 // account context beyond the key. Same "custom auth in the function body"
 // exemption webhook-routine-trigger already uses.
 //
-// Per-key rate limit: 30 req/min, shared increment_rate_limit() RPC with
-// chat (see that migration) -- closes the gap this comment used to
-// document as unsolved.
+// v4 (2026-10-08) -- closes 3 of developers.html's documented "known v1
+// gaps": model:"auto" routing (reuses chat/index.ts's embedding classifier
+// verbatim, including its heuristic fallback), stream:true (standard SSE,
+// not chat.html's internal marker-byte framing -- this is a public API for
+// arbitrary external clients, so it uses the conventional `data: {...}\n\n`
+// + `data: [DONE]\n\n` shape instead), and a lifetime-purchase rate-limit
+// tier (an account that has ever bought the Power or Pro pack gets a
+// higher per-minute cap than the flat default -- a cheap, defensible
+// reading of "favor paying users" that needed no new schema: it's a
+// straight read of existing credit_ledger purchase rows). Per-key rate
+// limit still shares increment_rate_limit() RPC with chat's own limiter.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -41,6 +49,7 @@ function corsHeadersFor(req: Request) {
 const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+const VOYAGE_API_KEY    = Deno.env.get("VOYAGE_API_KEY");
 
 const MODEL_MAP: Record<string, string> = {
   haiku:  "claude-haiku-4-5-20251001",
@@ -52,11 +61,84 @@ const CREDIT_RATES: Record<string, { input: number; output: number }> = {
   sonnet: { input: 0.30,  output: 1.50 },
   opus:   { input: 1.50,  output: 7.50 },
 };
+const VOYAGE_MODEL = "voyage-4-lite";
 
 const MAX_TOKENS = 4096;
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 8000;
-const API_RATE_LIMIT_PER_MINUTE = 30;
+const API_RATE_LIMIT_DEFAULT = 30;
+// Lifetime Power/Pro pack purchaser tier -- a one-time real purchase, not a
+// recurring subscription this product doesn't have, so this checks
+// credit_ledger history rather than any notion of an active "plan".
+const API_RATE_LIMIT_PRO = 90;
+const PRO_TIER_PACKS = ["power", "pro_7k"];
+
+// Same rule-based router as chat/index.ts's routeAutoModel() -- kept
+// byte-for-byte equivalent in spirit (no attachments param here, since
+// api-chat has no file-upload path) so model:"auto" behaves the same way
+// a developer would already expect from using chat.html.
+const AUTO_HEAVY_SIGNALS = [
+  "audit", "security", "vulnerab", "architecture", "refactor", "debug",
+  "prove", "optimi", "algorithm", "strategy", "analyz", "analysis",
+  "contract", "legal", "compliance", "research", "comprehensive",
+  "in-depth", "in depth", "detailed plan", "step by step", "step-by-step",
+  "compare", "pros and cons", "root cause", "design a", "write a full",
+];
+const AUTO_LIGHT_RE = /^(hi|hey|hello|yo|sup|thanks|thank you|thx|ok|okay|cool|nice|great|sure|yes|no|got it|sounds good|np|k)\b[.!?]*$/i;
+
+function routeAutoModel(message: string): "haiku" | "sonnet" | "opus" {
+  const trimmed = message.trim();
+  const lower = trimmed.toLowerCase();
+  const len = trimmed.length;
+
+  const isHeavy = len > 500 || AUTO_HEAVY_SIGNALS.some(s => lower.includes(s));
+  if (isHeavy) return "opus";
+
+  const isLight = len > 0 && len <= 40 && (AUTO_LIGHT_RE.test(trimmed) || (!/[?]/.test(trimmed) && len <= 15));
+  if (isLight) return "haiku";
+
+  return "sonnet";
+}
+
+async function embedText(text: string): Promise<number[] | null> {
+  if (!VOYAGE_API_KEY) return null;
+  try {
+    const resp = await fetch("https://api.voyageai.com/v1/embeddings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${VOYAGE_API_KEY}` },
+      body: JSON.stringify({ model: VOYAGE_MODEL, input: [text] }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.data?.[0]?.embedding ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Same classifier chat/index.ts uses: nearest-centroid lookup via
+// classify_router_tier() (pgvector, public.model_router_centroids),
+// falling back to the keyword/length heuristic whenever no embedding is
+// available or the RPC itself fails -- must never be a single point of
+// failure for a billed request.
+async function classifyModelFromEmbedding(
+  supaAdmin: ReturnType<typeof createClient>,
+  embedding: number[] | null,
+  message: string,
+): Promise<"haiku" | "sonnet" | "opus"> {
+  let tier: "light" | "medium" | "heavy" | null = null;
+  if (embedding) {
+    const { data, error } = await supaAdmin.rpc("classify_router_tier", { p_embedding: embedding });
+    if (!error && (data === "light" || data === "medium" || data === "heavy")) tier = data;
+  }
+  if (!tier) return routeAutoModel(message);
+
+  const lower = message.trim().toLowerCase();
+  if (AUTO_HEAVY_SIGNALS.some(s => lower.includes(s))) tier = "heavy";
+
+  return tier === "light" ? "haiku" : tier === "heavy" ? "opus" : "sonnet";
+}
 
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
@@ -90,6 +172,23 @@ serve(async (req) => {
     return json({ error: "Invalid or revoked API key" }, 401);
   }
 
+  // Tiered per-key rate limit: a lifetime Power/Pro pack purchase (a real,
+  // one-time purchase row in credit_ledger -- this product has no
+  // recurring subscriptions to check against) raises the cap. Fails
+  // closed to the default limit on a lookup error -- never silently grants
+  // the higher tier.
+  let rateLimitCap = API_RATE_LIMIT_DEFAULT;
+  {
+    const { data: proPurchase, error: proErr } = await supaAdmin
+      .from("credit_ledger")
+      .select("id")
+      .eq("user_id", keyRow.user_id)
+      .eq("reason", "purchase")
+      .in("metadata->>credit_pack", PRO_TIER_PACKS)
+      .limit(1);
+    if (!proErr && proPurchase && proPurchase.length > 0) rateLimitCap = API_RATE_LIMIT_PRO;
+  }
+
   // Per-key rate limit, same fixed-window RPC `chat` uses. Fails open on an
   // RPC error rather than blocking a legitimate call on an infra hiccup.
   {
@@ -99,7 +198,7 @@ serve(async (req) => {
     });
     if (rlErr) {
       console.error("api-chat: rate limit check failed", rlErr.message);
-    } else if (typeof rlCount === "number" && rlCount > API_RATE_LIMIT_PER_MINUTE) {
+    } else if (typeof rlCount === "number" && rlCount > rateLimitCap) {
       return new Response(JSON.stringify({ error: "Too many requests, please slow down" }), {
         status: 429, headers: { ...CORS, "Content-Type": "application/json", "Retry-After": "60" },
       });
@@ -133,7 +232,17 @@ serve(async (req) => {
     return json({ error: "The last message must have role \"user\"" }, 400);
   }
 
-  const modelKey = ["haiku", "sonnet", "opus"].includes(body?.model) ? body.model : "sonnet";
+  const requestedModel = typeof body?.model === "string" ? body.model : "sonnet";
+  let modelKey: "haiku" | "sonnet" | "opus";
+  if (requestedModel === "auto") {
+    const lastUserMessage = messages[messages.length - 1].content;
+    const embedding = await embedText(lastUserMessage);
+    modelKey = await classifyModelFromEmbedding(supaAdmin, embedding, lastUserMessage);
+  } else if (requestedModel === "haiku" || requestedModel === "sonnet" || requestedModel === "opus") {
+    modelKey = requestedModel;
+  } else {
+    modelKey = "sonnet";
+  }
   const model = MODEL_MAP[modelKey];
   const rates = CREDIT_RATES[modelKey];
 
@@ -146,15 +255,82 @@ serve(async (req) => {
   const { data: profile } = await supaAdmin
     .from("profiles").select("team_id").eq("id", keyRow.user_id).single();
 
+  const streamRequested = body?.stream === true;
+
+  async function bill(inputTokens: number, outputTokens: number): Promise<{ cost: number; newBalance: number | null }> {
+    const cost = Math.max(
+      1,
+      Math.ceil((inputTokens / 1000) * rates.input + (outputTokens / 1000) * rates.output),
+    );
+    const { error: ledgerErr } = await supaAdmin.from("credit_ledger").insert({
+      user_id: keyRow.user_id,
+      delta:   -cost,
+      reason:  "api_usage",
+      team_id: profile?.team_id ?? null,
+      metadata: { model: modelKey, requested_model: requestedModel, input_tokens: inputTokens, output_tokens: outputTokens, api_key_id: keyRow.id },
+    });
+    if (ledgerErr) console.error("api-chat: credit_ledger insert failed", ledgerErr.message);
+
+    // Non-critical analytics counters -- a lost update under concurrent
+    // requests from the same key is an acceptable race here, unlike billing.
+    await supaAdmin.from("api_keys").update({
+      last_used_at: new Date().toISOString(),
+      request_count: (keyRow.request_count || 0) + 1,
+    }).eq("id", keyRow.id);
+
+    const { data: newBalance } = await supaAdmin.rpc("get_credit_balance", { p_user_id: keyRow.user_id });
+    return { cost, newBalance: typeof newBalance === "number" ? newBalance : null };
+  }
+
+  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+  const systemPrompt = "You are Aethyro, accessed via the public Aethyro API. Be direct, accurate, and concise unless asked for more detail.";
+
+  if (streamRequested) {
+    const encoder = new TextEncoder();
+    const sseBody = new ReadableStream({
+      async start(controller) {
+        function send(obj: unknown) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+        }
+        try {
+          const anthropicStream = anthropic.messages.stream({
+            model, max_tokens: MAX_TOKENS, system: systemPrompt, messages,
+          });
+          let fullText = "";
+          for await (const chunk of anthropicStream) {
+            if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
+              fullText += chunk.delta.text;
+              send({ type: "delta", text: chunk.delta.text });
+            }
+          }
+          const finalMsg = await anthropicStream.finalMessage();
+          const { cost, newBalance } = await bill(finalMsg.usage.input_tokens, finalMsg.usage.output_tokens);
+          send({
+            type: "done",
+            model: modelKey,
+            ...(requestedModel === "auto" ? { requested_model: "auto" } : {}),
+            content: fullText,
+            usage: { input_tokens: finalMsg.usage.input_tokens, output_tokens: finalMsg.usage.output_tokens },
+            credits_charged: cost,
+            credits_remaining: newBalance,
+          });
+        } catch (e) {
+          console.error("api-chat: streaming Anthropic call failed", (e as Error).message);
+          send({ type: "error", error: "Upstream model error" });
+        } finally {
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        }
+      },
+    });
+    return new Response(sseBody, {
+      headers: { ...CORS, "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" },
+    });
+  }
+
   let msg;
   try {
-    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
-    msg = await anthropic.messages.create({
-      model,
-      max_tokens: MAX_TOKENS,
-      system: "You are Aethyro, accessed via the public Aethyro API. Be direct, accurate, and concise unless asked for more detail.",
-      messages,
-    });
+    msg = await anthropic.messages.create({ model, max_tokens: MAX_TOKENS, system: systemPrompt, messages });
   } catch (e) {
     console.error("api-chat: Anthropic call failed", (e as Error).message);
     return json({ error: "Upstream model error" }, 502);
@@ -163,36 +339,14 @@ serve(async (req) => {
   const resultBlock = msg.content.find(b => b.type === "text") as any;
   const content = resultBlock?.text || "";
 
-  const cost = Math.max(
-    1,
-    Math.ceil(
-      (msg.usage.input_tokens  / 1000) * rates.input +
-      (msg.usage.output_tokens / 1000) * rates.output,
-    ),
-  );
-  const { error: ledgerErr } = await supaAdmin.from("credit_ledger").insert({
-    user_id: keyRow.user_id,
-    delta:   -cost,
-    reason:  "api_usage",
-    team_id: profile?.team_id ?? null,
-    metadata: { model: modelKey, input_tokens: msg.usage.input_tokens, output_tokens: msg.usage.output_tokens, api_key_id: keyRow.id },
-  });
-  if (ledgerErr) console.error("api-chat: credit_ledger insert failed", ledgerErr.message);
-
-  // Non-critical analytics counters -- a lost update under concurrent
-  // requests from the same key is an acceptable race here, unlike billing.
-  await supaAdmin.from("api_keys").update({
-    last_used_at: new Date().toISOString(),
-    request_count: (keyRow.request_count || 0) + 1,
-  }).eq("id", keyRow.id);
-
-  const { data: newBalance } = await supaAdmin.rpc("get_credit_balance", { p_user_id: keyRow.user_id });
+  const { cost, newBalance } = await bill(msg.usage.input_tokens, msg.usage.output_tokens);
 
   return json({
     model: modelKey,
+    ...(requestedModel === "auto" ? { requested_model: "auto" } : {}),
     content,
     usage: { input_tokens: msg.usage.input_tokens, output_tokens: msg.usage.output_tokens },
     credits_charged: cost,
-    credits_remaining: typeof newBalance === "number" ? newBalance : null,
+    credits_remaining: newBalance,
   });
 });

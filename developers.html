@@ -117,8 +117,20 @@
     <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
     <tr><td class="mono">message</td><td class="mono">string</td><td>Shorthand for a single user turn. Use this or <span class="inline-code">messages</span>, not both.</td></tr>
     <tr><td class="mono">messages</td><td class="mono">array</td><td><span class="inline-code">[{role: "user"|"assistant", content: string}]</span>, up to 20 entries, must end with a <span class="inline-code">user</span> turn.</td></tr>
-    <tr><td class="mono">model</td><td class="mono">string</td><td><span class="inline-code">haiku</span> / <span class="inline-code">sonnet</span> / <span class="inline-code">opus</span>. Defaults to <span class="inline-code">sonnet</span>.</td></tr>
+    <tr><td class="mono">model</td><td class="mono">string</td><td><span class="inline-code">haiku</span> / <span class="inline-code">sonnet</span> / <span class="inline-code">opus</span> / <span class="inline-code">auto</span>. Defaults to <span class="inline-code">sonnet</span>. <span class="inline-code">auto</span> uses the same embedding-based router as chat.html, and the response's <span class="inline-code">model</span> field tells you which one it picked.</td></tr>
+    <tr><td class="mono">stream</td><td class="mono">boolean</td><td>If true, returns <span class="inline-code">text/event-stream</span> instead of a single JSON body — see Streaming below. Defaults to false.</td></tr>
   </table>
+
+  <h2>Streaming</h2>
+  <p class="lead">Pass <span class="inline-code">"stream": true</span> to get a standard Server-Sent Events response instead of waiting for the full reply. Each event is a JSON object on a <span class="inline-code">data:</span> line:</p>
+  <pre>data: {"type": "delta", "text": "Para"}
+
+data: {"type": "delta", "text": "mount"}
+
+data: {"type": "done", "model": "sonnet", "content": "Paramount...", "usage": {"input_tokens": 18, "output_tokens": 64}, "credits_charged": 1, "credits_remaining": 198}
+
+data: [DONE]</pre>
+  <p class="lead">Billing happens once, after the stream completes — the <span class="inline-code">done</span> event carries the same <span class="inline-code">credits_charged</span>/<span class="inline-code">credits_remaining</span> fields the non-streaming response does. A stream that errors mid-flight sends a <span class="inline-code">{"type": "error", ...}</span> event (never partially billed) followed by <span class="inline-code">[DONE]</span>.</p>
 
   <h2>Pricing</h2>
   <p class="lead">Same per-1,000-token credit rates as the chat app — a request never costs less than 1 credit. Buy credit packs from your <a href="/#pricing" style="color:var(--orange)">dashboard</a>; they never expire.</p>
@@ -135,13 +147,13 @@
     <tr><td class="mono"><span class="badge err">401</span></td><td>Missing, malformed, or revoked API key.</td></tr>
     <tr><td class="mono"><span class="badge err">400</span></td><td>Malformed request body — see the returned <span class="inline-code">error</span> field.</td></tr>
     <tr><td class="mono"><span class="badge err">402</span></td><td>Insufficient credits on the account that owns the key.</td></tr>
-    <tr><td class="mono"><span class="badge err">429</span></td><td>Over 30 requests/minute on this key. Check the <span class="inline-code">Retry-After</span> header (seconds).</td></tr>
+    <tr><td class="mono"><span class="badge err">429</span></td><td>Over your key's per-minute limit (30, or 90 if the account has ever bought a Power or Pro pack). Check the <span class="inline-code">Retry-After</span> header (seconds).</td></tr>
     <tr><td class="mono"><span class="badge err">502</span></td><td>The upstream model call failed. Safe to retry.</td></tr>
   </table>
 
   <div class="card">
     <strong style="color:var(--text)">A note on scope, honestly:</strong>
-    <p class="lead" style="margin-top:.5rem;margin-bottom:0">This is a v1. Each key is capped at 30 requests/minute (on top of your credit balance) — you'll get a <span class="inline-code">429</span> with <span class="inline-code">Retry-After: 60</span> if you hit it. No streaming responses yet, and no <span class="inline-code">auto</span> model routing on this endpoint (that's chat.html-only for now) — just a single synchronous JSON call. If you need either of those, or a higher rate limit, <a href="mailto:hello@aethyro.com" style="color:var(--orange)">tell us</a>.</p>
+    <p class="lead" style="margin-top:.5rem;margin-bottom:0">This is still a v1. Streaming and <span class="inline-code">auto</span> model routing are both in now, and Power/Pro pack buyers get 90 req/min instead of 30 — but it's still fully stateless (no server-side conversation history, no file/image attachments, no tool use/web search on this endpoint — those stay chat.html-only for now). If you need any of those, <a href="mailto:hello@aethyro.com" style="color:var(--orange)">tell us</a>.</p>
   </div>
 
   <div class="cta-box">
