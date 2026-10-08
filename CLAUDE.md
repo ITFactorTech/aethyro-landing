@@ -397,6 +397,68 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-08** — **Made `chat`'s `model:"auto"` routing and system prompt
+  "more intelligent"** after a direct user complaint about a real exchange:
+  Dj (see the two entries directly below) asked a detailed car-parts-fitment
+  question (fitting a specific Holley intake manifold + elbow under a VFN
+  fiberglass hood while keeping factory wipers), and after several
+  substantive follow-ups the assistant was still asking circular clarifying
+  questions and ended on "go borrow/source a hood to test-fit it" — useless
+  advice to someone who'd just said they don't have a hood and are trying to
+  decide whether to buy one. Pulled the actual conversation from
+  `messages`/`credit_ledger` (not just the user's paraphrase) to root-cause
+  it rather than guessing: 3 of the 4 exchanges were billed to **Haiku**, the
+  cheapest/weakest model, despite being deep into a genuinely hard technical
+  thread. Root cause: `classifyModelFromEmbedding()` only ever embeds the
+  **current** message — it has zero visibility into `historyRaw`, which is
+  already sitting in memory at that point in the handler. A short,
+  substantive reply mid-thread ("i dont have a hood", 19 chars) reads as
+  trivially "light" in isolation even though the conversation it's part of
+  is anything but.
+  **Two fixes, `chat` now v50**: (1) a new floor — when `model:"auto"`
+  classifies a message as `haiku` AND `historyRaw.length > 0` (an ongoing
+  conversation, not a fresh one) AND the message doesn't match
+  `AUTO_LIGHT_RE` (a genuine trivial acknowledgment like "thanks!"), bump it
+  to `sonnet`. Zero added latency or DB calls — `historyRaw` is already
+  parsed from the request body. (2) `systemPrompt` now explicitly instructs
+  the model to lead with a decisive, concrete recommendation rather than
+  re-asking a question the user has effectively already answered, and the
+  `web_search` tool's guidance (both in `systemPrompt` and the tool's own
+  `description`) was broadened from just "time-sensitive" topics to cover
+  any specific real-world product/part/compatibility question where actual
+  documented data (specs, forum reports) would beat generic reasoning —
+  search before telling a user to go acquire or physically test something
+  just to find out.
+  **Verified live end-to-end** with a real throwaway account, replaying the
+  exact failure shape: turn 1 (the opening fitment question, no history) —
+  even on Haiku, the new system prompt alone produced a decisive "**No, not
+  realistically**" with concrete numbers (2-4", 5-6"+) instead of the old
+  hedging; turn 2 (the short "i dont have a hood" follow-up, with real
+  history attached) — correctly routed to **Sonnet** (confirmed via the raw
+  `cost.model` field in `USAGE_MARK`), producing a genuinely reasoned answer
+  (realizing hood clearance and wiper-motor clearance are independent
+  constraints) ending in actionable advice ("mock this up with cardboard/
+  foam before spending money on the elbow") instead of "go get a part to
+  test"; turn 3 (a genuine "thanks!" in the same thread) correctly stayed on
+  **Haiku** — confirming the floor doesn't regress the auto-router's whole
+  cost-saving point for actual trivial acknowledgments. Live source fetched
+  back via `get_edge_function` and diffed byte-for-byte against local disk
+  (caught and fixed, in the same pass, that the v49 "(no response)" fix's
+  header comment had never actually been synced back to local disk from an
+  earlier session — local disk is now byte-for-byte current with live for
+  the first time in a while). Cleaned up: deleted the throwaway account
+  (confirmed real billing rows existed, zero orphaned `conversations` since
+  this test called the API directly rather than through `chat.html`),
+  `test-admin-setup` re-stubbed to 410 and confirmed via a live curl (401 at
+  the gateway).
+  **Scope note**: only `chat`'s `model:"auto"` path is affected — an
+  explicit model choice is untouched, same asymmetric-safety-net posture as
+  every other auto-router adjustment in this file. `api-chat` has its own,
+  simpler system prompt with no `web_search` tool at all (by design, see
+  `developers.html`'s known gaps) and wasn't touched; `trial-chat`'s prompt
+  is deliberately short-preview-only and has no `web_search` either, so
+  neither fix applies there.
+
 - **2026-10-08** — **Granted a real user ("Dj", `lee947204@gmail.com`, user_id
   `9dda3dd8-6669-4555-88fa-2a9c7ca53e28`) 100 goodwill credits** for the
   "(no response)" inconvenience (see the fix entry directly below) — his

@@ -1,3 +1,36 @@
+// chat v50 — made model:"auto" and the system prompt more intelligent after a
+// real user complaint: a technical, specific follow-up question ("i dont
+// have a hood", inside a multi-turn car-parts-fitment thread) got routed to
+// Haiku and answered with circular clarifying questions ending in
+// impractical advice ("go borrow/buy a hood just to test-fit it") instead of
+// a decisive, grounded answer. Two independent fixes:
+// (1) classifyModelFromEmbedding only ever embeds the CURRENT message, with
+// no view of historyRaw (already sitting in memory) -- a short substantive
+// reply mid-thread reads as trivially "light" in isolation even when the
+// conversation it's part of is a hard technical problem. Added a floor:
+// requestedModel==="auto" + classified "haiku" + historyRaw non-empty +
+// message isn't a genuine trivial acknowledgment (AUTO_LIGHT_RE) now floors
+// to "sonnet". Only affects follow-ups in an ongoing conversation; a brand
+// new conversation's opening message is unaffected.
+// (2) systemPrompt now explicitly tells the model to lead with a decisive,
+// concrete answer/estimate rather than re-asking a question the user has
+// effectively already answered, and broadens the web_search guidance beyond
+// "time-sensitive" topics to cover specific real-world product/part/
+// compatibility questions where real documented data (specs, forum reports)
+// beats generic reasoning -- search before telling a user to go acquire or
+// physically test something just to find out.
+// chat v49 — found and fixed a real live bug (user report: "no response"
+// sending a confusing/garbled message, twice in a row). finalize() never
+// sent an `error` field in its USAGE_MARK JSON at all, so a refusal or an
+// extended-thinking budget exhausted before any text_delta ever fired left
+// the client with literally zero bytes and no explanation -- just the
+// generic chat.html "(no response)" fallback, after still being billed at
+// least 1 credit. Fixed: finalize() now takes a stopReason param and
+// includes an explicit `error` message when assistantReply is empty
+// (mirrors trial-chat/index.ts's equivalent, broadened check); the main
+// streaming branch also flushes thinkingText via THINK_MARK if the model's
+// thinking budget ran out before thinkingEmitted ever fired, so the
+// reasoning panel still shows instead of nothing at all.
 // chat v48 — CORS was a bare "*", letting any website make authenticated
 // cross-origin calls against this billed endpoint. Locked to aethyro.com
 // (+ this project's Cloudflare preview subdomains, so branch/commit
@@ -455,6 +488,16 @@ serve(async (req) => {
   ]);
 
   let modelKey = requestedModel === "auto" ? await classifyModelFromEmbedding(supaAdmin, queryEmbedding, message, attachments) : requestedModel;
+  if (requestedModel === "auto" && modelKey === "haiku" && historyRaw.length > 0 && !AUTO_LIGHT_RE.test(message.trim())) {
+    // The classifier only ever embeds this one message -- it has no view of
+    // historyRaw, which is already sitting right here in memory. A short,
+    // substantive reply inside an ongoing technical thread ("i dont have a
+    // hood") reads as trivially "light" in isolation even when the
+    // conversation it's part of is anything but. Reserve the Haiku floor for
+    // genuine trivial acknowledgments (still caught by AUTO_LIGHT_RE below)
+    // and give every other mid-conversation follow-up at least Sonnet.
+    modelKey = "sonnet";
+  }
   if (requestedModel === "auto" && modelKey === "opus" && typeof balance === "number" && balance < AUTO_MODEL_CREDIT_FLOOR) {
     modelKey = "sonnet";
   }
@@ -462,7 +505,7 @@ serve(async (req) => {
   const rates    = CREDIT_RATES[modelKey];
 
   let existingMemory: UserMemory = {};
-  let systemPrompt = "You are Aethyro, a highly capable AI assistant.";
+  let systemPrompt = "You are Aethyro, a highly capable AI assistant. Give direct, decisive answers: lead with your best concrete recommendation or estimate based on the specifics you've already been given, rather than repeating a clarifying question the user has effectively already answered. Only ask a follow-up question when you genuinely lack information needed to answer usefully — and when you do answer with incomplete information, state your assumption and commit to a real answer anyway rather than deferring the whole thing back to the user.";
   // Counts of retrieved context actually used, surfaced later in this
   // message's signed generation receipt (see finalize()) -- not just
   // whether retrieval ran, but how many hits cleared the similarity bar.
@@ -470,7 +513,7 @@ serve(async (req) => {
   let documentContextCount = 0;
 
   if (TAVILY_API_KEY) {
-    systemPrompt += " You have a web_search tool — use it proactively for current events, news, prices, scores, release dates, or anything time-sensitive. Answer from knowledge for timeless facts.";
+    systemPrompt += " You have a web_search tool — use it proactively not just for current events, news, prices, scores, and release dates, but for any specific real-world product, part number, or compatibility question where actual documented data (specs, forum reports, manufacturer pages) would beat general reasoning. Search before telling a user to go acquire or test something physically just to find out — check whether the answer is already documented online first. Answer from knowledge alone only for timeless, well-established facts.";
   }
 
   // Flat JSONB memory (structured facts)
@@ -596,7 +639,7 @@ serve(async (req) => {
   const BASE_TOOLS: Anthropic.Tool[] = TAVILY_API_KEY
     ? [{
         name: "web_search",
-        description: "Search the web for current, up-to-date information. Use proactively for questions about recent news, events, prices, scores, weather, release dates, or anything time-sensitive. Answer from knowledge for timeless facts.",
+        description: "Search the web for current, up-to-date information. Use proactively for questions about recent news, events, prices, scores, weather, release dates, specific product/part specifications or compatibility, or anything else where real documented data beats general reasoning. Answer from knowledge for timeless facts.",
         input_schema: {
           type: "object" as const,
           properties: { query: { type: "string", description: "Concise, specific search query" } },
