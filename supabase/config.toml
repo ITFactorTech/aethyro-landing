@@ -1,7 +1,7 @@
 # Supabase project config for Aethyro (SovereignNation).
 #
 # Primarily exists so CI (`supabase functions deploy`, see
-# .github/workflows/deploy.yml) deploys every function with the correct
+# .github/workflows/deploy-supabase.yml) deploys every function with the correct
 # `verify_jwt` setting. Without this file, `deploy_edge_function`-style calls
 # default an omitted `verify_jwt` to `true` — a real, previously-hit footgun
 # (see CLAUDE.md's "deploy_edge_function's verify_jwt defaults to true"
