@@ -403,6 +403,56 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-09** — **`site-guardian` sweep, user-requested. Swept clean —
+  zero new issues found.** Full checklist run against the state left by
+  PRs #150/#151 (the `user_integrations` encryption fix and the
+  `cycle-001.patch` cherry-picks, both merged earlier the same day).
+  `get_advisors` (security+performance): every finding matches this
+  file's already-documented accepted classes — the 5 zero-policy tables
+  (`admin_users`/`agent_missions`/`app_secrets`/`model_router_centroids`/
+  `rate_limit_counters`), GraphQL-exposure boilerplate, the two
+  intentional anon-executable `get_credit_balance()`/`is_admin()`
+  functions, 12 `authenticated`-executable admin/owner-gated RPCs (each
+  does its own internal `is_admin()`/ownership check), unindexed FKs,
+  RLS `auth.<fn>()` re-evaluation, unused indexes, multiple permissive
+  policies on 3 tables (`newsletter_issues`/`pack_content`/
+  `user_routines`), and leaked-password protection still correctly
+  explained by the Free plan — nothing new, `extension_in_public`
+  (vector/pg_net) included, both long-installed and in active use.
+  `list_edge_functions` (28) vs. `supabase/functions/` (24 committed):
+  the 4-function gap is exactly the known diagnostic-stub set
+  (`test-admin-setup`/`test-voyage-probe`/`test-embed-probe`/
+  `test-embed-batch`), all confirmed still correctly inert — no drift.
+  `pg_trigger` on `auth.users` (4, all enabled) and `pg_cron.job` (6
+  jobs) both matched this file's documented baseline exactly. Live
+  smoke test with two real throwaway accounts: signup produced exactly
+  one `profiles`/`referral_codes`/`signup_bonus` row each (no
+  regression of the old double-bonus bug); a real chat message on all
+  three `MODEL_MAP` keys (haiku/sonnet/opus) succeeded with correct
+  billing and a real signed generation receipt each; referral
+  redemption happy (+100 credits), duplicate (409), self-referral
+  (400), and invalid-code (404) paths all correct; `buy-credits`
+  resolved to a real `checkout.stripe.com` URL, never a bare Stripe
+  link; `user_integrations` confirmed still at 0 rows (no leftover test
+  data from the same-day encryption-fix work). Hard security constraint
+  re-grepped clean (zero real `buy.stripe.com` matches — only this
+  file's own and `site-guardian/SKILL.md`'s negative-example mentions).
+  Static pages (`/`, `/robots.txt`, `/sitemap.xml`, `/terms.html`,
+  `/privacy.html`, `/trust.html`, `/developers.html`, `/routines.html`,
+  `/pricing.html`) all live (200), a real unknown path still 404s.
+  Re-grepped for stale subscription-model references
+  (`personal`/`research`/`cpa` plan keys, live `create-checkout`
+  callers) — none found. **Not completed this sweep, same as every
+  prior attempt**: the edge-function error-rate log check — tried the
+  same `function_edge_logs` query shape documented as working in a past
+  sweep, got `Table "function_edge_logs" does not exist` again; this
+  has now failed identically across at least 4 separate sweeps and is a
+  standing tooling limitation, not worth retrying again without a
+  different approach. Cleaned up: both throwaway accounts deleted, zero
+  orphaned rows confirmed across `profiles`/`credit_ledger`/
+  `referral_codes`/`referral_events`/`generation_receipts`/`auth.users`,
+  `test-admin-setup` re-stubbed to 410 and confirmed via a live curl.
+  No PRs needed — nothing to fix.
 - **2026-10-09** — **Cherry-picked the safe items from an uploaded
   `cycle-001.patch`** (an external multi-agent "cycle" report's proposed
   diff, same provenance as the pricing-audit report behind PR #149),
