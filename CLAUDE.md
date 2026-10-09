@@ -232,22 +232,11 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
-- **`user_integrations.access_token` is stored as plaintext server-side**
-  (GitHub/Notion PATs) — the column's own migration comment says
-  `-- stored as-is (PAT or API key); encrypt at app layer`, but that
-  encryption was apparently never actually implemented. Found
-  2026-10-08 while fact-checking an external report's claim that
-  `index.html` said "nothing stored server-side" for these integrations
-  (the copy claim was fixed the same day; this is the underlying real
-  gap behind why it was false). RLS (`integrations_own`,
-  `auth.uid() = user_id`) already restricts read access to the owner,
-  so this isn't directly client-exploitable today, but a token sitting
-  in plaintext in the database is still worth encrypting at the app
-  layer before this feature sees real usage at any scale. Needs a
-  deliberate `codex`/`backend-reviewer` pass (choosing an encryption
-  scheme, a migration to re-encrypt existing rows if any exist, and
-  updating `connector-proxy`'s read/write paths) — not something to fix
-  as a drive-by inside an unrelated PR.
+~~- `user_integrations.access_token` was stored as plaintext server-side~~
+  — **fixed 2026-10-09**, see the recent-work-log entry below. The column
+  is now `bytea`, holding `pgp_sym_encrypt` output; `connector-proxy` reads
+  and writes it only through `store_integration_token()`/
+  `get_integration_token()`, never a direct column select/upsert.
 
 ~~- Four pages (`/marketplace/`, `/builder/`, `/community/`,
   `/contractors.html`) were live/indexed but pitched a different, pre-pivot
@@ -413,6 +402,91 @@ active functions when only 10 were documented anywhere.
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-09** — **Encrypted `user_integrations.access_token` at rest**,
+  closing the real gap flagged in "Pending" on 2026-10-08: the column's
+  own migration comment always said `-- stored as-is (PAT or API key);
+  encrypt at app layer`, but that encryption was never actually built.
+  Confirmed live before changing anything: the table has 0 rows (nobody
+  has ever connected GitHub/Notion), and — a second, separate,
+  previously-undocumented finding — `authenticated` had full `SELECT`/
+  `INSERT`/`UPDATE`/`DELETE` table-level grants on `user_integrations`
+  (the same default-privileges-grant-is-a-floor pattern this file already
+  documents for `api_keys`/`routine_webhooks`/`agent_missions`), meaning
+  a signed-in user could already read their own raw plaintext token
+  directly via REST, bypassing both the service-role-only design and the
+  `connect` action's real-token-validation step.
+  Migration `20261009000000_encrypt_integration_tokens.sql`: seeds a new
+  `app_secrets` key (`integration_token_encryption_key`, same zero-policy
+  pattern as the deletion/generation-receipt HMAC keys), `REVOKE ALL ...
+  FROM anon, authenticated` on the table, converts `access_token` from
+  `text` to `bytea` holding `pgp_sym_encrypt` output, and adds two new
+  `SECURITY DEFINER` RPCs — `store_integration_token`/
+  `get_integration_token` — gated on `auth.role() = 'service_role'` (not
+  `auth.uid() = p_user_id`, deliberately: this function's only legitimate
+  caller is `connector-proxy`'s own service-role client, which has
+  already resolved the real user from their own JWT before calling it —
+  the exact `get_credit_balance` lesson this file already documents,
+  applied up front this time instead of discovered after the fact).
+  **Real obstacle hit and fixed**: the first version of the migration's
+  `ALTER COLUMN access_token TYPE bytea USING (...)` tried to look the
+  encryption key up with a subquery
+  (`(SELECT value FROM app_secrets WHERE key = ...)`) directly inside the
+  `USING` clause — Postgres rejects this (`0A000: cannot use subquery in
+  transform expression`), since a `USING` transform expression disallows
+  subqueries even though an ordinary `UPDATE ... SET` allows them freely.
+  Fixed by fetching the key into a transaction-local GUC first
+  (`set_config('aethyro.tmp_integration_key', v_key, false)` inside a
+  `DO $$ ... $$` block) and reading it back via `current_setting(...)` —
+  a plain function call, not a subquery — inside the `USING` clause.
+  `supabase/functions/connector-proxy/index.ts` (now v2): `connect` calls
+  `store_integration_token` instead of upserting `access_token` directly;
+  `query` calls `get_integration_token` instead of selecting it — the
+  plaintext token now only ever exists transiently in the function's own
+  memory, decrypted server-side per request, never read from the column
+  directly by this function's code.
+  **Verified live, not just by reading the migration**: `has_table_privilege`/
+  `has_function_privilege` confirmed `anon`/`authenticated` both `false`
+  on the table and on both new RPCs, `service_role` `true` on both RPCs;
+  a direct SQL round-trip (`store_integration_token` → raw bytes contain
+  no trace of the plaintext, in both raw and hex form → `get_integration_token`
+  → exact original plaintext back) proved the encryption actually works,
+  not just that the migration applied; a non-service-role call correctly
+  raised `Forbidden`. End-to-end via real HTTP with a throwaway account:
+  `query` with nothing connected correctly 404s; after seeding a fake
+  token via the RPC, `list_integrations` showed it correctly and `query`
+  reached the real GitHub API with the *decrypted* token (GitHub's own
+  `401 Bad credentials` for the fake value — proving decryption succeeded
+  through the full HTTP path, not just via direct SQL, since a decryption
+  failure would have surfaced as a 500 from inside `get_integration_token`
+  instead); `disconnect` cleanly removed the row; a raw REST `SELECT
+  access_token` as the signed-in user now 404s with "Could not find the
+  table" — PostgREST hides a table from its schema cache entirely once no
+  role has any grant on it, an even stronger result than a plain 403.
+  Live `connector-proxy` source fetched back via `get_edge_function` and
+  diffed byte-for-byte against local disk. Cleaned up: the throwaway
+  account and its one test row deleted via a direct call to its own
+  `disconnect` action (confirmed `list_integrations` empty after);
+  `test-admin-setup` re-stubbed to 410 and confirmed via a live curl.
+  **One execution-tooling quirk hit along the way, not a bug in this
+  fix**: a direct `DELETE` via `execute_sql` against the real admin
+  account's own synthetic test row (used for the direct-SQL round-trip
+  check above) returned `{"status":"cancelled"}` on **six** consecutive
+  attempts — the same intermittent quirk this file already documents for
+  DELETEs/UPDATEs against this project — while an `UPDATE` neutralizing
+  the row's content (`access_token = NULL`) succeeded immediately. Worked
+  around by deleting the row through `connector-proxy`'s own `disconnect`
+  action instead (called via a temporary edge-function helper acting as
+  service role), which succeeded on the first attempt — confirming the
+  flakiness is specific to the `execute_sql`/`apply_migration` DELETE
+  path, not to Postgres `DELETE` itself. Worth remembering: when a direct
+  SQL `DELETE` via these tools gets stuck in this loop, a service-role
+  client call (an edge function, or the equivalent) is a reliable
+  fallback, not just more retries.
+  **Scope note**: `refresh_token` (currently unused — GitHub/Notion PATs
+  need no refresh) was deliberately left as plain `text`, with a column
+  comment flagging that a future provider needing it must encrypt it the
+  same way. `metadata` (login/name, non-secret) was left untouched.
 
 - **2026-10-08** — **Graded an uploaded external "pricing page audit"
   report against the live site before acting on it (same pattern as
