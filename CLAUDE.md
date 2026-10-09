@@ -515,6 +515,61 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-09** — **Added server-side purchase-funnel logging**, after a
+  strategy discussion grounded in fresh numbers: 51 total users, 44 signed
+  up in the last 7 days, but **still $0 lifetime revenue and 0 purchases,
+  ever** — unchanged despite auto-topup, the credit-aware router, and the
+  Opus cost-warning modal shipped earlier the same day. The real blocker
+  to diagnosing this further: there was no way to tell "nobody ever clicks
+  Buy" apart from "people click Buy, reach Stripe, and abandon there" —
+  GA4's existing `checkout_started`/`checkout_completed` events (from PR
+  #130) aren't queryable from a Claude session, and Stripe itself isn't an
+  authorized connector here, so both of this product's only two sources of
+  real funnel data were out of reach. Asked the user whether to authorize
+  Stripe (fast, but needs their action) or build a server-side proxy
+  myself with the access already available; they picked the latter.
+  New `purchase_funnel_events` table — same zero-policy, service-role-only
+  posture as `admin_users`/`agent_missions`/`testimonials`
+  (`REVOKE ALL ... FROM PUBLIC, anon, authenticated`), logging `user_id`,
+  `pack`, `outcome` (`success`/`error`), the real Stripe `stripe_session_id`
+  on success, and the real error message on failure. `buy-credits` (now
+  v17) logs exactly once per real attempt — only once it has resolved both
+  a real signed-in user and a valid pack (an invalid pack or an expired
+  session is rejected before that point and deliberately isn't logged, so
+  this never captures bot/bug noise as if it were a real funnel event) —
+  wrapped in its own best-effort try/catch so a logging failure can never
+  block or alter the real checkout response. Migration:
+  `20261009131645_purchase_funnel_events.sql`.
+  **Verified live, not just code review**: `has_table_privilege` confirmed
+  `anon`/`authenticated` both `false` on the new table, `service_role`
+  `true`; a real throwaway account's real `buy-credits` call with a valid
+  pack returned a genuine `checkout.stripe.com` URL (no regression) and
+  produced exactly one `purchase_funnel_events` row with the matching real
+  `stripe_session_id` and `outcome:'success'`; a second call with an
+  invalid pack correctly 400'd and produced **zero** additional rows,
+  confirming non-attempts don't pollute the log. Live source diffed
+  byte-for-byte against local disk after deploying — caught and fixed one
+  cosmetic-only transcription slip of my own (a missing semicolon in
+  `_shared/packs.ts`) in the same pass, same discipline this file already
+  documents for exactly this class of mismatch. Cleaned up: deleted the
+  throwaway account, confirmed zero orphaned rows (including the funnel
+  table, which correctly cascade-deleted), `test-admin-setup` re-stubbed
+  to 410 and confirmed via a live curl.
+  **What this does NOT establish**: the error-logging branch was verified
+  by code construction (any exception inside the Stripe/profile block is
+  caught, logged with its real message, and rethrown unchanged) rather
+  than a live reproduction — forcing a genuine Stripe-side failure safely
+  would have meant deliberately breaking a real price/customer lookup,
+  judged not worth the risk for a diagnostic-logging change this narrow.
+  **Scope note**: this only instruments `buy-credits` (the actual
+  checkout-session-creation step) — it does not add a `buy_modal_open`-
+  equivalent (that would need a new client-callable write path, which
+  wasn't asked for) and does not touch `auto-topup-charge`/
+  `setup-auto-topup`, a different, not-yet-requested funnel. Once this has
+  collected a few real attempts, it directly answers the "nobody clicks
+  Buy" vs. "people abandon at Stripe" question this project has never
+  been able to answer before.
+
 - **2026-10-09** — **Added a pre-send confirmation before a brand-new
   account's explicit, costly Opus pick** (`app/chat.html`), after pulling
   real usage data to answer "what's next for Aethyro.com" rather than
