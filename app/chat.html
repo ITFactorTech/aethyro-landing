@@ -644,6 +644,19 @@ I often need help with: client quotes, contract review, business Instagram posts
   </div>
 </div>
 
+<!-- Opus cost-warning modal (new accounts, explicit Opus pick) -->
+<div class="workspace-modal-backdrop" id="opusWarnModal">
+  <div class="workspace-modal">
+    <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a1.5 1.5 0 0 0 1.3 2.2h17.8a1.5 1.5 0 0 0 1.3-2.2L13.7 3.9a1.5 1.5 0 0 0-2.6 0Z"/></svg> Heads up — Opus can use a lot of credits</h3>
+    <p class="wm-sub" id="opusWarnText">Opus gives the most thorough answers, but a long reply can cost 40–80+ credits. You have <strong id="opusWarnBalance">0</strong> credits from your free signup grant — want to try Sonnet for this one first, or go ahead with Opus?</p>
+    <div class="wm-actions">
+      <button class="wm-cancel" id="opusWarnCancel">Cancel</button>
+      <button class="wm-cancel" id="opusWarnProceed">Send with Opus anyway</button>
+      <button class="wm-save" id="opusWarnSwitch">Switch to Sonnet &amp; send</button>
+    </div>
+  </div>
+</div>
+
 <!-- Intelligence Panel -->
 <div class="intel-panel" id="intelPanel">
   <div class="intel-drag-handle"></div>
@@ -927,18 +940,19 @@ I often need help with: client quotes, contract review, business Instagram posts
   });
 
   /* ── Model selector ── */
+  function setModel(key){
+    currentModel=key;
+    localStorage.setItem('aethyro_model', currentModel);
+    $('modelBar').querySelectorAll('.model-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-model')===currentModel); });
+    setCloudNote();
+    if(_prevBalance!==null) updateLowBalanceWarning(_prevBalance);
+  }
   function initModelBar(){
     var bar=$('modelBar');
     bar.style.display='flex';
     bar.querySelectorAll('.model-btn').forEach(function(btn){
       btn.classList.toggle('active', btn.getAttribute('data-model')===currentModel);
-      btn.addEventListener('click', function(){
-        currentModel=btn.getAttribute('data-model');
-        localStorage.setItem('aethyro_model', currentModel);
-        bar.querySelectorAll('.model-btn').forEach(function(b){ b.classList.toggle('active', b===btn); });
-        setCloudNote();
-        if(_prevBalance!==null) updateLowBalanceWarning(_prevBalance);
-      });
+      btn.addEventListener('click', function(){ setModel(btn.getAttribute('data-model')); });
     });
     setCloudNote();
   }
@@ -1768,10 +1782,68 @@ I often need help with: client quotes, contract review, business Instagram posts
     }
   }
 
-  $('composer').addEventListener('submit',function(e){
+  /* ── New-account Opus cost warning ──
+     Real usage data (Oct 2026) showed several brand-new accounts burning
+     100-230+ credits via 2-6 explicit Opus sends within their first
+     session, then never returning -- their free grant gone before they'd
+     seen anything else the product does. Per this project's standing
+     "never override an explicit choice" rule, this only ever warns -- it
+     never silently downgrades the pick. Fires at most once ever per
+     browser, and only when the passive low-balance banner (which already
+     covers the lower-balance case more urgently) isn't already showing. */
+  var OPUS_WARN_LS_KEY='aethyro_opus_cost_warn_v1';
+  var NEW_ACCOUNT_MSG_THRESHOLD=6;
+
+  async function shouldWarnBeforeOpusSend(){
+    if(!session || currentModel!=='opus') return false;
+    if(localStorage.getItem(OPUS_WARN_LS_KEY)) return false;
+    if(_prevBalance!==null && _prevBalance<=lowBalanceThreshold('opus')) return false;
+    try{
+      var r=await supabase.from('messages')
+        .select('id, conversations!inner(user_id)', {count:'exact', head:true})
+        .eq('conversations.user_id', session.user.id)
+        .eq('role','user');
+      if(r.error || r.count==null) return false;
+      return r.count < NEW_ACCOUNT_MSG_THRESHOLD;
+    }catch(e){ return false; }
+  }
+
+  function showOpusWarnModal(){
+    $('opusWarnBalance').textContent = _prevBalance!==null ? _prevBalance : '—';
+    $('opusWarnModal').classList.add('show');
+    return new Promise(function(resolve){
+      var modal=$('opusWarnModal'), cancelBtn=$('opusWarnCancel'), proceedBtn=$('opusWarnProceed'), switchBtn=$('opusWarnSwitch');
+      function done(choice){
+        modal.classList.remove('show');
+        cancelBtn.removeEventListener('click', onCancel);
+        proceedBtn.removeEventListener('click', onProceed);
+        switchBtn.removeEventListener('click', onSwitch);
+        modal.removeEventListener('click', onBackdrop);
+        resolve(choice);
+      }
+      function onCancel(){ done('cancel'); }
+      function onProceed(){ done('proceed'); }
+      function onSwitch(){ done('switch'); }
+      function onBackdrop(e){ if(e.target===modal) done('cancel'); }
+      cancelBtn.addEventListener('click', onCancel);
+      proceedBtn.addEventListener('click', onProceed);
+      switchBtn.addEventListener('click', onSwitch);
+      modal.addEventListener('click', onBackdrop);
+    });
+  }
+
+  $('composer').addEventListener('submit',async function(e){
     e.preventDefault();
     var input=$('input'), text=input.value.trim();
     if(!text) return;
+
+    if(await shouldWarnBeforeOpusSend()){
+      var choice=await showOpusWarnModal();
+      localStorage.setItem(OPUS_WARN_LS_KEY,'1');
+      if(choice==='cancel') return;
+      if(choice==='switch') setModel('sonnet');
+    }
+
     input.value=''; input.style.height='auto';
     var atts=pendingAttachments.slice();
     pendingAttachments=[];
