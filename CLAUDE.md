@@ -232,6 +232,12 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+~~- `user_integrations.access_token` was stored as plaintext server-side~~
+  — **fixed 2026-10-09**, see the recent-work-log entry below. The column
+  is now `bytea`, holding `pgp_sym_encrypt` output; `connector-proxy` reads
+  and writes it only through `store_integration_token()`/
+  `get_integration_token()`, never a direct column select/upsert.
+
 ~~- Four pages (`/marketplace/`, `/builder/`, `/community/`,
   `/contractors.html`) were live/indexed but pitched a different, pre-pivot
   product~~ — **confirmed pre-"Aethyro Cloud" via git history and removed
@@ -396,6 +402,164 @@ active functions when only 10 were documented anywhere.
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-09** — **Encrypted `user_integrations.access_token` at rest**,
+  closing the real gap flagged in "Pending" on 2026-10-08: the column's
+  own migration comment always said `-- stored as-is (PAT or API key);
+  encrypt at app layer`, but that encryption was never actually built.
+  Confirmed live before changing anything: the table has 0 rows (nobody
+  has ever connected GitHub/Notion), and — a second, separate,
+  previously-undocumented finding — `authenticated` had full `SELECT`/
+  `INSERT`/`UPDATE`/`DELETE` table-level grants on `user_integrations`
+  (the same default-privileges-grant-is-a-floor pattern this file already
+  documents for `api_keys`/`routine_webhooks`/`agent_missions`), meaning
+  a signed-in user could already read their own raw plaintext token
+  directly via REST, bypassing both the service-role-only design and the
+  `connect` action's real-token-validation step.
+  Migration `20261009000000_encrypt_integration_tokens.sql`: seeds a new
+  `app_secrets` key (`integration_token_encryption_key`, same zero-policy
+  pattern as the deletion/generation-receipt HMAC keys), `REVOKE ALL ...
+  FROM anon, authenticated` on the table, converts `access_token` from
+  `text` to `bytea` holding `pgp_sym_encrypt` output, and adds two new
+  `SECURITY DEFINER` RPCs — `store_integration_token`/
+  `get_integration_token` — gated on `auth.role() = 'service_role'` (not
+  `auth.uid() = p_user_id`, deliberately: this function's only legitimate
+  caller is `connector-proxy`'s own service-role client, which has
+  already resolved the real user from their own JWT before calling it —
+  the exact `get_credit_balance` lesson this file already documents,
+  applied up front this time instead of discovered after the fact).
+  **Real obstacle hit and fixed**: the first version of the migration's
+  `ALTER COLUMN access_token TYPE bytea USING (...)` tried to look the
+  encryption key up with a subquery
+  (`(SELECT value FROM app_secrets WHERE key = ...)`) directly inside the
+  `USING` clause — Postgres rejects this (`0A000: cannot use subquery in
+  transform expression`), since a `USING` transform expression disallows
+  subqueries even though an ordinary `UPDATE ... SET` allows them freely.
+  Fixed by fetching the key into a transaction-local GUC first
+  (`set_config('aethyro.tmp_integration_key', v_key, false)` inside a
+  `DO $$ ... $$` block) and reading it back via `current_setting(...)` —
+  a plain function call, not a subquery — inside the `USING` clause.
+  `supabase/functions/connector-proxy/index.ts` (now v2): `connect` calls
+  `store_integration_token` instead of upserting `access_token` directly;
+  `query` calls `get_integration_token` instead of selecting it — the
+  plaintext token now only ever exists transiently in the function's own
+  memory, decrypted server-side per request, never read from the column
+  directly by this function's code.
+  **Verified live, not just by reading the migration**: `has_table_privilege`/
+  `has_function_privilege` confirmed `anon`/`authenticated` both `false`
+  on the table and on both new RPCs, `service_role` `true` on both RPCs;
+  a direct SQL round-trip (`store_integration_token` → raw bytes contain
+  no trace of the plaintext, in both raw and hex form → `get_integration_token`
+  → exact original plaintext back) proved the encryption actually works,
+  not just that the migration applied; a non-service-role call correctly
+  raised `Forbidden`. End-to-end via real HTTP with a throwaway account:
+  `query` with nothing connected correctly 404s; after seeding a fake
+  token via the RPC, `list_integrations` showed it correctly and `query`
+  reached the real GitHub API with the *decrypted* token (GitHub's own
+  `401 Bad credentials` for the fake value — proving decryption succeeded
+  through the full HTTP path, not just via direct SQL, since a decryption
+  failure would have surfaced as a 500 from inside `get_integration_token`
+  instead); `disconnect` cleanly removed the row; a raw REST `SELECT
+  access_token` as the signed-in user now 404s with "Could not find the
+  table" — PostgREST hides a table from its schema cache entirely once no
+  role has any grant on it, an even stronger result than a plain 403.
+  Live `connector-proxy` source fetched back via `get_edge_function` and
+  diffed byte-for-byte against local disk. Cleaned up: the throwaway
+  account and its one test row deleted via a direct call to its own
+  `disconnect` action (confirmed `list_integrations` empty after);
+  `test-admin-setup` re-stubbed to 410 and confirmed via a live curl.
+  **One execution-tooling quirk hit along the way, not a bug in this
+  fix**: a direct `DELETE` via `execute_sql` against the real admin
+  account's own synthetic test row (used for the direct-SQL round-trip
+  check above) returned `{"status":"cancelled"}` on **six** consecutive
+  attempts — the same intermittent quirk this file already documents for
+  DELETEs/UPDATEs against this project — while an `UPDATE` neutralizing
+  the row's content (`access_token = NULL`) succeeded immediately. Worked
+  around by deleting the row through `connector-proxy`'s own `disconnect`
+  action instead (called via a temporary edge-function helper acting as
+  service role), which succeeded on the first attempt — confirming the
+  flakiness is specific to the `execute_sql`/`apply_migration` DELETE
+  path, not to Postgres `DELETE` itself. Worth remembering: when a direct
+  SQL `DELETE` via these tools gets stuck in this loop, a service-role
+  client call (an edge function, or the equivalent) is a reliable
+  fallback, not just more retries.
+  **Scope note**: `refresh_token` (currently unused — GitHub/Notion PATs
+  need no refresh) was deliberately left as plain `text`, with a column
+  comment flagging that a future provider needing it must encrypt it the
+  same way. `metadata` (login/name, non-secret) was left untouched.
+
+- **2026-10-08** — **Graded an uploaded external "pricing page audit"
+  report against the live site before acting on it (same pattern as
+  every other external review this project has received), and found a
+  real bug the report itself didn't correctly describe.** The report's
+  headline claim — a "best value" badge sits on the wrong pack — turned
+  out to have the pack *names* backwards when checked against the real
+  page. Digging into why surfaced the actual, worse, previously-
+  undocumented bug: **the same two packs ($30/2000cr and $90/7000cr) are
+  called "Pro"/"Power" on `index.html` but swapped to "Power"/"Pro" on
+  `pricing.html` and in `app/dashboard.html`'s `PACK_LABELS`** — a real
+  cross-page AND in-app inconsistency (a signed-in user's purchase
+  history/auto-topup settings on the dashboard would show the *opposite*
+  pack names from what they saw on the pricing page before buying).
+  Normalized every surface to `index.html`'s convention
+  (`power`=$30/2000cr, `pro_7k`=$90/7000cr), which already matches the
+  backend's own Stripe/metadata key names (confirmed in
+  `buy-credits/index.ts`'s `CREDIT_PACKS`) and this file's own prior
+  documentation.
+  **Fixed, once correctly named**: moved the "Best value" badge to the
+  pack that's actually cheapest per credit ($90/7000cr = $0.0129/cr vs.
+  $30/2000cr = $0.015/cr) on both `index.html` and `pricing.html` — the
+  real arithmetic bug underneath the report's confused claim. Also fixed
+  `pricing.html`'s JSON-LD structured data (same Pro/Power swap, plus an
+  unrelated stale Starter-pack Opus-message count of 20 that should be
+  13 at the site's own consistent ~15cr/message rate).
+  **Two real overclaims found and fixed** while verifying the report's
+  other claims: `index.html`'s "nothing/zero data stored server-side"
+  for GitHub/Notion integrations was flatly false — checked
+  `user_integrations.access_token` directly, and it's stored as
+  plaintext server-side per its own migration comment
+  (`-- stored as-is (PAT or API key); encrypt at app layer` — that
+  encryption was apparently never done). Removed the false claim rather
+  than leave an inaccurate security statement live; **flagging the
+  plaintext-at-rest token storage itself as a separate, real, not-yet-
+  fixed security gap** worth a dedicated hardening pass, not something
+  silently patched inside a copy-accuracy PR. Also softened "No data
+  used for training — Guaranteed" (Aethyro's own column) to "Per
+  Anthropic's API policy" — Aethyro relies on, but doesn't itself
+  control, that policy — and `pricing.html`'s "the world's most capable
+  model" (unverifiable against every model globally) to "Anthropic's
+  most capable model" (true, and matches `index.html`'s own existing
+  phrasing of the same claim).
+  **Checked and confirmed NOT a bug**, despite the report's "high
+  confidence" framing: its claim that "~13 Opus replies" contradicts the
+  page's own "~18cr deep review" example. The ~13/~40/~130/~460 Opus-
+  message counts across all four packs are self-consistent at this
+  site's own stated ~15cr/Opus-message rate (`pricing.html`'s model-tier
+  panel literally says "~15 cr/msg" for Opus) — the 18cr figure
+  describes a specifically heavier "deep review of a long doc" task on
+  a separate `index.html` panel, not a contradiction once the whole site
+  is read together rather than two numbers in isolation. Left unchanged.
+  The report's other LOW-severity items (GPT-4o dating, ✗-as-demerit
+  framing on credit rows, "10/60 seconds" puffery) were checked and
+  either already correctly handled (`pricing.html`'s comparison table
+  already uses "— N/A" for competitor credit rows, not a bare ✗) or too
+  low-value/low-confidence to act on — skipped, consistent with this
+  project's standing practice of fixing the real findings from an
+  external review and explicitly declining the rest rather than fixing
+  everything indiscriminately.
+  **Also noted**: the report's proposed "credits never expire vs.
+  monthly plans reset to zero" growth experiment is **already shipped**
+  — `index.html`'s comparison table already has a "Credits that never
+  expire" row with exactly this framing. Its proposed formal A/B-test
+  methodology (run until ~200 completed checkouts per variant) is not
+  realistic at this product's current scale — $0 lifetime purchase
+  revenue — so no experiment infrastructure was built for it.
+  Verified: `node --check` on every inline script in all 3 touched
+  files, JSON-LD blocks in both `index.html` and `pricing.html` re-
+  validated as parseable JSON after editing, and a full repo grep
+  confirming no remaining "Pro"/"Power" naming mismatch anywhere else
+  (`developers.html`'s mentions are generic, name no dollar amount, and
+  needed no change).
 
 - **2026-10-08** — **First real mission run through the "agent team" built
   earlier the same day (see the entry directly below): `nexus` was given

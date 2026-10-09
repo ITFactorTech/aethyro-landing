@@ -143,16 +143,17 @@ serve(async (req) => {
       return err(`Token validation failed: ${(e as Error).message}`);
     }
 
-    const { error: upsertErr } = await supaAdmin
-      .from("user_integrations")
-      .upsert({
-        user_id: user.id,
-        provider,
-        access_token: token,
-        metadata,
-      }, { onConflict: "user_id,provider" });
+    // Token is encrypted server-side inside store_integration_token (pgp_sym_encrypt)
+    // -- it never touches the access_token column directly from this function's own
+    // code. See 20261009000000_encrypt_integration_tokens.sql.
+    const { error: storeErr } = await supaAdmin.rpc("store_integration_token", {
+      p_user_id: user.id,
+      p_provider: provider,
+      p_token: token,
+      p_metadata: metadata,
+    });
 
-    if (upsertErr) return err(upsertErr.message, 500);
+    if (storeErr) return err(storeErr.message, 500);
     return ok({ connected: true, provider, metadata });
   }
 
@@ -171,17 +172,17 @@ serve(async (req) => {
   if (action === "query") {
     if (!provider) return err("provider required");
 
-    const { data: integration } = await supaAdmin
-      .from("user_integrations")
-      .select("access_token, metadata")
-      .eq("user_id", user.id)
-      .eq("provider", provider)
-      .single();
+    // Decrypted server-side inside get_integration_token (pgp_sym_decrypt) --
+    // the plaintext token only ever exists transiently in this function's
+    // memory, never read from the column directly.
+    const { data: token, error: tokenErr } = await supaAdmin.rpc("get_integration_token", {
+      p_user_id: user.id,
+      p_provider: provider,
+    });
 
-    if (!integration?.access_token)
+    if (tokenErr || !token)
       return err(`No ${provider} integration found. Connect it first.`, 404);
 
-    const token = integration.access_token;
     const { operation } = body;
 
     try {
