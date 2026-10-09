@@ -924,7 +924,7 @@
       </div>
       <div style="padding:1rem 1.1rem;background:var(--s1);border:1px solid var(--b1);border-radius:12px">
         <div style="font-family:var(--mono);font-size:.68rem;color:var(--orange);text-transform:uppercase;letter-spacing:.04em">Integrations</div>
-        <p style="font-size:.82rem;color:var(--t2);margin-top:.4rem;line-height:1.55">Read-only GitHub and Notion access via your own token — Claude lists repos and browses pages in-context, nothing stored server-side.</p>
+        <p style="font-size:.82rem;color:var(--t2);margin-top:.4rem;line-height:1.55">Read-only GitHub and Notion access via your own personal access token — Claude lists repos and browses pages in-context.</p>
       </div>
     </div>
     <p style="text-align:center;margin-top:1.5rem">
@@ -1037,7 +1037,7 @@
         <div class="bento-icon" style="color:#fcd34d"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 15 15 9"/><path d="M11 6.5 13 4.4a3.6 3.6 0 0 1 5.1 5.1L16 11.6"/><path d="M13 17.5 11 19.6a3.6 3.6 0 0 1-5.1-5.1L8 12.4"/></svg></div>
         <h3>GitHub &amp; Notion</h3>
         <p>Connect your GitHub or Notion with a personal access token. Claude can list repos, read issues, search code, and browse your Notion pages — in-context, without copy-pasting.</p>
-        <div style="margin-top:1rem;font-family:var(--mono);font-size:.68rem;color:#fcd34d">PAT-based · read-only · zero data stored server-side</div>
+        <div style="margin-top:1rem;font-family:var(--mono);font-size:.68rem;color:#fcd34d">PAT-based · read-only · revoke anytime from your provider</div>
       </div>
       <div class="bento-card" style="background:var(--s1);border-color:rgba(0,212,255,.1);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;min-height:200px">
         <div style="color:var(--cyan);margin-bottom:.85rem"><svg class="ic" style="width:2rem;height:2rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2c3 1.5 5 5 5 9 0 2-1 4-2 5l-1 2-2-1-2 1-1-2c-1-1-2-3-2-5 0-4 2-7.5 5-9Z"/><circle cx="12" cy="9" r="1.6"/><path d="M8.5 16.5 6 19M15.5 16.5 18 19"/></svg></div>
@@ -1318,8 +1318,7 @@ patterns are well established.</div>
         <a href="/app/signup.html?next=buy&amp;pack=value" class="price-cta ghost">Buy credits →</a>
       </div>
 
-      <div class="price-card featured">
-        <div class="badge b-featured" style="width:fit-content">Best value</div>
+      <div class="price-card">
         <div class="price-name">Power</div>
         <div class="price-for">// heavy users</div>
         <div class="price-amt">$30<span>/pack</span></div>
@@ -1328,10 +1327,11 @@ patterns are well established.</div>
           <li>✓ Claude Opus 5</li>
           <li>✓ Never expire</li>
         </ul>
-        <a href="/app/signup.html?next=buy&amp;pack=power" class="price-cta orange">Buy credits →</a>
+        <a href="/app/signup.html?next=buy&amp;pack=power" class="price-cta ghost">Buy credits →</a>
       </div>
 
-      <div class="price-card">
+      <div class="price-card featured">
+        <div class="badge b-featured" style="width:fit-content">Best value</div>
         <div class="price-name">Pro</div>
         <div class="price-for">// teams &amp; professionals</div>
         <div class="price-amt">$90<span>/pack</span></div>
@@ -1340,7 +1340,7 @@ patterns are well established.</div>
           <li>✓ Claude Opus 5</li>
           <li>✓ Never expire</li>
         </ul>
-        <a href="/app/signup.html?next=buy&amp;pack=pro_7k" class="price-cta ghost">Buy credits →</a>
+        <a href="/app/signup.html?next=buy&amp;pack=pro_7k" class="price-cta orange">Buy credits →</a>
       </div>
 
     </div>
@@ -1425,7 +1425,7 @@ patterns are well established.</div>
           </tr>
           <tr>
             <td>No data used for training</td>
-            <td class="col-ours"><span class="check">✓</span> Guaranteed</td>
+            <td class="col-ours"><span class="check">✓</span> Per Anthropic's API policy</td>
             <td><span class="partial">Opt-out required</span></td>
             <td><span class="check">✓</span> Guaranteed</td>
           </tr>
