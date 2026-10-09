@@ -388,6 +388,88 @@ active functions when only 10 were documented anywhere.
 - GA4: `G-BE319Z71PD` on every page
 - Production domain: `aethyro.com`
 
+## CI/CD
+
+- **Frontend**: Cloudflare Workers auto-deploys on every `git push` to
+  `main` — unchanged, no CI involvement.
+- **Supabase backend** (`.github/workflows/deploy-supabase.yml`, added
+  2026-10-09): every push to `main` touching `supabase/**` runs
+  `supabase db push` (apply pending migrations — idempotent, safe to run
+  on every matching push) then `supabase functions deploy` (redeploys
+  **all** committed edge functions, unconditionally — not a diff of which
+  changed). Deploying everything every time is deliberate: it's simpler,
+  and it's the only way a change to a `_shared/` module (e.g.
+  `_shared/packs.ts`) correctly reaches every function that imports it.
+  This closes the exact gap that caused the PR #97 auto-model-routing
+  regression (committed source correct, live function silently stale for
+  days — see the 2026-09-28 recent-work-log entry below) — a merge that
+  only touches git history is no longer a different thing from a deploy.
+  **Requires a `SUPABASE_ACCESS_TOKEN` repo secret** (Settings → Secrets
+  and variables → Actions → New repository secret) — a personal access
+  token generated at https://supabase.com/dashboard/account/tokens with
+  at least the scope to manage this project
+  (`uzmdqbtflcpikjdrggqc`/"SovereignNation"). This is a manual, one-time
+  step only a human with dashboard access can do; no MCP tool or edge
+  function can generate it. Until that secret exists, this workflow's
+  runs will fail at the `supabase link` step — that's expected, not a
+  bug in the workflow itself, and doesn't block the frontend's own
+  auto-deploy (which is entirely separate).
+  `supabase/config.toml` (added same day) is what makes
+  `supabase functions deploy` deploy every function with its correct
+  `verify_jwt` setting instead of the CLI's/API's own `true` default —
+  pulled live from `list_edge_functions` on 2026-10-09 for all 24
+  committed functions. If a function's `verify_jwt` is ever changed live
+  (e.g. via the dashboard), update this file in the same change or the
+  next CI deploy will silently revert it.
+- **Pack-config consistency check** (`.github/workflows/pack-config-check.yml`
+  + `.github/scripts/check-pack-config.mjs`, added 2026-10-09): runs on
+  every PR touching `pack-config.js` or
+  `supabase/functions/_shared/packs.ts`, fails the build if a pack's
+  price or credit amount differs between the two. See "Credit-pack
+  pricing: single source of truth" below for why these two files exist
+  and what this check does and doesn't cover.
+- **Self-healing ceiling, by design**: both workflows stop at "detect
+  drift / keep deploys current" — neither auto-merges a PR or
+  auto-fixes a mismatch. That's intentional for a payments-adjacent app;
+  see `site-guardian`'s own hard boundary ("never auto-merge, never ship
+  an unverified fix") for the same reasoning applied the same way here.
+
+## Credit-pack pricing: single source of truth
+
+Pack price/credits data was hardcoded in 6 separate places before
+2026-10-09 (`buy-credits`, `auto-topup-charge`, `setup-auto-topup`,
+`index.html`, `pricing.html`, `app/dashboard.html`'s `PACK_LABELS`) — the
+same duplication that caused the real Pro/Power naming-swap bug fixed in
+PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
+
+- **`supabase/functions/_shared/packs.ts`** — backend source of truth
+  (`priceId`, `credits`, `cents` per pack key). Imported by `buy-credits`,
+  `auto-topup-charge`, `setup-auto-topup`. If you add/change a pack here,
+  a real Stripe Price must exist first (Stripe Prices are immutable — a
+  price change is always a new Price object, never an edit).
+- **`/pack-config.js`** (repo root) — frontend source of truth (`label`,
+  `price`, `credits`, `note` per pack key; no `priceId`, since that's
+  server-only). Loaded by `index.html`, `pricing.html`, and
+  `app/dashboard.html`. `dashboard.html`'s `CREDIT_PACKS`/`PACK_LABELS`
+  are now derived from `window.AETHYRO_PACKS` at runtime rather than
+  separately hardcoded. `index.html`/`pricing.html` load the script for
+  future-proofing but still render their pricing cards as static markup —
+  not a full data-driven re-render, since that would have been a bigger
+  change than what was asked.
+- The two files are **not** auto-synced — `pack-config.js` has no
+  `priceId`, so it can't just import from the backend file, and a shared
+  module importable from both a Deno edge function and a browser `<script
+  src>` tag isn't a clean fit for this codebase's no-build-step
+  architecture. Instead, the pack-config-check CI job (above) catches
+  drift between them on every relevant PR.
+- **Found and fixed the same bug class while building this**: `index.html`
+  called the $10/600cr pack "Value" in 5 places while `pricing.html` and
+  `app/dashboard.html` both already said "Standard" — same root cause as
+  the Pro/Power swap, just not yet caught. Made "Standard" canonical
+  (2 of 3 surfaces already agreed; `dashboard.html` shows real purchase
+  history, the highest-stakes surface) and fixed `index.html`'s 5
+  references.
+
 ## Conventions
 
 - CSS tokens (dark theme, used across `app/*.html`): `--text:#f0f0f0`,
@@ -403,6 +485,56 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-09** — **First concrete step toward a self-healing site,
+  from the user asking what that would take: centralized credit-pack
+  pricing into a single source of truth per side (frontend/backend) and
+  added the first tier of auto-deploy CI**, after an exploratory
+  discussion where a 4-tier roadmap was proposed (1: auto-deploy-on-merge;
+  2: scheduled unattended `site-guardian` sweeps, already exists; 3:
+  pre-deploy automated testing against Supabase DB branches; 4:
+  auto-rollback/canary) and the user picked "tier 1 + the pack-config CI
+  check" as the first PR. Full detail on the pack-pricing centralization
+  itself (and the real Value/Standard naming-drift bug found and fixed
+  along the way) in "Credit-pack pricing: single source of truth" above;
+  full detail on both new CI workflows and the required one-time secret
+  in "CI/CD" above.
+  **Explicitly scoped out, matching the roadmap's own stated ceiling**:
+  no tier 2-4 work in this PR (tier 2 already exists as `site-guardian`;
+  tiers 3-4 are real future work, not attempted here), and no full
+  data-driven re-render of `index.html`/`pricing.html`'s pricing cards
+  from `pack-config.js` (they still render static markup; only
+  `dashboard.html` derives its pack UI from the shared config at
+  runtime) — judged bigger scope than what was asked for this pass.
+  **Verified**: all three backend functions
+  (`buy-credits`→v16/v18, `auto-topup-charge`→v3, `setup-auto-topup`→v3)
+  deployed live and diffed byte-for-byte against local disk; all 4 pack
+  keys re-verified live post-refactor (real `checkout.stripe.com` URLs
+  for all 4 via `buy-credits`/`setup-auto-topup`, `auto-topup-charge`
+  verified via a temporary internal-key proxy in `test-admin-setup`
+  showing `pack.cents` correctly resolving before hitting Stripe's
+  real payment-method check) — zero behavior change from the
+  pre-refactor hardcoded literals, `test-admin-setup` re-stubbed to 410
+  after. Frontend changes verified via a locally-served copy with
+  Playwright: `window.AETHYRO_PACKS` loads correctly on `index.html`/
+  `pricing.html`, zero "Value" text remains anywhere, zero console
+  errors; `dashboard.html`'s IIFE-scoped pack-derivation logic verified
+  by running the exact derivation lines against `pack-config.js` in
+  isolation and confirming byte-identical output to the original
+  hardcoded `CREDIT_PACKS`/`PACK_LABELS` values (couldn't drive the real
+  authenticated dashboard UI without a live Supabase session in this
+  verification pass, so the logic itself was verified directly instead).
+  The new `check-pack-config.mjs` CI script was test-run against both
+  the real (matching) files and a deliberately-drifted scratch copy —
+  passes clean on the real files, correctly fails with a clear price-
+  mismatch message on the drifted copy.
+  **Not yet done, blocking the auto-deploy workflow from actually
+  running**: the `SUPABASE_ACCESS_TOKEN` repo secret doesn't exist yet —
+  this is a manual step only a human with Supabase dashboard access can
+  do (generate a personal access token at
+  supabase.com/dashboard/account/tokens, add it as a GitHub repo
+  secret). See "CI/CD" above for the exact steps. Until it's added, the
+  deploy workflow's runs will fail at `supabase link` — expected, not a
+  bug, and the frontend's own auto-deploy is unaffected either way.
 - **2026-10-09** — **`site-guardian` sweep, user-requested. Swept clean —
   zero new issues found.** Full checklist run against the state left by
   PRs #150/#151 (the `user_integrations` encryption fix and the

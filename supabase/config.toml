@@ -1,0 +1,87 @@
+# Supabase project config for Aethyro (SovereignNation).
+#
+# Primarily exists so CI (`supabase functions deploy`, see
+# .github/workflows/deploy.yml) deploys every function with the correct
+# `verify_jwt` setting. Without this file, `deploy_edge_function`-style calls
+# default an omitted `verify_jwt` to `true` — a real, previously-hit footgun
+# (see CLAUDE.md's "deploy_edge_function's verify_jwt defaults to true"
+# gotcha, which silently broke send-low-credit-email once already). Listing
+# every function's real setting here means CI can never repeat that mistake.
+#
+# Values below were pulled live from `list_edge_functions` on 2026-10-09 and
+# must match the project's real, currently-deployed settings. If you change
+# a function's verify_jwt live (e.g. via the dashboard), update this file in
+# the same change, or the next CI deploy will silently revert it.
+project_id = "uzmdqbtflcpikjdrggqc"
+
+[functions.activate-license]
+verify_jwt = true
+
+[functions.api-chat]
+verify_jwt = false
+
+[functions.auto-topup-charge]
+verify_jwt = false
+
+[functions.buy-credits]
+verify_jwt = false
+
+[functions.chat]
+verify_jwt = true
+
+[functions.check-leaked-password]
+verify_jwt = false
+
+[functions.connector-proxy]
+verify_jwt = true
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.customer-portal]
+verify_jwt = true
+
+[functions.embed-content]
+verify_jwt = true
+
+[functions.redeem-referral]
+verify_jwt = true
+
+[functions.run-agent-task]
+verify_jwt = true
+
+[functions.run-routines]
+verify_jwt = true
+
+[functions.send-low-credit-email]
+verify_jwt = false
+
+[functions.send-newsletter]
+verify_jwt = false
+
+[functions.send-onboarding-email]
+verify_jwt = false
+
+[functions.send-routine-result-email]
+verify_jwt = false
+
+[functions.send-welcome-email]
+verify_jwt = false
+
+[functions.setup-auto-topup]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.team-manage]
+verify_jwt = false
+
+[functions.trial-chat]
+verify_jwt = false
+
+[functions.validate-license]
+verify_jwt = false
+
+[functions.webhook-routine-trigger]
+verify_jwt = false

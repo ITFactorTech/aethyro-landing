@@ -1,3 +1,7 @@
+// buy-credits v16 — pack prices/credits now imported from
+// ../_shared/packs.ts, the single source of truth shared with
+// auto-topup-charge and setup-auto-topup (and, for display, pack-config.js
+// on the frontend). No more locally-duplicated CREDIT_PACKS literal.
 // buy-credits v15 — CORS was a bare "*", letting any website make
 // authenticated cross-origin calls against this billed endpoint. Locked to
 // aethyro.com (+ this project's Cloudflare preview subdomains) via a
@@ -10,26 +14,16 @@
 // not be used from the frontend: a Payment Link checkout carries no
 // supabase_user_id, so stripe-webhook cannot attribute the payment to an
 // account and the buyer is charged without receiving credits.
-//
-// Pack prices and credit amounts are the ones advertised on the marketing site
-// (index.html price grid and pricing.html). Keep all three in sync.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
+import { CREDIT_PACKS } from "../_shared/packs.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2024-04-10" });
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
-
-// Keys match the `credit_pack` metadata on the corresponding Stripe prices.
-const CREDIT_PACKS: Record<string, { priceId: string; credits: number }> = {
-  starter: { priceId: "price_1UJDr4LSbMeMK2S0BwCPsiq0", credits: 200 },  // $4
-  value:   { priceId: "price_1UJDr6LSbMeMK2S0WhJstVjM", credits: 600 },  // $10
-  power:   { priceId: "price_1UJDr9LSbMeMK2S0VPdF6Roa", credits: 2000 }, // $30
-  pro_7k:  { priceId: "price_1UJDrBLSbMeMK2S0vhpUVXCw", credits: 7000 }, // $90
-};
 
 const ALLOWED_ORIGINS = ["https://aethyro.com", "https://www.aethyro.com"];
 const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-aethyro-landing\.[a-z0-9-]+\.workers\.dev$/;
