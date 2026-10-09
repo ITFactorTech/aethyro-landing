@@ -515,6 +515,68 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-09** — **Added a pre-send confirmation before a brand-new
+  account's explicit, costly Opus pick** (`app/chat.html`), after pulling
+  real usage data to answer "what's next for Aethyro.com" rather than
+  brainstorming generically. Found a sharp, previously-undocumented churn
+  pattern: several real accounts (`aaandrej231@gmail.com`,
+  `zbulu11@gmail.com`, `karimbakshi@gmail.com`, and others) burned 100-234
+  credits — most or all of their 200-credit free grant — via 2-6 Opus
+  messages within a single ~10-minute session on day one, then never
+  returned. Checked `generation_receipts.requested_model` before building
+  anything: the one user who signed up after that feature shipped
+  (`aaandrej231`) showed `requested_model:"opus"` on every one of their 5
+  messages — an **explicit** pick, not `model:"auto"` resolving to Opus —
+  which ruled out extending the existing `AUTO_MODEL_CREDIT_FLOOR` pattern
+  (that only ever caps `auto`, never an explicit choice) and meant a naive
+  port of that fix would have silently done nothing for the real failure
+  cases. Surfaced the fork to the user rather than guessing; they picked
+  "warn before an expensive explicit send" — keep the project's standing
+  "never override an explicit choice" rule intact, just make sure a new
+  account can't be blindsided.
+  Added a one-time confirmation modal (`#opusWarnModal`, styled to match
+  the existing `.workspace-modal-backdrop` family used by the referral/
+  webhook/workspace-context/receipt modals) that fires before `send()` is
+  called when: the account is signed in, `currentModel==='opus'`
+  (explicit — `auto` resolving to Opus never triggers this), the balance
+  is still above the existing low-balance banner's own 80-credit Opus
+  threshold (that banner already covers the lower-balance case more
+  urgently — this modal only fills the gap *before* it would show), the
+  account has sent fewer than 6 real user messages ever (a direct,
+  RLS-respecting `messages`-joined-to-`conversations` count query —
+  matches the real failure window, which was messages 1-6), and the modal
+  hasn't already fired once in this browser (`localStorage
+  aethyro_opus_cost_warn_v1` — "one-time," per the user's own framing, not
+  a persistent nag). Three real choices, no silent override: "Switch to
+  Sonnet & send" (primary — calls a new shared `setModel()`, extracted
+  from the model-selector's own click handler so both paths update the
+  active-button UI/localStorage/cloud-note identically), "Send with Opus
+  anyway" (proceeds exactly as before), "Cancel" (returns before `send()`
+  is ever called — the typed message is preserved in the input, nothing
+  is sent, no credits move).
+  **Verified live end-to-end**, not just code review, using two real
+  throwaway accounts (`test-admin-setup`, redeployed and re-stubbed to 410
+  after) driven through Playwright against a locally-served copy of
+  `app/chat.html` hitting the real backend: a fresh 0-message account with
+  a 200-credit balance correctly got the modal on its first explicit Opus
+  send (balance shown correctly, message **not** sent — input value
+  preserved, no bubble added); clicking Cancel closed it and set the
+  one-time flag; a second attempt in the same browser correctly did **not**
+  show it again; a separate account seeded with 6 real `messages` rows
+  (direct SQL, matching the real churn window) correctly got **no** modal
+  at all and sent normally; two fresh-profile runs confirmed both
+  remaining choices work — "Switch to Sonnet & send" correctly flipped the
+  active model button to Sonnet, persisted `aethyro_model:"sonnet"`, and
+  sent; "Send with Opus anyway" correctly left the model on Opus and sent.
+  `node --check` on all 3 inline `<script>` blocks, clean. Cleaned up both
+  throwaway accounts (the second one's 6 seeded `messages` rows cascaded
+  correctly), confirmed zero orphaned rows across `profiles`/
+  `credit_ledger`/`conversations`/`messages`/`auth.users`, `test-admin-setup`
+  re-stubbed to 410 and confirmed via a live curl.
+  **Scope note**: frontend-only — no migration, no edge-function change.
+  `chat`'s own billing/routing logic is untouched; this only adds a
+  client-side pre-send gate in front of the existing explicit-model path.
+
 - **2026-10-09** — **Added a hero-image polish pass (code-drawn, not a raster
   image) and an ongoing real-testimonial collection mechanism**, both from
   the same conversation. The hero piece: generated 3 AI hero-art candidates
