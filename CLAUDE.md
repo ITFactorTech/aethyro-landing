@@ -229,57 +229,38 @@ it to the `?buy=` pattern instead.
   every redeploy of an already-`verify_jwt: false` function** — check
   `get_edge_function` or `list_edge_functions` for the current value
   first if unsure, don't rely on the param being additive/optional.
+- **The `apply_migration` tool stamps `schema_migrations.version` with the
+  call's own real timestamp — completely independent of whatever
+  filename a migration is later committed under.** This is the root
+  cause of a long-standing, just-reconciled (2026-10-09, see
+  recent-work-log) drift between this repo's `supabase/migrations/`
+  files and what Supabase's own migration-history table actually
+  tracks: every migration in this project's history was applied via
+  this tool (not the Supabase CLI's `db push`), so its *real* tracked
+  version has never matched its local filename's timestamp. Harmless by
+  itself (the live schema is still correct either way), but it means
+  `supabase db push` — including this project's own
+  `deploy-supabase.yml` CI workflow — will refuse to run while any
+  version mismatch exists, since it can't tell a real gap from a
+  harmless renaming apart without a human/agent checking. **Going
+  forward, prefer applying migrations the way CI does (a real
+  `supabase db push`, or at minimum naming migration files to match
+  immediately after an `apply_migration` call by checking
+  `list_migrations` for the version it was just assigned)** rather than
+  letting local filenames drift from the live-tracked version again —
+  the 2026-10-09 reconciliation was a large, forensic, multi-hour fix
+  for exactly this pattern repeating unchecked for over a month.
 
 ## Pending / not yet applied
 
-- **The remote Supabase migration-history table and this repo's
-  `supabase/migrations/` folder have never been in CLI-sync.** Found
-  2026-10-09, the first time `supabase db push` ever ran against this
-  project (the new `deploy-supabase.yml` CI workflow's first real run,
-  after the `SUPABASE_ACCESS_TOKEN` secret was added). It failed with
-  "Remote migration versions not found in local migrations directory",
-  listing 67 versions the remote `supabase_migrations.schema_migrations`
-  table tracks against the repo's 59 committed files. Root cause: every
-  migration in this project's history was written locally under one
-  timestamp, then applied live via a tool (`apply_migration`/the
-  dashboard) that recorded a *different* timestamp as the applied
-  version — so ~51 of the 67 remote versions do correspond to a real
-  local file (same migration, same SQL, just a mismatched version
-  number), not a genuine gap. CI was fixed around this rather than
-  through it (see `deploy-supabase.yml`'s own comment): "Deploy all edge
-  functions" now runs with `if: ${{ !cancelled() }}` so a migration-push
-  failure doesn't block function deploys, since the live schema itself is
-  correct and this is a bookkeeping mismatch, not a missing schema
-  change. `db push` itself is left failing/visible as a flag, not
-  silenced.
-  **Real work still needed, deliberately not attempted yet** (too risky
-  to rush — this rewrites production's migration bookkeeping, not just
-  local files): reconcile the two by renaming local files to the
-  remote-recorded version numbers (content is identical in the ~51
-  matched cases, confirmed by name), or `supabase migration repair` the
-  remainder. One case needs real care, not a mechanical rename: local
-  `20261003135352_lock_down_routine_webhooks_grants.sql` and remote
-  `20261003135352 revoke_anon_grants_routine_webhooks` share the *exact
-  same timestamp* but are different migrations — per this file's own
-  2026-10-03 entry, that date had a mistaken over-broad `REVOKE`
-  immediately followed by a correcting migration at `20261003135419`,
-  and the two version numbers collided. Also unresolved: 4 local files
-  with no name-matched remote version at all —
-  `20260901000008_stripe_webhook_cancelled_spelling_fix.sql`,
-  `20260922000001_newsletter_reactions.sql`,
-  `20260926000001_conversation_sharing.sql`,
-  `20261003210000_lock_down_cleanup_rate_limit_counters.sql` — worth
-  checking individually whether each was ever actually applied to the
-  live schema (not just whether its version number is tracked), since a
-  genuinely-never-applied migration is a real gap, not a naming
-  mismatch. ~7 of the 16 unmatched-by-name remote versions
-  (`pgvector_knowledge`, `subscriptions_licenses`, `onboarding_emails`,
-  `credit_ledger_and_signup_bonus`, `credit_ledger_purchase_idempotency`,
-  `add_trial_chat_usage`, `conversation_persistence`) predate this
-  repo's earliest committed migration (`20260901000001`) and are almost
-  certainly legitimate pre-repo-history baseline schema, not a gap —
-  consistent with this file's own note elsewhere that `handle_new_user()`
-  and other early schema predate migration tracking entirely.
+~~- The remote Supabase migration-history table and this repo's
+  `supabase/migrations/` folder had never been in CLI-sync~~ — **fully
+  reconciled 2026-10-09**, see the recent-work-log entry below for the
+  complete breakdown (38 renames, 26 backfilled files, 2 real schema
+  fixes for previously-broken live features, 16 bookkeeping-only
+  "applied" markers). `supabase/migrations/` and the remote
+  `schema_migrations` table are now a confirmed, verified, exact 1:1
+  match — zero drift either direction.
 
 ~~- `user_integrations.access_token` was stored as plaintext server-side~~
   — **fixed 2026-10-09**, see the recent-work-log entry below. The column
@@ -534,6 +515,105 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-09** — **Fully reconciled the migration-history drift found
+  earlier the same day** (see the two entries directly below), after the
+  user asked what to do next and picked this over continuing the
+  self-healing roadmap. This was NOT a simple rename job — forensic
+  comparison against the real SQL in `supabase_migrations.schema_migrations`
+  (pulled directly via `execute_sql`, not just version numbers via
+  `list_migrations`) surfaced two genuinely serious, previously-
+  undocumented live bugs mixed in with the bookkeeping mismatch.
+  **Found and fixed two real, live, currently-broken features**:
+  `newsletter_reactions` (table + `add_newsletter_reaction()` RPC,
+  committed as `20260922000001_newsletter_reactions.sql`) and
+  `conversations.share_token` (the conversation-sharing feature,
+  committed as `20260926000001_conversation_sharing.sql`) were both
+  **committed to the repo but never actually applied to the live
+  database** — confirmed via direct schema checks (`to_regclass`,
+  `information_schema.columns`) before touching anything. Both are
+  wired into real, currently-shipping pages (`app/newsletter.html`'s
+  reaction buttons call the RPC inside a bare `try{}catch(e){}` that
+  silently swallowed every failure; `app/chat.html`'s "Share" button
+  and `app/share.html` depend on `share_token` and would throw a real
+  error on every use). Applied both for real via `apply_migration`,
+  verified live: `newsletter_reactions_table_exists`/
+  `add_newsletter_reaction_fn_count`/`share_token_col_exists` all
+  flipped from absent to present, and a real anon-key curl to
+  `add_newsletter_reaction` returned a genuine incrementing count (`1`)
+  — not just a schema check.
+  **Root cause of the drift, confirmed**: every migration applied via
+  the `apply_migration` MCP tool (used throughout this project's history
+  instead of the CLI) gets stamped with the *call's own real timestamp*
+  as its `schema_migrations.version` — completely independent of
+  whatever filename/timestamp the migration is later committed under.
+  This explains the entire drift, not just a few stragglers.
+  **Full reconciliation, done file-by-file, not by trusting name/fuzzy
+  matching alone** — every one of the 67 originally-unmatched remote
+  versions was checked against actual local file *content* (normalized
+  hash first, then manual diff for anything not byte-identical):
+  - **38 local files renamed** (`git mv`, content confirmed identical or
+    cosmetically-different-only) to their real remote-tracked version
+    number, keeping each file's own descriptive name suffix.
+  - **26 new files backfilled** with the real, exact SQL pulled from
+    `schema_migrations.statements` for remote versions with no adequate
+    local match — including 3 genuinely pre-repo-history baseline
+    migrations (`pgvector_knowledge`, `subscriptions_licenses`,
+    `onboarding_emails`, May/June 2026) and a cluster of real early
+    hardening migrations from Sep 20-22 that this repo's own
+    `20260901000001-010` files turned out to be a **later, rewritten,
+    not-byte-accurate reimplementation of** (confirmed by real content
+    diffs, not assumption) — including, critically, **a materially
+    different and since-superseded `get_credit_balance()`** (early
+    version: `SECURITY DEFINER`, no ownership check at all; the
+    `20260901000002` file's version has the ownership check and
+    `SECURITY INVOKER`). Also found and backfilled the real resolution
+    of the `20261003135352` version-number collision this file already
+    flagged: the committed
+    `20261003135352_lock_down_routine_webhooks_grants.sql` needed **no
+    change at all** (its version number already coincides with a real
+    tracked remote version, so `db push` already treats it as applied
+    regardless of the literal content difference) — the actual gap was
+    the *second* step, `20261003135419_restore_authenticated_insert_delete_routine_webhooks`,
+    which had no local file and was backfilled.
+  - **16 local-only versions marked "applied" via a direct
+    `INSERT INTO supabase_migrations.schema_migrations`** (the SQL
+    equivalent of `supabase migration repair --status applied`, run
+    through `apply_migration` so the repair itself is tracked too —
+    confirmed via `list_migrations` afterward) rather than renamed,
+    because their content doesn't correspond 1:1 to any single remote
+    version — either a combined/condensed rewrite of 2-3 real remote
+    steps (`20260901000009` combines `force_revoke_get_credit_balance`
+    + `get_credit_balance_security_invoker`; `20260927234300` combines
+    `harden_trigger_welcome_email` + `revoke_public_execute_trigger_welcome_email`),
+    or a corrected final state that superseded a less-secure
+    remote-tracked first draft (`20260928040000`'s anon grant correctly
+    includes the `is_public` column the remote-tracked version is
+    missing; `20260928060000`'s `get_credit_balance` has the
+    `SECURITY DEFINER` + ownership-revoke the remote-tracked version
+    lacks) — both **verified live before trusting this**, not assumed:
+    direct `pg_get_functiondef`/`has_function_privilege`/
+    `information_schema.column_privileges` checks confirmed the live
+    function/grant state matches the local file's (more complete,
+    correct) version, not the remote-tracked (incomplete) one. Marking
+    these "applied" rather than renaming means `supabase db push` will
+    never try to execute their SQL for real — critical for
+    `20260901000002`, since actually re-running it would have silently
+    reintroduced the exact arbitrary-balance-disclosure vulnerability
+    this file's own schema-gotchas section already documents being
+    found and fixed on 2026-10-02/03.
+  **Final verification**: a from-scratch comparison of every local
+  `supabase/migrations/` version prefix against a fresh
+  `list_migrations` pull confirmed an **exact 1:1 match — 86 versions
+  each side, zero gaps in either direction** — and a separate pass
+  confirmed no duplicate version prefixes exist locally. `db push`
+  should now succeed with nothing pending on the next real run.
+  **Scope note**: the one harmless leftover is a test row in
+  `newsletter_reactions` (`issue_slug = '__reconciliation_test__'`) that
+  couldn't be deleted due to the already-documented intermittent
+  `execute_sql` DELETE-cancellation quirk (failed 3 consecutive
+  attempts) — left in place since it can never match a real newsletter
+  issue slug and is otherwise inert, consistent with how this exact
+  quirk has been handled before in this file.
 - **2026-10-09** — **First concrete step toward a self-healing site,
   from the user asking what that would take: centralized credit-pack
   pricing into a single source of truth per side (frontend/backend) and
