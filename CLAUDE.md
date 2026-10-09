@@ -403,6 +403,39 @@ active functions when only 10 were documented anywhere.
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-09** — **Cherry-picked the safe items from an uploaded
+  `cycle-001.patch`** (an external multi-agent "cycle" report's proposed
+  diff, same provenance as the pricing-audit report behind PR #149),
+  after flagging two items in it as problems rather than applying them
+  wholesale: it reverted the already-verified "~13 Opus replies" figure
+  to "~11 deep Opus reviews" on the Starter pack only (would have made
+  the four-pack table internally inconsistent — the other three tiers
+  stayed worded as plain "~Opus messages"), and it built a "For
+  business"/"For developers" hero tab-split that was previously and
+  explicitly deferred (2026-10-06 entry) pending the user's own
+  sign-off, which this patch never obtained. Neither was applied.
+  **What was applied**, confirmed safe on review: (1) `index.html`'s
+  `#compare` table — "GPT-4o" → "Flagship OpenAI model*" with a new
+  footnote ("*Model lineups change — checked Oct 2026.") and the same
+  change to `pricing.html`'s comparison table, since a competitor's
+  current model name is the kind of fact that goes stale silently; (2)
+  `index.html`'s `#compare` table "Credits that never expire" row —
+  bare "✗" → "n/a — no credit packs" for both competitor columns, since
+  neither has a credit-pack concept at all, matching how
+  `pricing.html`'s equivalent table already uses "— N/A" for the same
+  reason (this project's own established non-overclaiming convention,
+  `index.html` was just the one lagging); same fix applied to "Free
+  credits on signup"'s ChatGPT Plus cell ("✗" → "n/a" — Claude.ai Pro's
+  "Limited trial" cell was left as-is, it's a real answer not a cross);
+  (3) softened `index.html`'s "How it works" section — "60 seconds" →
+  "about a minute", "Create an account in 10 seconds" → "...in under a
+  minute" (neither speed claim was ever independently verified, and the
+  vaguer framing costs nothing).
+  Verified via a locally-served copy with Playwright: both new copy
+  strings and all 4 table-cell changes render correctly, zero horizontal
+  overflow, zero console errors; JSON-LD blocks in both files
+  re-validated as parseable JSON and all inline `<script>` blocks in
+  both files re-checked with `node --check` after editing.
 - **2026-10-09** — **Encrypted `user_integrations.access_token` at rest**,
   closing the real gap flagged in "Pending" on 2026-10-08: the column's
   own migration comment always said `-- stored as-is (PAT or API key);
