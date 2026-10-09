@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>Quick feedback — Aethyro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+<style>
+:root{
+  --bg:#0a0a0a;--s1:#111;--s2:#161616;--b1:#222;--b2:#2a2a2a;
+  --text:#f0f0f0;--t2:#a0a0a0;--t3:#666;
+  --orange:#ff4d00;--orange2:#e04400;--cyan:#00d4ff;--green:#22c55e;
+  --font:'Space Grotesk',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  color-scheme:dark;
+}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --bg:#f8f8f6;--s1:#fff;--s2:#f3f3f0;--b1:#e0e0dc;--b2:#d0d0cc;
+  --text:#111;--t2:#444;--t3:#888;color-scheme:light;
+}}
+:root[data-theme="dark"]{color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding:0 1rem 4rem}
+a{color:var(--orange);text-decoration:none}
+a:hover{text-decoration:underline}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:1rem 0;border-bottom:1px solid var(--b1);margin-bottom:2rem;max-width:560px;margin-left:auto;margin-right:auto}
+.brand{display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:1rem;color:var(--text);text-decoration:none}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--orange);display:inline-block}
+
+.wrap{max-width:560px;margin:0 auto}
+.card{background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:1.75rem}
+h1{font-size:1.3rem;font-weight:700;margin-bottom:.5rem}
+.sub{font-size:.88rem;color:var(--t2);line-height:1.6;margin-bottom:1.5rem}
+
+.field{margin-bottom:1.1rem}
+.field label{display:block;font-size:.76rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin-bottom:.4rem;font-family:var(--mono)}
+textarea,input[type=text]{
+  width:100%;background:rgba(0,0,0,.25);border:1px solid var(--b2);border-radius:9px;
+  padding:.7rem .85rem;color:var(--text);font-family:var(--font);font-size:.92rem;outline:none;resize:vertical;
+}
+textarea:focus,input[type=text]:focus{border-color:var(--orange)}
+textarea{min-height:110px}
+.hint{font-size:.72rem;color:var(--t3);margin-top:.35rem;font-family:var(--mono)}
+.consent-row{display:flex;align-items:flex-start;gap:.6rem;margin-bottom:1.5rem}
+.consent-row input{margin-top:.2rem;flex-shrink:0}
+.consent-row label{font-size:.82rem;color:var(--t2);line-height:1.5}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.75rem 1.4rem;border-radius:9px;font-size:.9rem;font-weight:700;border:none;cursor:pointer;font-family:var(--font);width:100%}
+.btn-orange{background:var(--orange);color:#fff}
+.btn-orange:hover{background:var(--orange2)}
+.btn-orange:disabled{opacity:.5;cursor:not-allowed}
+
+.state-msg{text-align:center;padding:2rem 1rem}
+.state-msg .icon{font-size:2rem;margin-bottom:.75rem}
+.state-msg h2{font-size:1.1rem;margin-bottom:.5rem}
+.state-msg p{font-size:.88rem;color:var(--t2);line-height:1.6}
+.error-text{color:#fca5a5;font-size:.82rem;margin-top:.75rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/" class="brand"><span class="dot"></span> Aethyro</a>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <div id="loading" class="state-msg"><p>Loading…</p></div>
+
+    <div id="invalid" class="state-msg" style="display:none">
+      <div class="icon">🔗</div>
+      <h2>This link isn't valid</h2>
+      <p>It may have expired or been used already. If you'd still like to share feedback, just reply to the email directly.</p>
+    </div>
+
+    <div id="already" class="state-msg" style="display:none">
+      <div class="icon">✓</div>
+      <h2>Already got it — thank you</h2>
+      <p>You've already sent a response with this link. Appreciate you taking the time.</p>
+    </div>
+
+    <div id="thanks" class="state-msg" style="display:none">
+      <div class="icon">✓</div>
+      <h2>Thanks — genuinely</h2>
+      <p>Got your feedback. If you said it's okay to use, I'll reach out before putting your name anywhere.</p>
+    </div>
+
+    <form id="feedbackForm" style="display:none">
+      <h1>Quick thought on Aethyro?</h1>
+      <p class="sub">2-3 honest sentences — good, bad, whatever's true. Takes about 30 seconds.</p>
+
+      <div class="field">
+        <label for="content">Your feedback</label>
+        <textarea id="content" maxlength="1000" placeholder="e.g. &quot;Been using it for quick research — the document upload has saved me a bunch of time...&quot;" required></textarea>
+      </div>
+
+      <div class="field">
+        <label for="displayName">How should we credit you? (optional)</label>
+        <input type="text" id="displayName" maxlength="80" placeholder="e.g. first name, initials, or leave blank"/>
+        <div class="hint">Only used if you check the box below.</div>
+      </div>
+
+      <div class="consent-row">
+        <input type="checkbox" id="consent"/>
+        <label for="consent">Okay to use this (with the name above, or anonymously if left blank) on the Aethyro website — I'll confirm with you first either way.</label>
+      </div>
+
+      <button type="submit" class="btn btn-orange" id="submitBtn">Send →</button>
+      <div class="error-text" id="formError" style="display:none"></div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  var SUPABASE_URL = "https://uzmdqbtflcpikjdrggqc.supabase.co";
+  var ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6bWRxYnRmbGNwaWtqZHJnZ3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODQxOTgsImV4cCI6MjA5MTI2MDE5OH0.BwNVBJCbw9SG-ge7PfmoIW8q_33k-ZQlqpDHa2HrvHI";
+  var FN_URL = SUPABASE_URL + '/functions/v1/submit-testimonial';
+
+  var token = new URLSearchParams(location.search).get('t');
+  var loading = document.getElementById('loading');
+  var invalid = document.getElementById('invalid');
+  var already = document.getElementById('already');
+  var thanks = document.getElementById('thanks');
+  var form = document.getElementById('feedbackForm');
+
+  function show(el){
+    [loading, invalid, already, thanks, form].forEach(function(e){ e.style.display = 'none'; });
+    el.style.display = '';
+  }
+
+  if (!token) { show(invalid); }
+  else {
+    fetch(FN_URL + '?token=' + encodeURIComponent(token), {
+      headers: { 'apikey': ANON }
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (!data.valid) show(invalid);
+        else if (data.already_submitted) show(already);
+        else show(form);
+      })
+      .catch(function(){ show(invalid); });
+  }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var content = document.getElementById('content').value.trim();
+    var displayName = document.getElementById('displayName').value.trim();
+    var consent = document.getElementById('consent').checked;
+    var errEl = document.getElementById('formError');
+    errEl.style.display = 'none';
+
+    if (!content) {
+      errEl.textContent = 'Mind adding a line or two first?';
+      errEl.style.display = '';
+      return;
+    }
+
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    fetch(FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON },
+      body: JSON.stringify({ token: token, content: content, display_name: displayName, consent: consent })
+    })
+      .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+      .then(function(res){
+        if (!res.ok) throw new Error((res.data && res.data.error) || 'Something went wrong');
+        show(thanks);
+      })
+      .catch(function(err){
+        btn.disabled = false;
+        btn.textContent = 'Send →';
+        errEl.textContent = err.message || 'Something went wrong — mind trying again?';
+        errEl.style.display = '';
+      });
+  });
+})();
+</script>
+</body>
+</html>

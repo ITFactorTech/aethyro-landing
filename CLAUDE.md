@@ -515,6 +515,94 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-09** — **Added a hero-image polish pass (code-drawn, not a raster
+  image) and an ongoing real-testimonial collection mechanism**, both from
+  the same conversation. The hero piece: generated 3 AI hero-art candidates
+  via Canva for the homepage's `.hero` section, picked one ("horizon of
+  light" — a bright line cutting across the dark hero, fading out toward
+  the left third so it never competes with the headline), then hit a real
+  blocker integrating it — the generated image was only retrievable through
+  the available tooling at **199×112px** (a chat-preview thumbnail), with no
+  MCP path to a production-resolution version of a bare generated image (as
+  opposed to a full Canva *design*, which can be exported at any size).
+  Recreated the same effect directly in CSS instead of waiting on a manual
+  high-res download (`.hero-horizon`/`.horizon-line`/`.horizon-node`/
+  `.horizon-wash` in `index.html`) — infinitely crisp at any size, and
+  actually more consistent with this page's existing zero-`<img>`-tag,
+  code-drawn-glow conventions (`.hero-orb`, `#agentCanvas`) than introducing
+  a raster asset would have been. PR #157, merged by the user directly.
+  **Testimonial collection**: after manually pulling real engagement data
+  and personally drafting outreach to the 3-4 users who'd actually returned
+  on a second day, built the repeatable version. New `testimonials` table
+  (same zero-policy, RPC-only posture as `admin_users`/`agent_missions` —
+  `REVOKE ALL ... FROM PUBLIC, anon, authenticated`, one row per user ever
+  via a `UNIQUE(user_id)` constraint) plus 4 `SECURITY DEFINER` RPCs:
+  `request_testimonial_if_eligible` (service-role-only; `chat`'s
+  `finalize()` now calls this after the low-credit/auto-topup block — fires
+  at most once ever per user, the first time they cross 10+ messages or
+  return on a 2nd distinct calendar day, atomically via `ON CONFLICT
+  (user_id) DO NOTHING` so a race between near-simultaneous chat completions
+  can't double-fire), `submit_testimonial_response` (idempotent — a second
+  submit on an already-used token is a no-op, never an overwrite),
+  `check_testimonial_token` (lets the public form show "invalid"/
+  "already used" on load without a throwaway submit attempt), and
+  `get_testimonials`/`moderate_testimonial` (both `is_admin()`-gated, same
+  pattern as `get_agent_missions`). Two new edge functions:
+  `send-testimonial-request` (internal-only, `X-Internal-Key`, same shape as
+  `send-low-credit-email` — sends the actual ask email via Resend) and
+  `submit-testimonial` (public, `verify_jwt:false`, token-authenticated —
+  `GET ?token=` checks validity, `POST` records the response). New public
+  `app/feedback.html` — a simple, unauthenticated form reached via the
+  emailed link, no Supabase session required. New "Reviews" panel in
+  `app/admin.html` (mirrors the existing Team panel's exact structure:
+  4 KPI cards, a pending-review table with Approve/Reject buttons, a
+  decided-history table) — approving a testimonial here never auto-publishes
+  it to the live site; that's still a deliberate, separate, manual
+  copy-into-`index.html` step, same as every real testimonial this project
+  has ever shown, keeping the hard no-fabrication rule from the 2026-09-28
+  testimonials removal intact for anything automated.
+  **Found and fixed a real bug during build, before it ever reached a real
+  user**: `request_testimonial_if_eligible`'s `SET search_path TO 'public'`
+  excluded the `extensions` schema, where this project's `pgcrypto`
+  actually lives (`gen_random_bytes`/`hmac` — same root cause
+  `generation_receipts`/`deletion_receipts` already had to work around) —
+  caught immediately via a direct-SQL test before any live traffic hit it,
+  fixed with a follow-up migration schema-qualifying the call
+  (`extensions.gen_random_bytes`) and widening the function's search_path,
+  exactly the pattern `20261005224659_generation_receipts.sql` already
+  established for the same reason.
+  **Verified live end-to-end**, not just code review: direct-SQL tests
+  (rolled back, not committed) proved the eligibility RPC's three branches
+  (eligible → real token; already-asked → `false`; zero-message user →
+  `false`) and the full admin moderation path under a simulated real-admin
+  JWT (`get_testimonials`/`moderate_testimonial`, plus a simulated non-admin
+  correctly raising `Forbidden`). Then a real, live, end-to-end pass with
+  two real throwaway accounts (`test-admin-setup`, redeployed for this
+  verification and re-stubbed to 410 after): one seeded to satisfy the
+  2-distinct-days path, one the 10+-messages path — real `chat` API calls
+  (not synthetic) correctly fired `request_testimonial_if_eligible` and
+  created real `testimonials` rows with real tokens; the real
+  `submit-testimonial` function correctly validated a fresh token, accepted
+  a real submission, then correctly blocked and didn't overwrite on a
+  resubmit attempt with the same token. Client-side (`app/feedback.html`)
+  verified via Playwright with the network layer mocked (direct calls to
+  the real Supabase endpoint from this sandbox's headless Chromium hit the
+  same pre-existing `ERR_CERT_AUTHORITY_INVALID` proxy artifact already
+  documented elsewhere in this file, not a bug in the page) — all 6 UI
+  states (valid/invalid/already-used token, successful submit, no-token
+  param, and empty-content blocked by the native HTML5 `required`
+  attribute) rendered correctly. All three edge functions (`chat`,
+  `send-testimonial-request`, `submit-testimonial`) fetched back via
+  `get_edge_function` and diffed byte-for-byte against local disk (caught
+  and fixed one cosmetic-only mismatch in `chat/index.ts` — a few box-
+  drawing divider characters drifted during manual deploy-payload
+  transcription; zero functional difference, local disk now written to
+  match live exactly). Cleaned up: both throwaway accounts deleted,
+  confirmed zero orphaned rows across `testimonials`/`conversations`/
+  `messages`/`auth.users`, `test-admin-setup` re-stubbed to 410 and
+  confirmed via a live curl. `supabase/config.toml` updated with both new
+  functions' `verify_jwt:false` entries. `chat` now at v51 (comment
+  header)/v53 (Supabase's internal deploy counter).
 - **2026-10-09** — **Fully reconciled the migration-history drift found
   earlier the same day** (see the two entries directly below), after the
   user asked what to do next and picked this over continuing the

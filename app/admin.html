@@ -405,6 +405,10 @@ svg.sparkline { width: 100%; height: 100%; overflow: visible; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/><circle cx="4" cy="9" r="2"/><circle cx="20" cy="9" r="2"/><path d="M1 19c.3-2.2 1.9-4 3.8-4.6"/><path d="M23 19c-.3-2.2-1.9-4-3.8-4.6"/></svg>
         Team
       </div>
+      <div class="nav-item" onclick="showSection('reviews')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+        Reviews
+      </div>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user" id="sidebar-email">—</div>
@@ -714,6 +718,57 @@ svg.sparkline { width: 100%; height: 100%; overflow: visible; }
         </div>
       </div>
     </div>
+
+    <div id="section-reviews" hidden>
+      <div class="kpi-grid">
+        <div class="kpi-card blue">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+          <div class="kpi-value" id="rev-requested">—</div>
+          <div class="kpi-label">Asked, no reply yet</div>
+          <div class="kpi-sub">Fires once, ever, per user</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
+          <div class="kpi-value" id="rev-submitted">—</div>
+          <div class="kpi-label">Awaiting your review</div>
+          <div class="kpi-sub">Real responses, not yet moderated</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="kpi-value" id="rev-approved">—</div>
+          <div class="kpi-label">Approved</div>
+          <div class="kpi-sub">Cleared to quote — still a manual add to the site</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/></svg></div>
+          <div class="kpi-value" id="rev-total">—</div>
+          <div class="kpi-label">Total asked</div>
+          <div class="kpi-sub">All time</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><div class="section-title">Awaiting review</div></div>
+        <div class="chart-card" style="padding:0">
+          <table class="users-table" id="rev-pending-table">
+            <thead><tr><th>When</th><th>Who</th><th>Feedback</th><th>Share as</th><th>Actions</th></tr></thead>
+            <tbody id="rev-pending-tbody">
+              <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><div class="section-title">Decided</div></div>
+        <div class="chart-card" style="padding:0">
+          <table class="users-table" id="rev-decided-table">
+            <thead><tr><th>When</th><th>Who</th><th>Feedback</th><th>Share as</th><th>Status</th></tr></thead>
+            <tbody id="rev-decided-tbody">
+              <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -729,7 +784,8 @@ const SECTION_LABELS = {
   users: 'User Management',
   drip: 'Email Drip',
   credits: 'Credits',
-  team: 'Team'
+  team: 'Team',
+  reviews: 'Reviews'
 };
 
 let currentSection = 'overview';
@@ -747,7 +803,7 @@ function fmt(n) {
 
 // ── Section nav ──────────────────────────────────────────────────────────────
 function showSection(name) {
-  ['overview','users','drip','credits','team'].forEach(s => {
+  ['overview','users','drip','credits','team','reviews'].forEach(s => {
     document.getElementById('section-' + s).hidden = (s !== name);
   });
   document.querySelectorAll('.nav-item').forEach(el => {
@@ -761,6 +817,8 @@ function showSection(name) {
     loadUsers();
   } else if (name === 'team') {
     loadTeam();
+  } else if (name === 'reviews') {
+    loadReviews();
   } else if (statsCache) {
     renderSection(name, statsCache);
   }
@@ -769,6 +827,7 @@ function showSection(name) {
 function refreshCurrent() {
   if (currentSection === 'users') { loadUsers(); }
   else if (currentSection === 'team') { loadTeam(); }
+  else if (currentSection === 'reviews') { loadReviews(); }
   else { loadStats(); }
 }
 
@@ -826,6 +885,73 @@ async function loadTeam() {
           <td>${OUTCOME_BADGE[m.outcome] || escapeHtml(m.outcome)}</td>
           <td>${m.pr_url ? `<a href="${escapeHtml(m.pr_url)}" target="_blank" rel="noopener" style="color:var(--accent)">PR →</a>` : '—'}</td>
         </tr>`).join('');
+}
+
+// ── Reviews / testimonials ──────────────────────────────────────────────────
+const REVIEW_STATUS_BADGE = {
+  approved:  '<span class="badge badge-green">approved</span>',
+  rejected:  '<span class="badge" style="background:var(--bg-3);color:var(--text-muted)">rejected</span>',
+  published: '<span class="badge badge-blue">published</span>'
+};
+
+async function loadReviews() {
+  const pendingTbody = document.getElementById('rev-pending-tbody');
+  const decidedTbody = document.getElementById('rev-decided-tbody');
+  const { data, error } = await sb.rpc('get_testimonials', { p_status: null });
+
+  if (error) {
+    pendingTbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--accent)">${escapeHtml(error.message)}</td></tr>`;
+    decidedTbody.innerHTML = '';
+    return;
+  }
+
+  const rows = data.rows || [];
+  const counts = data.counts || {};
+
+  document.getElementById('rev-requested').textContent = fmt(counts.requested);
+  document.getElementById('rev-submitted').textContent = fmt(counts.submitted);
+  document.getElementById('rev-approved').textContent  = fmt(counts.approved);
+  document.getElementById('rev-total').textContent      = fmt(counts.total);
+
+  const pending = rows.filter(r => r.status === 'submitted');
+  const decided = rows.filter(r => r.status === 'approved' || r.status === 'rejected' || r.status === 'published');
+
+  pendingTbody.innerHTML = pending.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--text-muted)">Nothing waiting on you right now.</td></tr>'
+    : pending.map(r => `
+        <tr id="rev-row-${r.id}">
+          <td class="num" style="color:var(--text-muted)">${escapeHtml(r.submitted_at || r.requested_at)}</td>
+          <td>${escapeHtml(r.email)}</td>
+          <td style="max-width:360px">${escapeHtml(r.content)}</td>
+          <td>${r.consent ? escapeHtml(r.display_name || 'anonymous') : '<span style="color:var(--text-muted)">no consent given</span>'}</td>
+          <td style="white-space:nowrap">
+            <button class="adj-btn" onclick="moderateReview('${r.id}', true)" style="font-size:12px;margin-right:6px">Approve</button>
+            <button class="adj-btn" onclick="moderateReview('${r.id}', false)" style="font-size:12px">Reject</button>
+          </td>
+        </tr>`).join('');
+
+  decidedTbody.innerHTML = decided.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted)">No decisions made yet.</td></tr>'
+    : decided.map(r => `
+        <tr>
+          <td class="num" style="color:var(--text-muted)">${escapeHtml(r.submitted_at || r.requested_at)}</td>
+          <td>${escapeHtml(r.email)}</td>
+          <td style="max-width:360px">${escapeHtml(r.content)}</td>
+          <td>${r.consent ? escapeHtml(r.display_name || 'anonymous') : '<span style="color:var(--text-muted)">no consent given</span>'}</td>
+          <td>${REVIEW_STATUS_BADGE[r.status] || escapeHtml(r.status)}</td>
+        </tr>`).join('');
+}
+
+async function moderateReview(id, approve) {
+  const row = document.getElementById('rev-row-' + id);
+  if (row) row.style.opacity = '0.5';
+  const { error } = await sb.rpc('moderate_testimonial', { p_id: id, p_approve: approve });
+  if (error) {
+    alert('Could not update: ' + error.message);
+    if (row) row.style.opacity = '1';
+    return;
+  }
+  loadReviews();
 }
 
 // ── Sparklines ───────────────────────────────────────────────────────────────

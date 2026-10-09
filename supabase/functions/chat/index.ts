@@ -1,3 +1,12 @@
+// chat v51 — added ongoing real-testimonial collection: finalize() now calls
+// the new request_testimonial_if_eligible RPC after the low-credit/auto-topup
+// block, which fires send-testimonial-request (a one-time, low-pressure
+// ask email) the first time a user crosses 10+ messages or returns on a
+// 2nd distinct calendar day -- and never again for that user. Built after
+// manually identifying and personally emailing the first 3-4 real engaged
+// users turned up a need for a repeatable version of the same ask, with
+// replies landing in a new testimonials table for admin moderation
+// (app/admin.html's new Reviews panel) rather than ever auto-publishing.
 // chat v50 — made model:"auto" and the system prompt more intelligent after a
 // real user complaint: a technical, specific follow-up question ("i dont
 // have a hood", inside a multi-turn car-parts-fitment thread) got routed to
@@ -211,7 +220,7 @@ function routeAutoModel(message: string, attachments: Attachment[]): "haiku" | "
 // set was 94.7% accurate (71/75), with every miss an adjacent-tier confusion
 // (light<->medium), never a light/heavy or medium/heavy mix-up. Deliberately
 // NOT inlined as source-code literals (an earlier attempt at that briefly
-// broke this function entirely via a botched large deploy -- see recent-
+// broke this function entirely via a botched large deploy — see recent-
 // work-log) -- keeping this file small and pushing the big data into the DB
 // is both safer to ship and consistent with how this codebase already does
 // vector similarity everywhere else.
@@ -232,7 +241,7 @@ async function classifyModelFromEmbedding(
   if (!tier) return routeAutoModel(message, attachments);
 
   // Safety nets, same asymmetric bias as the heuristic ("err toward Opus
-  // whenever ambiguous") -- both can only push the tier UP, never down.
+  // whenever ambiguous") — both can only push the tier UP, never down.
   const lower = message.trim().toLowerCase();
   if (AUTO_HEAVY_SIGNALS.some(s => lower.includes(s))) tier = "heavy";
   if (attachments.length > 0 && tier === "light") tier = "medium";
@@ -245,7 +254,7 @@ const USAGE_MARK = "\x00";
 const THINK_MARK = "\x02";
 const MAX_TOKENS_THINKING = 8192;
 
-// ── Voyage AI embed (single text) ─────────────────────────────────────────────
+// ── Voyage AI embed (single text) ──────────────────────────────────────────────
 
 async function embedText(text: string): Promise<number[] | null> {
   if (!VOYAGE_API_KEY) return null;
@@ -267,7 +276,7 @@ async function embedText(text: string): Promise<number[] | null> {
   }
 }
 
-// ── Web search ────────────────────────────────────────────────────────────────
+// ── Web search ──────────────────────────────────────────────────────────────
 
 async function executeWebSearch(query: string): Promise<string> {
   if (!TAVILY_API_KEY) return "Search unavailable.";
@@ -300,7 +309,7 @@ async function executeWebSearch(query: string): Promise<string> {
   }
 }
 
-// ── GitHub proxy ──────────────────────────────────────────────────────────────
+// ── GitHub proxy ───────────────────────────────────────────────────────────────
 
 async function githubRequest(token: string, path: string): Promise<any> {
   const resp = await fetch(`https://api.github.com${path}`, {
@@ -315,7 +324,7 @@ async function githubRequest(token: string, path: string): Promise<any> {
   return resp.json();
 }
 
-// ── Notion proxy ──────────────────────────────────────────────────────────────
+// ── Notion proxy ───────────────────────────────────────────────────────────────
 
 async function notionRequest(token: string, path: string, method = "GET", body?: any): Promise<any> {
   const resp = await fetch(`https://api.notion.com/v1${path}`, {
@@ -339,7 +348,7 @@ function extractNotionText(blocks: any[]): string {
   }).filter(Boolean).join("\n").slice(0, 6000);
 }
 
-// ── Memory helpers ────────────────────────────────────────────────────────────
+// ── Memory helpers ───────────────────────────────────────────────────────────
 
 type UserMemory = {
   name?: string;
@@ -377,7 +386,7 @@ function mergeMemory(existing: UserMemory, incoming: Partial<UserMemory>): UserM
   return merged;
 }
 
-// ── Attachment helpers ────────────────────────────────────────────────────────
+// ── Attachment helpers ──────────────────────────────────────────────────────────
 
 type Attachment = {
   type: "text" | "image";
@@ -405,7 +414,7 @@ function buildUserContent(message: string, attachments: Attachment[]): string | 
   return blocks;
 }
 
-// ── Main handler ──────────────────────────────────────────────────────────────
+// ── Main handler ───────────────────────────────────────────────────────────────
 
 serve(async (req) => {
   const CORS = corsHeadersFor(req);
@@ -546,7 +555,7 @@ serve(async (req) => {
       }
     }
 
-    // ── Document RAG retrieval ────────────────────────────────────────────────
+    // ── Document RAG retrieval ─────────────────────────────────────────────
     const { data: docHits } = await supaAdmin.rpc("match_document_chunks", {
       p_user_id: user.id,
       p_embedding: queryEmbedding,
@@ -564,7 +573,7 @@ serve(async (req) => {
     }
   }
 
-  // ── Build connector tools dynamically ─────────────────────────────────────
+  // ── Build connector tools dynamically ───────────────────────────
   const integrations = integrationsRes.data || [];
   const githubInt = integrations.find(i => i.provider === "github");
   const notionInt = integrations.find(i => i.provider === "notion");
@@ -650,7 +659,7 @@ serve(async (req) => {
 
   const TOOLS = [...BASE_TOOLS, ...connectorTools];
 
-  // ── Tool execution ────────────────────────────────────────────────────────
+  // ── Tool execution ──────────────────────────────────────────────────────────────
   async function executeTool(blk: Anthropic.ToolUseBlock): Promise<string> {
     try {
       if (blk.name === "web_search") {
@@ -711,7 +720,7 @@ serve(async (req) => {
     }
   }
 
-  // ── Format history ────────────────────────────────────────────────────────
+  // ── Format history ──────────────────────────────────────────────────────────────
   const formattedHistory = historyRaw
     .filter((m: any) => m.role === "user" || m.role === "assistant")
     .slice(-20)
@@ -875,6 +884,27 @@ serve(async (req) => {
       }
     } catch {}
 
+    // Ongoing real-testimonial collection (fires at most once ever per
+    // user): request_testimonial_if_eligible does the cheap "already
+    // asked" check itself and only does the real engagement aggregate for
+    // users who've never been asked, so this is a no-op lookup for the
+    // overwhelming majority of calls. Awaited, not waitUntil()'d -- same
+    // reasoning as the low-credit block above: finalize() is itself
+    // awaited by both its call sites, so there's no isolate-freeze race to
+    // guard against here.
+    try {
+      const { data: elig, error: eligErr } = await supaAdmin.rpc("request_testimonial_if_eligible", {
+        p_user_id: user.id,
+      });
+      const row = Array.isArray(elig) ? elig[0] : elig;
+      if (!eligErr && row?.should_send && row?.request_token) {
+        await supaAdmin.functions.invoke("send-testimonial-request", {
+          headers: { "X-Internal-Key": SERVICE_ROLE_KEY },
+          body: { user_id: user.id, token: row.request_token },
+        });
+      }
+    } catch {}
+
     // Parallel fire-and-forget: JSONB memory extraction + vector memory storage.
     // Must be handed to EdgeRuntime.waitUntil() — without it, Supabase's edge
     // runtime is free to freeze/recycle this isolate the moment controller.close()
@@ -950,7 +980,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
     controller.close();
   }
 
-  // ── Streaming response ────────────────────────────────────────────────────
+  // ── Streaming response ───────────────────────────────────────────────────────
   const stream = new ReadableStream({
     async start(controller) {
       try {

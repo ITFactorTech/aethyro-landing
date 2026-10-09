@@ -65,6 +65,9 @@ verify_jwt = false
 [functions.send-routine-result-email]
 verify_jwt = false
 
+[functions.send-testimonial-request]
+verify_jwt = false
+
 [functions.send-welcome-email]
 verify_jwt = false
 
@@ -72,6 +75,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.stripe-webhook]
+verify_jwt = false
+
+[functions.submit-testimonial]
 verify_jwt = false
 
 [functions.team-manage]
