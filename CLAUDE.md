@@ -232,6 +232,55 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **The remote Supabase migration-history table and this repo's
+  `supabase/migrations/` folder have never been in CLI-sync.** Found
+  2026-10-09, the first time `supabase db push` ever ran against this
+  project (the new `deploy-supabase.yml` CI workflow's first real run,
+  after the `SUPABASE_ACCESS_TOKEN` secret was added). It failed with
+  "Remote migration versions not found in local migrations directory",
+  listing 67 versions the remote `supabase_migrations.schema_migrations`
+  table tracks against the repo's 59 committed files. Root cause: every
+  migration in this project's history was written locally under one
+  timestamp, then applied live via a tool (`apply_migration`/the
+  dashboard) that recorded a *different* timestamp as the applied
+  version — so ~51 of the 67 remote versions do correspond to a real
+  local file (same migration, same SQL, just a mismatched version
+  number), not a genuine gap. CI was fixed around this rather than
+  through it (see `deploy-supabase.yml`'s own comment): "Deploy all edge
+  functions" now runs with `if: ${{ !cancelled() }}` so a migration-push
+  failure doesn't block function deploys, since the live schema itself is
+  correct and this is a bookkeeping mismatch, not a missing schema
+  change. `db push` itself is left failing/visible as a flag, not
+  silenced.
+  **Real work still needed, deliberately not attempted yet** (too risky
+  to rush — this rewrites production's migration bookkeeping, not just
+  local files): reconcile the two by renaming local files to the
+  remote-recorded version numbers (content is identical in the ~51
+  matched cases, confirmed by name), or `supabase migration repair` the
+  remainder. One case needs real care, not a mechanical rename: local
+  `20261003135352_lock_down_routine_webhooks_grants.sql` and remote
+  `20261003135352 revoke_anon_grants_routine_webhooks` share the *exact
+  same timestamp* but are different migrations — per this file's own
+  2026-10-03 entry, that date had a mistaken over-broad `REVOKE`
+  immediately followed by a correcting migration at `20261003135419`,
+  and the two version numbers collided. Also unresolved: 4 local files
+  with no name-matched remote version at all —
+  `20260901000008_stripe_webhook_cancelled_spelling_fix.sql`,
+  `20260922000001_newsletter_reactions.sql`,
+  `20260926000001_conversation_sharing.sql`,
+  `20261003210000_lock_down_cleanup_rate_limit_counters.sql` — worth
+  checking individually whether each was ever actually applied to the
+  live schema (not just whether its version number is tracked), since a
+  genuinely-never-applied migration is a real gap, not a naming
+  mismatch. ~7 of the 16 unmatched-by-name remote versions
+  (`pgvector_knowledge`, `subscriptions_licenses`, `onboarding_emails`,
+  `credit_ledger_and_signup_bonus`, `credit_ledger_purchase_idempotency`,
+  `add_trial_chat_usage`, `conversation_persistence`) predate this
+  repo's earliest committed migration (`20260901000001`) and are almost
+  certainly legitimate pre-repo-history baseline schema, not a gap —
+  consistent with this file's own note elsewhere that `handle_new_user()`
+  and other early schema predate migration tracking entirely.
+
 ~~- `user_integrations.access_token` was stored as plaintext server-side~~
   — **fixed 2026-10-09**, see the recent-work-log entry below. The column
   is now `bytea`, holding `pgp_sym_encrypt` output; `connector-proxy` reads
