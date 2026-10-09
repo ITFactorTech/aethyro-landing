@@ -1,0 +1,36 @@
+name: Pack config consistency check
+
+# Credit-pack pricing/credits were hardcoded in 6 separate places across
+# this repo before being centralized into pack-config.js (frontend) and
+# supabase/functions/_shared/packs.ts (backend) — see CLAUDE.md's
+# recent-work-log for the full history, including the real Pro/Power
+# naming-swap bug (PR #149) and the Value/Standard naming-drift bug this
+# same centralization fixed. Centralizing removes the duplication, but
+# nothing stops the two surviving copies (one per side, since the backend
+# file also carries Stripe priceId's the frontend doesn't need) from
+# drifting apart again by a future edit that only touches one of them.
+#
+# This check runs on every PR that touches either file and fails the build
+# if a pack's price or credit amount differs between them. It deliberately
+# does NOT scrape index.html/pricing.html's marketing prose (judged too
+# fragile/high-false-positive-risk — those pages read pack-config.js at
+# runtime for their rendered data already) and does NOT check against live
+# Stripe prices (no Stripe credential available in CI for this project).
+on:
+  pull_request:
+    paths:
+      - "pack-config.js"
+      - "supabase/functions/_shared/packs.ts"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Compare pack-config.js against _shared/packs.ts
+        run: node .github/scripts/check-pack-config.mjs

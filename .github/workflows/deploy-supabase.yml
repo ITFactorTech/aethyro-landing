@@ -1,0 +1,51 @@
+name: Deploy Supabase backend
+
+# Cloudflare Workers already auto-deploys this repo's frontend on every push
+# to main (git-push auto-deploy) — see CLAUDE.md. Supabase edge functions
+# and migrations have no equivalent: historically they only ever updated
+# via an explicit, manual deploy_edge_function/apply_migration call, which
+# is exactly how a merged conflict resolution landed in main's git history
+# without ever reaching production (the PR #97 auto-model-routing
+# regression documented in CLAUDE.md's recent-work-log — committed source
+# was correct, the live function silently wasn't, for days).
+#
+# This workflow closes that gap: every push to main applies all pending
+# migrations and redeploys every committed edge function, unconditionally.
+# Deploying all 24 functions on every relevant push (rather than diffing
+# which files actually changed) is deliberate — it's simpler, and it's the
+# only way a change to supabase/functions/_shared/packs.ts (or any other
+# shared module) correctly propagates to every function that imports it.
+#
+# `supabase db push` is idempotent (migrations already applied are no-ops),
+# so this is safe to run on every push, not just ones that touch
+# supabase/migrations/.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase project
+        run: supabase link --project-ref uzmdqbtflcpikjdrggqc
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Apply pending migrations
+        run: supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy all edge functions
+        run: supabase functions deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

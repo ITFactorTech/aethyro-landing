@@ -4,14 +4,16 @@
 // PaymentIntent against their saved default payment method for their
 // chosen pack and grants credits directly once it actually succeeds.
 //
-// Amounts (cents) must match the real Stripe Price amounts in
-// buy-credits/index.ts's CREDIT_PACKS exactly — this charges a raw amount
-// via PaymentIntent rather than reusing those Price IDs, since Checkout
-// (which needs a live customer session) isn't usable for an off-session
-// charge.
+// Pack cents/credits now imported from ../_shared/packs.ts, the single
+// source of truth shared with buy-credits and setup-auto-topup — this
+// charges a raw cents amount via PaymentIntent rather than reusing a Price
+// ID, since Checkout (which needs a live customer session) isn't usable
+// for an off-session charge, but the amount must still match the real
+// Stripe Price exactly, which is why it comes from the same shared file.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
+import { CREDIT_PACKS } from "../_shared/packs.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2024-04-10" });
 const supabase = createClient(
@@ -19,13 +21,6 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-const CREDIT_PACKS: Record<string, { credits: number; amountCents: number }> = {
-  starter: { credits: 200, amountCents: 400 },   // $4
-  value:   { credits: 600, amountCents: 1000 },  // $10
-  power:   { credits: 2000, amountCents: 3000 }, // $30
-  pro_7k:  { credits: 7000, amountCents: 9000 }, // $90
-};
 
 // Guards against two near-simultaneous chat requests both crossing the
 // threshold and firing this before the first attempt's DB write lands.
@@ -68,7 +63,7 @@ serve(async (req) => {
 
   try {
     const pi = await stripe.paymentIntents.create({
-      amount: pack.amountCents,
+      amount: pack.cents,
       currency: "usd",
       customer: profile.stripe_customer_id,
       payment_method: profile.stripe_payment_method_id,
@@ -95,7 +90,7 @@ serve(async (req) => {
       reason: "purchase",
       stripe_session_id: pi.id,
       team_id: profile.team_id ?? null,
-      metadata: { credit_pack: profile.auto_topup_pack, amount_total: pack.amountCents, auto_topup: true },
+      metadata: { credit_pack: profile.auto_topup_pack, amount_total: pack.cents, auto_topup: true },
     });
     if (ledgerErr && ledgerErr.code !== "23505") {
       console.error("auto-topup credit_ledger insert failed", ledgerErr.message);

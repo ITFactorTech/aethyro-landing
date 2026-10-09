@@ -1307,7 +1307,7 @@ patterns are well established.</div>
       </div>
 
       <div class="price-card">
-        <div class="price-name">Value</div>
+        <div class="price-name">Standard</div>
         <div class="price-for">// regular users</div>
         <div class="price-amt">$10<span>/pack</span></div>
         <ul class="price-feat">
@@ -1369,7 +1369,7 @@ patterns are well established.</div>
         </div>
       </div>
       <p style="text-align:center;font-size:.72rem;color:var(--t3);margin-top:1rem;font-family:var(--mono)">Actual cost scales with your real input/output length — see the exact per-model rates on <a href="/developers.html" style="color:var(--orange)">developers.html</a>.</p>
-      <p style="text-align:center;font-size:.82rem;color:var(--t2);margin-top:.85rem">Example: 15 quick questions, 5 longer explanations, and 1 deep review a week ≈ 40 credits — about $3/month on the Value pack ($10/600 credits).</p>
+      <p style="text-align:center;font-size:.82rem;color:var(--t2);margin-top:.85rem">Example: 15 quick questions, 5 longer explanations, and 1 deep review a week ≈ 40 credits — about $3/month on the Standard pack ($10/600 credits).</p>
     </div>
 
     <div style="max-width:640px;margin:1.5rem auto 0;padding:1.5rem 1.75rem;background:var(--s2);border:1px solid var(--b1);border-radius:14px;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap">
@@ -1486,7 +1486,7 @@ patterns are well established.</div>
 
     <div id="calcCallout"></div>
 
-    <p class="calc-note" id="calcNote">// ~10 credits per conversation · Value pack rate ($0.0167/cr) · actual cost varies by message length</p>
+    <p class="calc-note" id="calcNote">// ~10 credits per conversation · Standard pack rate ($0.0167/cr) · actual cost varies by message length</p>
 
     <div class="calc-cta">
       <a href="/app/chat.html" class="btn btn-lg btn-orange">Start free — 200 credits, no card →</a>
@@ -1754,7 +1754,7 @@ patterns are well established.</div>
           <span class="faq-icon" aria-hidden="true">+</span>
         </button>
         <div class="faq-a" role="region">
-          <div class="faq-a-inner">Credits are consumed per message. A typical conversation uses roughly 1–5 credits per exchange depending on length. You start with 200 free credits. When you need more, buy a pack — Starter (200cr/$4), Value (600cr/$10), Power (2000cr/$30), or Pro (7000cr/$90). Credits never expire.</div>
+          <div class="faq-a-inner">Credits are consumed per message. A typical conversation uses roughly 1–5 credits per exchange depending on length. You start with 200 free credits. When you need more, buy a pack — Starter (200cr/$4), Standard (600cr/$10), Power (2000cr/$30), or Pro (7000cr/$90). Credits never expire.</div>
         </div>
       </div>
 
@@ -1856,6 +1856,7 @@ patterns are well established.</div>
   </div>
 </footer>
 
+<script src="/pack-config.js"></script>
 <script>
   const COMMUNITY_URL = "https://discord.gg/5PwBk8RVHv";
   document.querySelectorAll('[data-community]').forEach(a => { a.href = COMMUNITY_URL; });
@@ -2114,7 +2115,7 @@ patterns are well established.</div>
     function calcAethyro(cr) {
       // pick cheapest effective rate for that monthly credit volume
       if (cr <= 200)  return { cost: cr * 0.02,        pack: 'Starter', rate: 0.02 };
-      if (cr <= 600)  return { cost: cr * (10/600),    pack: 'Value',   rate: 10/600 };
+      if (cr <= 600)  return { cost: cr * (10/600),    pack: 'Standard', rate: 10/600 };
       if (cr <= 2000) return { cost: cr * (30/2000),   pack: 'Power',   rate: 30/2000 };
                       return { cost: cr * (90/7000),   pack: 'Pro',     rate: 90/7000 };
     }

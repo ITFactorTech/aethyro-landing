@@ -377,6 +377,7 @@
 
 <script src="./vendor/supabase.js"></script>
 <script src="./config.js"></script>
+<script src="../pack-config.js"></script>
 <script>
 (function(){
   var $=function(id){return document.getElementById(id);};
@@ -422,12 +423,11 @@
   // the buy-credits function — that stamps supabase_user_id into the Stripe
   // session so the webhook can credit the account. Never link a raw Payment
   // Link here: those carry no user id and the buyer gets charged for nothing.
-  var CREDIT_PACKS = [
-    { label: '200 credits',   price: '$4',  credits: 200,  pack: 'starter' },
-    { label: '600 credits',   price: '$10', credits: 600,  pack: 'value'   },
-    { label: '2,000 credits', price: '$30', credits: 2000, pack: 'power'   },
-    { label: '7,000 credits', price: '$90', credits: 7000, pack: 'pro_7k'  },
-  ];
+  // Derived from ../pack-config.js, the single source of truth shared with
+  // index.html/pricing.html and (for the backend) supabase/functions/_shared/packs.ts.
+  var CREDIT_PACKS = window.AETHYRO_PACKS.map(function(p){
+    return { label: p.credits.toLocaleString() + ' credits', price: '$' + p.price, credits: p.credits, pack: p.key };
+  });
 
   (async function(){
     try{
@@ -508,7 +508,8 @@
       // would have shown the raw word "purchase" instead of a pack name.
       // Never actually hit in production yet -- zero real purchases exist
       // so far -- but would have as soon as the first one landed.
-      var PACK_LABELS = { starter:'Starter (200cr)', value:'Standard (600cr)', power:'Power (2,000cr)', pro_7k:'Pro (7,000cr)' };
+      var PACK_LABELS = {};
+      window.AETHYRO_PACKS.forEach(function(p){ PACK_LABELS[p.key] = p.label + ' (' + p.credits.toLocaleString() + 'cr)'; });
       var REASON_LABELS = { chat_usage:'Chat usage', signup_bonus:'Signup bonus', referral_bonus:'Referral bonus', admin_adjustment:'Admin adjustment' };
       var ledger = ledRes.data || [];
       if(ledger.length){
