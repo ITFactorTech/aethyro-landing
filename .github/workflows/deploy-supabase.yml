@@ -19,6 +19,24 @@ name: Deploy Supabase backend
 # `supabase db push` is idempotent (migrations already applied are no-ops),
 # so this is safe to run on every push, not just ones that touch
 # supabase/migrations/.
+#
+# "Apply pending migrations" and "Deploy all edge functions" run
+# independently (the latter has `if: ${{ !cancelled() }}`, so it still
+# runs after a migration failure but not after the job itself is
+# cancelled) rather than one gating the other. Found live on 2026-10-09,
+# first run with a working
+# SUPABASE_ACCESS_TOKEN: the remote migration-history table and this repo's
+# supabase/migrations/ folder have never been in CLI-sync (every migration
+# here was written locally, then applied live via a tool that stamped its
+# own version timestamp -- different from the committed file's own
+# timestamp), because nothing had ever run `supabase db push` against this
+# project before that run. That failure is a real, pre-existing bookkeeping
+# gap worth fixing properly (see CLAUDE.md's "Pending" section), but it
+# isn't a sign the live schema itself is wrong, and it shouldn't block the
+# one thing this workflow was actually built to guarantee: that a function
+# source change (especially to a _shared/ module) reaches production.
+# Revisit decoupling once the migration-history drift is reconciled and
+# `db push` can be trusted to mean "nothing pending."
 on:
   push:
     branches: [main]
@@ -46,6 +64,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - name: Deploy all edge functions
+        if: ${{ !cancelled() }}
         run: supabase functions deploy
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
