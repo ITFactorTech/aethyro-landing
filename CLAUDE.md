@@ -515,6 +515,92 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-10** — **Added a monthly spend cap + a pre-send cost estimate**,
+  the two most-repeated asks from a round of real pre-launch feedback on
+  the credit-based pricing model — three separate reviewers independently
+  converged on "a ceiling is what turns metered pricing from scary to
+  usable," more than any other single point raised, including the
+  distinctive forkable-routines feature itself.
+  **Monthly spend cap**: new `profiles.monthly_spend_cap_credits` (nullable
+  integer, client-settable, no cap by default) and
+  `get_monthly_spend(uuid)` — a new `SECURITY DEFINER` RPC mirroring
+  `get_credit_balance`'s exact `auth.role() = 'service_role' OR auth.uid()
+  = p_user_id OR is_admin()` ownership-check pattern, summing this user's
+  own negative `credit_ledger` deltas since the start of the current UTC
+  calendar month. Deliberately scoped to the individual user's own ledger
+  rows, not the team-pooled balance `get_credit_balance` understands — a
+  personal safety rail, not a team policy; extending it to teams is real
+  but separate, not-yet-asked-for scope. `chat`'s pre-send gate (now v52)
+  computes a worst-case credit estimate for the message about to run
+  (this message's length for input tokens, the real `max_tokens` ceiling
+  for output at the resolved model's rates — the same "up to ~N credits"
+  framing the existing low-balance banner already uses, never a
+  prediction of the actual reply length) and returns a distinct 402
+  (`error: "Monthly cap reached"`) if spend-so-far-this-month + that
+  estimate would exceed the cap — checked and enforced *before* the
+  Anthropic call, so a blocked attempt never partially bills. `finalize()`
+  also reports `monthlySpend`/`monthlyCap` in its cost JSON whenever a cap
+  is set, so the per-message cost badge in `chat.html` can show "X/Y this
+  month" passively, not just the hard block. New "Monthly spend cap" panel
+  in `app/dashboard.html` (set/update/remove, reuses the page's own
+  already-computed current-month spend number rather than a second RPC
+  round trip — this is display-only, the real enforcement is server-side).
+  `chat.html`'s existing 402 handler now branches: a cap-block gets its own
+  message and a link to the dashboard panel, instead of the generic
+  "buy credits" flow — buying more credits does nothing for a cap block,
+  since the cap gates spend, not balance, and offering it would have been
+  actively misleading.
+  **Pre-send cost estimate**: a small, duplicated-client-side copy of
+  `chat`'s `CREDIT_RATES`/`MAX_TOKENS` constants (documented inline as a
+  deliberate duplication, same worst-case-not-predicted framing as the
+  server's own estimate) now renders "up to ~N credits" in the composer
+  hint line as the user types, debounced via the existing textarea
+  `input` listener and refreshed on every model switch. For `model:"auto"`
+  it shows the true Opus-level ceiling rather than guessing which tier the
+  real embedding classifier will pick — honest about what can't be known
+  client-side, not a false precision claim.
+  **Found and fixed a real grant bug while building this, the same class
+  CLAUDE.md already documents multiple times**: `get_monthly_spend`'s
+  first migration did `REVOKE ALL ... FROM PUBLIC` then explicitly granted
+  `authenticated`/`service_role` — but `anon` still had `EXECUTE`
+  afterward, confirmed live via `has_function_privilege` before trusting
+  the migration text. Same root cause as every prior instance of this bug
+  class: a default-privileges rule grants directly to `anon` by name, and
+  revoking from `PUBLIC` doesn't touch that separate grant. Fixed with an
+  explicit `REVOKE ALL ... FROM anon` by name
+  (`20261010134514_revoke_anon_get_monthly_spend.sql`) — confirmed
+  harmless in practice either way (`anon`'s `auth.uid()` is always null,
+  so the ownership check inside always raised `Forbidden` for it
+  regardless), but fixed for the same least-privilege discipline applied
+  everywhere else in this project.
+  **Verified live end-to-end**, not just code review, with a real
+  throwaway account: a normal haiku send with no cap set succeeded
+  normally (`monthlyCap: null`, no regression); setting the cap to 1
+  credit (below what was already spent) correctly 402'd with
+  `{monthly_spend:1, monthly_cap:1, estimated_cost:2}` and produced **zero**
+  new `credit_ledger` rows (confirmed via direct count — a blocked attempt
+  never partially bills); raising the cap to 50 let the next send through
+  normally, correctly reporting `monthlySpend:2` (not 3 — the blocked
+  attempt never counted). `get_monthly_spend` called directly via REST
+  under the real user's own JWT returned the correct number for their own
+  id and correctly raised `Forbidden` for an arbitrary other id. `chat`'s
+  live source fetched back via `get_edge_function` and diffed
+  byte-for-byte against local disk (caught and fixed one cosmetic-only
+  transcription slip of my own — a multi-line template literal flattened
+  to literal `\n` escape sequences during JSON transcription, same
+  zero-functional-difference class this file already documents happening
+  before). `app/dashboard.html`'s and `app/chat.html`'s inline
+  `<script>` blocks all syntax-checked clean with `node --check` after
+  editing. Cleaned up: deleted the throwaway account, confirmed zero
+  orphaned rows across `profiles`/`credit_ledger`/`referral_codes`/
+  `generation_receipts`/`auth.users`, `test-admin-setup` re-stubbed to
+  410 and confirmed via a live curl.
+  **Scope note, deliberately narrow**: the still-open ask from the same
+  feedback round — a visible missed-run history for scheduled routines
+  (currently a skip with no catch-up and no history beyond the single
+  most-recent `last_result` field) — was not built in this pass; flagged
+  but not yet actioned, a separate, smaller follow-up.
+
 - **2026-10-10** — **Added signup-source attribution** (`profiles.signup_referrer`/
   `signup_utm`), after a direct cohort investigation (pulling real message
   content, referral chains, signup timing, and email domains for the

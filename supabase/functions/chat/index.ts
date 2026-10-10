@@ -1,3 +1,19 @@
+// chat v52 — added an optional monthly spend cap: profiles.monthly_spend_cap_credits
+// (client-set, null = no cap). The pre-send gate now computes a worst-case
+// credit estimate for the message about to run (input tokens from this
+// message's length + the real max_tokens ceiling for the resolved model/
+// thinking mode, at that model's own rates -- the same "up to ~N credits"
+// framing the existing low-balance banner already uses, not a promise of
+// exact precision) and blocks with a distinct 402 if spend-so-far-this-
+// month + that estimate would exceed the cap. get_monthly_spend(uuid) is
+// the new RPC (own migration), scoped to the user's own ledger rows, not
+// the team-pooled balance get_credit_balance() understands -- this cap is
+// a personal safety rail, not a team policy. finalize()'s cost JSON now
+// also reports monthlySpend/monthlyCap (when a cap is set) so the client
+// can show running progress passively, not just the hard block. Built
+// directly from real pre-launch feedback: a hard, visible ceiling was the
+// single most-repeated ask across independent reviewers of the pricing
+// model, more than any other single point raised.
 // chat v51 — added ongoing real-testimonial collection: finalize() now calls
 // the new request_testimonial_if_eligible RPC after the low-credit/auto-topup
 // block, which fires send-testimonial-request (a one-time, low-pressure
@@ -491,7 +507,7 @@ serve(async (req) => {
   // classification (instead of a second Voyage call) costs zero extra
   // latency -- the classifier just runs after this Promise.all resolves.
   const [profileRes, integrationsRes, queryEmbedding] = await Promise.all([
-    supaAdmin.from("profiles").select("workspace_context, memory, team_id").eq("id", user.id).single(),
+    supaAdmin.from("profiles").select("workspace_context, memory, team_id, monthly_spend_cap_credits").eq("id", user.id).single(),
     supaAdmin.from("user_integrations").select("provider, access_token, metadata").eq("user_id", user.id),
     embedText(message),
   ]);
@@ -512,6 +528,34 @@ serve(async (req) => {
   }
   const MODEL    = MODEL_MAP[modelKey];
   const rates    = CREDIT_RATES[modelKey];
+  const supportsThinking = MODEL === MODEL_MAP.sonnet || MODEL === MODEL_MAP.opus;
+
+  // Monthly spend cap — a hard, user-set ceiling, enforced before the
+  // Anthropic call rather than discovered after the fact. The estimate is
+  // deliberately worst-case (this message's length for input, the real
+  // max_tokens ceiling for output) rather than a prediction of the actual
+  // reply length, since every model's output rate here dwarfs its input
+  // rate -- a confident "it'll probably use less" estimate would be the
+  // wrong thing to build trust on. See chat v52's header comment.
+  const capCredits = profileRes.data?.monthly_spend_cap_credits;
+  if (typeof capCredits === "number") {
+    const estInputTokens = Math.ceil(message.length / 4);
+    const estMaxTokens = supportsThinking ? MAX_TOKENS_THINKING : MAX_TOKENS;
+    const worstCaseCost = Math.max(
+      1,
+      Math.ceil((estInputTokens / 1000) * rates.input + (estMaxTokens / 1000) * rates.output),
+    );
+    const { data: spentSoFar } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: user.id });
+    const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+    if (spent + worstCaseCost > capCredits) {
+      return new Response(JSON.stringify({
+        error: "Monthly cap reached",
+        monthly_spend: spent,
+        monthly_cap: capCredits,
+        estimated_cost: worstCaseCost,
+      }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
+    }
+  }
 
   let existingMemory: UserMemory = {};
   let systemPrompt = "You are Aethyro, a highly capable AI assistant. Give direct, decisive answers: lead with your best concrete recommendation or estimate based on the specifics you've already been given, rather than repeating a clarifying question the user has effectively already answered. Only ask a follow-up question when you genuinely lack information needed to answer usefully — and when you do answer with incomplete information, state your assumption and commit to a real answer anyway rather than deferring the whole thing back to the user.";
@@ -782,6 +826,16 @@ serve(async (req) => {
     });
     const { data: newBal } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
 
+    // Only queried when a cap is actually set -- no extra RPC cost for the
+    // common case of no cap. Lets the client show "X/Y this month" passively
+    // after every message, not just once the hard block above fires.
+    let monthlySpend: number | undefined;
+    const monthlyCap = profileRes.data?.monthly_spend_cap_credits;
+    if (typeof monthlyCap === "number") {
+      const { data: spentNow } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: user.id });
+      if (typeof spentNow === "number") monthlySpend = spentNow;
+    }
+
     // Auto-title
     let title: string | undefined;
     if (historyRaw.length === 0 && firstMsg) {
@@ -830,6 +884,8 @@ serve(async (req) => {
       title,
       receipt,
       error: responseError,
+      monthlySpend,
+      monthlyCap,
       cost: {
         credits: cost,
         model: modelKey,
@@ -1023,7 +1079,6 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
 
         emitToolPrefix(controller);
 
-        const supportsThinking = MODEL === MODEL_MAP.sonnet || MODEL === MODEL_MAP.opus;
         const finalStream = anthropic.messages.stream({
           model: MODEL,
           max_tokens: supportsThinking ? MAX_TOKENS_THINKING : MAX_TOKENS,
