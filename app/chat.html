@@ -550,7 +550,7 @@
         <textarea id="input" placeholder="Message Aethyro…" rows="1" required></textarea>
         <button type="submit" id="sendBtn">Send</button>
       </form>
-      <div class="composer-hint">⌘/Ctrl+Enter or Enter ↵ to send &nbsp;·&nbsp; Shift+Enter for new line</div>
+      <div class="composer-hint"><span id="costEstimate"></span>⌘/Ctrl+Enter or Enter ↵ to send &nbsp;·&nbsp; Shift+Enter for new line</div>
     </div>
   </div>
 </div>
@@ -956,6 +956,39 @@ I often need help with: client quotes, contract review, business Instagram posts
     inp.style.height=Math.min(inp.scrollHeight,160)+'px';
   });
 
+  /* ── Pre-send cost estimate ──
+     Client-side duplicate of chat edge function's CREDIT_RATES/MAX_TOKENS,
+     used only to show a worst-case ceiling before sending -- never the
+     real bill, which the server always computes from actual token counts
+     after the reply completes. Deliberately worst-case (this message's
+     length for input, the real max_tokens ceiling for output) rather than
+     a guess at the actual reply length, same reasoning as the server's
+     own monthly-cap estimate. Real pre-launch feedback: not knowing the
+     cost before a heavy/auto-routed send was the single most-raised
+     concern about pay-per-use pricing. */
+  var CLIENT_CREDIT_RATES={haiku:{input:0.08,output:0.40},sonnet:{input:0.30,output:1.50},opus:{input:1.50,output:7.50}};
+  var CLIENT_MAX_TOKENS=4096, CLIENT_MAX_TOKENS_THINKING=8192;
+  function estimateWorstCaseCost(modelKey, text){
+    var rates=CLIENT_CREDIT_RATES[modelKey]||CLIENT_CREDIT_RATES.sonnet;
+    var estInputTokens=Math.ceil((text||'').length/4);
+    var supportsThinking=modelKey==='sonnet'||modelKey==='opus';
+    var estMaxTokens=supportsThinking?CLIENT_MAX_TOKENS_THINKING:CLIENT_MAX_TOKENS;
+    return Math.max(1, Math.ceil((estInputTokens/1000)*rates.input + (estMaxTokens/1000)*rates.output));
+  }
+  function updateCostEstimate(){
+    var el=$('costEstimate');
+    if(!el) return;
+    var text=$('input').value.trim();
+    if(!text){ el.textContent=''; return; }
+    if(currentModel==='auto'){
+      /* Auto could route anywhere up to Opus -- show the true ceiling
+         rather than guessing which tier it'll actually pick. */
+      el.textContent='up to ~'+estimateWorstCaseCost('opus', text)+' credits (auto) · ';
+    } else {
+      el.textContent='up to ~'+estimateWorstCaseCost(currentModel, text)+' credits · ';
+    }
+  }
+
   /* ── Model selector ── */
   function setModel(key){
     currentModel=key;
@@ -963,6 +996,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     $('modelBar').querySelectorAll('.model-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-model')===currentModel); });
     setCloudNote();
     if(_prevBalance!==null) updateLowBalanceWarning(_prevBalance);
+    updateCostEstimate();
   }
   function initModelBar(){
     var bar=$('modelBar');
@@ -1644,6 +1678,21 @@ I often need help with: client quotes, contract review, business Instagram posts
         cursor.remove();
         bubble.classList.add('error');
         bubble.innerHTML='';
+        var d=await resp.json().catch(function(){return{};});
+        if(d.error==='Monthly cap reached'){
+          /* Distinct from being out of credits -- buying more credits does
+             nothing here, since the cap is on spend, not balance. Point at
+             the dashboard's cap control instead of the buy-credits modal. */
+          var capMsg=document.createTextNode('You’ve hit your monthly spend cap ('+d.monthly_spend+'/'+d.monthly_cap+' credits this month). ');
+          var capLink=document.createElement('a');
+          capLink.href='./dashboard.html#spendCapPanel';
+          capLink.target='_blank';
+          capLink.rel='noopener';
+          capLink.textContent='Raise or remove your cap →';
+          bubble.appendChild(capMsg);
+          bubble.appendChild(capLink);
+          return;
+        }
         var oocMsg=document.createTextNode("You’re out of credits.");
         var oocBtn=document.createElement('button');
         oocBtn.className='ooc-buy-btn';
@@ -1652,7 +1701,6 @@ I often need help with: client quotes, contract review, business Instagram posts
         bubble.appendChild(oocMsg);
         bubble.appendChild(document.createElement('br'));
         bubble.appendChild(oocBtn);
-        var d=await resp.json().catch(function(){return{};});
         if(typeof d.balance==='number') setBalance(d.balance);
         else lockForDepleted();
         return;
@@ -1756,7 +1804,8 @@ I often need help with: client quotes, contract review, business Instagram posts
           var costEl=document.createElement('div');
           costEl.className='msg-cost';
           costEl.innerHTML='<span class="mc-credits">'+mc.credits+' credit'+(mc.credits===1?'':'s')+'</span>'+
-            '<span class="mc-detail">· '+mc.inputTokens.toLocaleString()+' in / '+mc.outputTokens.toLocaleString()+' out tokens · '+modelLabel+'</span>';
+            '<span class="mc-detail">· '+mc.inputTokens.toLocaleString()+' in / '+mc.outputTokens.toLocaleString()+' out tokens · '+modelLabel+'</span>'+
+            (typeof meta.monthlyCap==='number' ? '<span class="mc-detail">· '+meta.monthlySpend+'/'+meta.monthlyCap+' this month</span>' : '');
           /* Signed generation receipt: a tamper-evident record (model, tokens,
              cost, retrieval/tool context) a user can hold onto and show
              someone else as proof of what was AI-generated and from what --
@@ -1867,7 +1916,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     renderChips();
     send(text, atts);
   });
-  $('input').addEventListener('input',function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,160)+'px'; });
+  $('input').addEventListener('input',function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,160)+'px'; updateCostEstimate(); });
   $('input').addEventListener('keydown',function(e){ if(e.key==='Enter'&&((e.metaKey||e.ctrlKey)||!e.shiftKey)){ e.preventDefault(); $('composer').requestSubmit(); } });
 
   /* ── Workspace Context ── */

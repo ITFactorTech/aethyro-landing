@@ -350,6 +350,16 @@
       <div class="msg" id="autoTopupMsg"></div>
     </div>
 
+    <!-- MONTHLY SPEND CAP -->
+    <div class="panel" style="margin-top:1rem" id="spendCapPanel">
+      <h2>Monthly spend cap</h2>
+      <p class="muted" style="font-size:.85rem;margin-top:.3rem">Set a hard ceiling on credits spent per calendar month. Once you'd cross it, chat blocks the send instead of billing past it — no cap by default.</p>
+      <div id="spendCapBody" style="margin-top:.85rem">
+        <p class="muted" style="font-size:.78rem">Loading…</p>
+      </div>
+      <div class="msg" id="spendCapMsg"></div>
+    </div>
+
     <!-- API KEYS -->
     <div class="panel" style="margin-top:1rem" id="apiKeysPanel">
       <h2>API Keys</h2>
@@ -452,7 +462,7 @@
         supabase.from('referral_codes').select('code').limit(1).maybeSingle(),
         supabase.from('referral_events').select('id',{count:'exact',head:true}),
         supabase.from('credit_ledger').select('delta').eq('reason','referral_bonus').gt('delta',0),
-        supabase.from('profiles').select('auto_topup_enabled,auto_topup_pack,stripe_payment_method_id').eq('id',user.id).single()
+        supabase.from('profiles').select('auto_topup_enabled,auto_topup_pack,stripe_payment_method_id,monthly_spend_cap_credits').eq('id',user.id).single()
       ]);
 
       // ── Credits ──
@@ -603,6 +613,62 @@
       var atParam = new URLSearchParams(location.search).get('autotopup');
       if(atParam === 'success') autoTopupMsg('Card saved — auto-topup is now on.', 'ok');
       else if(atParam === 'cancelled') autoTopupMsg('Auto-topup setup cancelled — nothing was saved.', 'err');
+
+      // ── Monthly spend cap ──
+      // monthSpend (computed above, same monthStart filter as the existing
+      // "Credits used this month" stat card) is reused here rather than a
+      // second get_monthly_spend() RPC call -- this is a display-only number;
+      // the real enforcement lives server-side in chat's pre-send gate.
+      function spendCapMsg(text, kind){
+        var el = $('spendCapMsg');
+        el.textContent = text;
+        el.className = 'msg show ' + (kind || 'ok');
+      }
+
+      function renderSpendCap(){
+        var body = $('spendCapBody');
+        var cap = autoProf && autoProf.monthly_spend_cap_credits;
+        if(typeof cap === 'number'){
+          var pct = Math.min(100, Math.round((monthSpend / cap) * 100));
+          body.innerHTML =
+            '<div style="font-size:.85rem;margin-bottom:.5rem">'+monthSpend.toLocaleString()+' / '+cap.toLocaleString()+' credits used this month</div>'
+            +'<div style="height:6px;background:var(--border,#2a2a2a);border-radius:100px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'#ef4444':'#ff4d00')+'"></div></div>'
+            +'<div style="margin-top:.85rem;display:flex;gap:.6rem;align-items:center">'
+            +'<input id="spendCapInput" type="number" min="0" step="1" value="'+cap+'" style="background:var(--surface,#141414);color:var(--text,#f0f0f0);border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:.5rem .7rem;font-size:.85rem;width:120px"/>'
+            +'<button class="btn btn-ghost" id="spendCapSave" style="width:auto;padding:.5rem 1rem">Update cap</button>'
+            +'<button class="btn btn-ghost" id="spendCapClear" style="width:auto;padding:.5rem 1rem">Remove cap</button>'
+            +'</div>';
+        } else {
+          body.innerHTML =
+            '<div style="font-size:.85rem;margin-bottom:.75rem">No cap set — '+monthSpend.toLocaleString()+' credits used this month.</div>'
+            +'<div style="display:flex;gap:.6rem;align-items:center">'
+            +'<input id="spendCapInput" type="number" min="0" step="1" placeholder="e.g. 200" style="background:var(--surface,#141414);color:var(--text,#f0f0f0);border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:.5rem .7rem;font-size:.85rem;width:120px"/>'
+            +'<button class="btn" id="spendCapSave" style="width:auto;padding:.5rem 1rem;background:#ff4d00;color:#fff;font-weight:700;border-radius:8px;border:none;cursor:pointer">Set cap</button>'
+            +'</div>';
+        }
+        var saveBtn = document.getElementById('spendCapSave');
+        saveBtn.onclick = async function(){
+          var input = document.getElementById('spendCapInput');
+          var val = parseInt(input.value, 10);
+          if(!Number.isInteger(val) || val < 0){ spendCapMsg('Enter a whole number of credits (0 or more).', 'err'); return; }
+          saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+          var r = await supabase.from('profiles').update({ monthly_spend_cap_credits: val }).eq('id', user.id);
+          if(r.error){ spendCapMsg('Could not save cap: '+r.error.message, 'err'); saveBtn.disabled=false; saveBtn.textContent='Set cap'; return; }
+          autoProf.monthly_spend_cap_credits = val;
+          spendCapMsg('Monthly cap set to '+val.toLocaleString()+' credits.', 'ok');
+          renderSpendCap();
+        };
+        var clearBtn = document.getElementById('spendCapClear');
+        if(clearBtn) clearBtn.onclick = async function(){
+          clearBtn.disabled = true; clearBtn.textContent = 'Removing…';
+          var r = await supabase.from('profiles').update({ monthly_spend_cap_credits: null }).eq('id', user.id);
+          if(r.error){ spendCapMsg('Could not remove cap: '+r.error.message, 'err'); clearBtn.disabled=false; clearBtn.textContent='Remove cap'; return; }
+          autoProf.monthly_spend_cap_credits = null;
+          spendCapMsg('Monthly cap removed.', 'ok');
+          renderSpendCap();
+        };
+      }
+      renderSpendCap();
 
       // ── Team ──
       function teamMsg(text, kind){
