@@ -2705,9 +2705,31 @@ I often need help with: client quotes, contract review, business Instagram posts
     list.innerHTML='';
     var routineNameById={};
     r.data.forEach(function(rt){ routineNameById[rt.id]=rt.name; });
+
+    /* Recent run history -- lets a card show "ran fine 10 times, skipped
+       once" instead of only the single last_result string, which an
+       empty-balance skip silently overwrites with no other trace. One
+       fetch for every routine on the page, grouped client-side by
+       routine_id (already ordered newest-first, so .push while <5 keeps
+       exactly the most recent few per routine). */
+    var runLogByRoutine={};
+    var routineIds=r.data.map(function(rt){ return rt.id; });
+    if(routineIds.length){
+      var logRes=await supabase.from('routine_run_log').select('routine_id,status,detail,ran_at').in('routine_id',routineIds).order('ran_at',{ascending:false}).limit(200);
+      (logRes.data||[]).forEach(function(row){
+        if(!runLogByRoutine[row.routine_id]) runLogByRoutine[row.routine_id]=[];
+        if(runLogByRoutine[row.routine_id].length<5) runLogByRoutine[row.routine_id].push(row);
+      });
+    }
+
     r.data.forEach(function(rt){
       var card=document.createElement('div'); card.className='intel-card';
       var lastRun=rt.last_run_at?timeAgo(new Date(rt.last_run_at)):'Never run';
+      var runLog=runLogByRoutine[rt.id]||[];
+      var lastAttempt=runLog[0];
+      var skipBadge=(lastAttempt&&lastAttempt.status==='skipped_no_credits')
+        ?'<div style="display:flex;align-items:center;gap:.35rem;margin-top:.3rem;font-size:.72rem;color:#f5a524"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>Last run skipped — out of credits</div>'
+        :'';
       var nextRunStr='';
       if(rt.next_run_at){
         var nextDate=new Date(rt.next_run_at);
@@ -2726,7 +2748,18 @@ I often need help with: client quotes, contract review, business Instagram posts
           (rt.forked_from?' · <span style="color:var(--t3)">forked</span>':'')+
           (rt.next_routine_id?' · <span style="color:#c4b5fd">➜ then: '+intelEsc(routineNameById[rt.next_routine_id]||'(deleted)')+'</span>':'')+
         '</div>'+
+        skipBadge+
         (rt.last_result?'<div class="intel-card-result" style="margin-top:.4rem">'+renderMarkdown(rt.last_result.slice(0,300))+'</div>':'');
+      var historyList=document.createElement('div'); historyList.style.display='none'; historyList.style.marginTop='.5rem';
+      if(runLog.length){
+        historyList.innerHTML=runLog.map(function(row){
+          var icon=row.status==='completed'?'<span style="color:var(--green)">✓</span>':row.status==='error'?'<span style="color:#f87171">✗</span>':'<span style="color:#f5a524">⚠</span>';
+          var label=row.status==='completed'?'Ran':row.status==='error'?'Error':'Skipped — no credits';
+          return '<div style="display:flex;gap:.4rem;align-items:baseline;font-size:.72rem;color:var(--t3);padding:.2rem 0;border-bottom:1px solid var(--b2)">'+icon+'<span style="color:var(--text)">'+label+'</span><span style="margin-left:auto">'+timeAgo(new Date(row.ran_at))+'</span></div>';
+        }).join('');
+      } else {
+        historyList.innerHTML='<div style="font-size:.72rem;color:var(--t3)">No run history yet.</div>';
+      }
       var actions=document.createElement('div'); actions.className='intel-card-actions';
       var pubBtn=document.createElement('button'); pubBtn.className='intel-btn intel-btn-sm'; pubBtn.textContent=rt.is_public?'Make private':'Publish';
       pubBtn.title=rt.is_public?'Remove from the community gallery':'Share this routine in the community gallery so others can fork it';
@@ -2778,6 +2811,9 @@ I often need help with: client quotes, contract review, business Instagram posts
         }catch(e){ showToast('Network error','err'); }
         finally{ runBtn.disabled=false; runBtn.textContent='Run now'; }
       });
+      var historyBtn=document.createElement('button'); historyBtn.className='intel-btn intel-btn-sm'; historyBtn.textContent='History';
+      historyBtn.title='Recent run attempts for this routine — completed, skipped, or errored';
+      historyBtn.addEventListener('click',function(){ historyList.style.display=historyList.style.display==='none'?'block':'none'; });
       var hookBtn=document.createElement('button'); hookBtn.className='intel-btn intel-btn-sm'; hookBtn.textContent='Webhook';
       hookBtn.title='Get a URL that lets an external system (GitHub Actions, Zapier, a script) trigger this routine on demand';
       hookBtn.addEventListener('click',function(){ openWebhookModal(rt.id); });
@@ -2807,8 +2843,9 @@ I often need help with: client quotes, contract review, business Instagram posts
         card.style.opacity='0'; card.style.transition='opacity .25s'; setTimeout(function(){ card.remove(); },260);
         loadIntelStats();
       });
-      actions.appendChild(togWrap); actions.appendChild(emailBtn); actions.appendChild(runBtn); actions.appendChild(hookBtn); actions.appendChild(chainBtn); actions.appendChild(delBtn);
+      actions.appendChild(togWrap); actions.appendChild(emailBtn); actions.appendChild(runBtn); actions.appendChild(historyBtn); actions.appendChild(hookBtn); actions.appendChild(chainBtn); actions.appendChild(delBtn);
       card.appendChild(chainSel);
+      card.appendChild(historyList);
       card.appendChild(actions); list.appendChild(card);
     });
     loadCommunityRoutines();

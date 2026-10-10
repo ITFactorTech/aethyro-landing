@@ -1,3 +1,15 @@
+// run-routines v4 — visible missed-run history + a real notification on
+// skip, closing the trust gap real pre-launch feedback flagged: an
+// empty-balance skip previously only overwrote last_result with a
+// one-line note nobody saw unless they opened the app, with zero
+// notification and no way to tell "ran fine 10 times, skipped once" from
+// "has never worked." Every attempt (completed/skipped_no_credits/error)
+// now also writes a row to the new routine_run_log table (see its own
+// migration) so the UI can show real history, not just the latest
+// last_result. On a credit skip specifically, if the routine has
+// email_on_result = true, send-routine-result-email now also fires with
+// skipped:true -- the same opt-in a user already set to hear about
+// results now also tells them when a run didn't happen and why.
 // run-routines v3 — the return-visit hook: after a successful run, if the
 // routine has email_on_result = true, invokes send-routine-result-email so
 // the owner gets a short summary instead of the result sitting silently
@@ -174,6 +186,26 @@ serve(async (req) => {
           next_run_at:  nextCronDate(routine.schedule).toISOString(),
           last_result:  "⚠️ Skipped — no credits.",
         }).eq("id", routine.id);
+        const { error: logErr } = await supaAdmin.from("routine_run_log").insert({
+          routine_id: routine.id,
+          user_id:    routine.user_id,
+          status:     "skipped_no_credits",
+          detail:     "No credits remaining",
+        });
+        if (logErr) console.error("run-routines: routine_run_log insert failed", logErr.message);
+        // Same opt-in that gets you a result email now also tells you when
+        // a run didn't happen and why -- previously this was a fully silent
+        // skip with no notification of any kind.
+        if (routine.email_on_result) {
+          try {
+            await supaAdmin.functions.invoke("send-routine-result-email", {
+              headers: { "X-Internal-Key": SERVICE_ROLE_KEY },
+              body: { user_id: routine.user_id, routine_name: routine.name, skipped: true, reason: "no_credits" },
+            });
+          } catch (emailErr) {
+            console.error("run-routines: skip-notification invoke failed", (emailErr as Error).message);
+          }
+        }
         results.push({ id: routine.id, name: routine.name, status: "skipped_no_credits" });
         continue;
       }
@@ -217,6 +249,14 @@ serve(async (req) => {
         next_run_at: nextCronDate(routine.schedule).toISOString(),
         last_result: resultText.slice(0, 10000),
       }).eq("id", routine.id);
+
+      const { error: logErr } = await supaAdmin.from("routine_run_log").insert({
+        routine_id: routine.id,
+        user_id:    routine.user_id,
+        status:     "completed",
+        detail:     resultText.slice(0, 500),
+      });
+      if (logErr) console.error("run-routines: routine_run_log insert failed", logErr.message);
 
       results.push({ id: routine.id, name: routine.name, status: "completed" });
 
@@ -265,6 +305,13 @@ serve(async (req) => {
         next_run_at: nextCronDate(routine.schedule).toISOString(),
         last_result: `Error: ${(e as Error).message}`,
       }).eq("id", routine.id);
+      const { error: logErr } = await supaAdmin.from("routine_run_log").insert({
+        routine_id: routine.id,
+        user_id:    routine.user_id,
+        status:     "error",
+        detail:     (e as Error).message.slice(0, 500),
+      });
+      if (logErr) console.error("run-routines: routine_run_log insert failed", logErr.message);
       results.push({ id: routine.id, name: routine.name, status: "error" });
     }
   }
