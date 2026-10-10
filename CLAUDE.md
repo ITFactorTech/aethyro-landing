@@ -515,6 +515,82 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-10** — **Fixed: `chat`'s `finalize()` still billed a credit for
+  turns that delivered zero output text**, found live auditing real
+  production data rather than guessing from a user report (same session
+  that pulled the Reddit-feedback-driven monthly-cap work below, plus a
+  deep-dive into real churn: a 30-message sample of the "sent a few
+  messages, never came back" cohort, the referrer-attribution breakdown,
+  and this finding). Direct SQL across the whole `messages` table: 37 of
+  111 total user messages, ever, had no saved assistant reply following
+  them (a user message with nothing — or another user message — directly
+  after it in the same conversation), spread across 19 distinct accounts,
+  not a couple of broken sessions. Of those 37, 12 had a real
+  `chat_usage` `credit_ledger` charge land within 30 seconds of the send
+  (115 credits total on that tight, conservative window — the real total
+  across a looser window was higher). The 2026-10-08 "(no response)" fix
+  (`chat` v49, see that entry below) only ever added the client-facing
+  `responseError` explanation when `assistantReply` was empty; it never
+  touched the actual charge, so the exact bug it was fixing — billed for
+  nothing delivered — was only half-fixed. Since `chat.html` never
+  persists an empty assistant reply to `messages` at all, the only trace
+  of any of this was the stray ledger row; there was nothing in `messages`
+  to explain it after the fact, which is exactly why this took a
+  production-data audit to find rather than ever surfacing as a clean bug
+  report.
+  **Fix** (`chat` now v53): `finalize()`'s `cost` computation is now
+  `replyIsEmpty ? 0 : Math.max(1, ...)` — the existing 1-credit floor is
+  skipped entirely, not just reduced, when the turn produced no output —
+  and the `credit_ledger` insert itself is now conditional on `cost > 0`.
+  The generation-receipt RPC call (`create_generation_receipt`) is now
+  also skipped on an empty reply, since there's nothing to attest to and
+  no cost to record. Input tokens are still consumed server-side on an
+  empty turn (the Anthropic call still happened), but that's now
+  explicitly a cost this product absorbs rather than passes to a user who
+  received nothing back — matches the same "a blocked attempt never
+  partially bills" principle the same-day monthly-spend-cap work below
+  already established for the pre-send gate, just applied to the
+  post-send empty-output case too. No client-side change needed:
+  `chat.html`'s cost-badge rendering already lives entirely inside
+  `if(full){...}` (`full` being the accumulated reply text), so it
+  already skipped rendering a cost badge whenever there was nothing to
+  show a cost for — confirmed by reading the client code rather than
+  assumed.
+  **Verified live with a real throwaway account**, not just code review:
+  `chat`'s live source fetched back via `get_edge_function` and diffed
+  byte-for-byte against local disk (clean match) before trusting the
+  deploy. Positive-path (no-regression) check: a real message that got a
+  real, substantive declined-with-explanation reply (144 in / 129 out
+  tokens, non-empty `full` text) correctly billed 1 credit and produced a
+  real generation receipt — confirms ordinary billing, including a
+  model's conversational decline that still contains real text, is
+  completely unaffected by this fix. **What this does NOT establish**:
+  forcing the actual `replyIsEmpty` branch (a true zero-content
+  `stop_reason:"refusal"`, as opposed to a normal declined-with-text
+  reply) live wasn't attempted — doing so reliably would mean crafting a
+  prompt severe enough to trip Anthropic's own content classifier into a
+  genuine empty-content refusal, which wasn't a prompt worth constructing
+  for a QA check, and this project's own history already documents this
+  exact class of case as "inherently non-deterministic LLM behavior, not
+  something a curl replay can force on demand" (see the 2026-10-08 entry
+  below). Confidence instead rests on the code path itself being a small,
+  direct, fully-reviewed conditional (`cost = replyIsEmpty ? 0 : ...`)
+  plus the real production data that motivated it — the fix will show up
+  the next time this project's own 2026-10-10 audit methodology (a
+  `messages`-vs-`credit_ledger` join) is re-run. Cleaned up: deleted the
+  throwaway account, confirmed zero orphaned rows across
+  `profiles`/`credit_ledger`/`conversations`/`generation_receipts`/
+  `auth.users`, `test-admin-setup` re-stubbed to 410 and confirmed via a
+  live curl.
+  **Scope note**: this only fixes the authenticated `chat` function's
+  `credit_ledger` billing. The anonymous `trial-chat` path has the exact
+  same root-cause shape (`increment_trial_usage` runs unconditionally
+  *before* the Anthropic call, so an anonymous user who hits a refusal
+  still loses one of their 3 daily free messages) but is lower-stakes
+  (a free-trial message, not a paid credit) and architecturally different
+  to fix safely (the increment has to happen before the call for the rate
+  limit to actually bound cost exposure, unlike `chat`'s post-call
+  billing) — flagged here, not fixed in this pass.
 - **2026-10-10** — **Added a monthly spend cap + a pre-send cost estimate**,
   the two most-repeated asks from a round of real pre-launch feedback on
   the credit-based pricing model — three separate reviewers independently

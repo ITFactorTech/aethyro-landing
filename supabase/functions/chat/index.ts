@@ -1,3 +1,17 @@
+// chat v53 — fixed billing-without-delivery: finalize() no longer charges
+// any credits (and skips the generation receipt) when assistantReply is
+// genuinely empty (replyIsEmpty -- refusal, thinking-budget exhaustion, or
+// a dropped stream). Previously the v49 fix only ever added the client-
+// facing `responseError` explanation; the actual `credit_ledger` charge
+// was untouched, so a turn that delivered zero output text could still
+// bill the existing 1-credit floor. Found live 2026-10-10 auditing real
+// production data (not a hypothetical): 37 of 111 total user messages
+// across the whole product had no saved assistant reply, and 12 of those
+// had a real chat_usage charge land within 30 seconds of the send (115
+// credits total on a conservative, tightly-time-windowed count -- the
+// real total across a looser window was higher). Input tokens are still
+// consumed server-side on an empty turn, but that's a cost this product
+// absorbs, not one to pass to a user who received nothing back.
 // chat v52 — added an optional monthly spend cap: profiles.monthly_spend_cap_credits
 // (client-set, null = no cap). The pre-send gate now computes a worst-case
 // credit estimate for the message about to run (input tokens from this
@@ -813,17 +827,33 @@ serve(async (req) => {
             ? "Aethyro ran out of room thinking that one through before it could answer — try asking more directly, or split it into smaller questions."
             : "Aethyro didn't generate a reply to that — try rephrasing your question.")
       : undefined;
-    const cost = Math.max(
-      1,
-      Math.ceil((inputTokens / 1000) * rates.input + (outputTokens / 1000) * rates.output)
-    );
-    await supaAdmin.from("credit_ledger").insert({
-      user_id: user.id,
-      delta: -cost,
-      reason: "chat_usage",
-      team_id: profileRes.data?.team_id ?? null,
-      metadata: { model: modelKey, input_tokens: inputTokens, output_tokens: outputTokens },
-    });
+    // A turn that delivered zero output text (refusal, thinking-budget
+    // exhaustion, a dropped stream) is billed nothing -- found live
+    // 2026-10-10 auditing real production data: 37 of 111 total user
+    // messages across the whole product had no saved assistant reply, and
+    // 12 of those had a real chat_usage charge land within 30 seconds (115
+    // credits total on a conservative count). The v49 fix above only ever
+    // added the client-facing `responseError` explanation; the actual
+    // charge was untouched, so a user could be billed for a reply they
+    // never received, with the only trace being a ledger row -- nothing in
+    // `messages` to explain it after the fact. Input tokens were still
+    // consumed server-side on an empty turn, but that's a cost to the
+    // business to absorb, not one to pass to a user who got nothing back.
+    const cost = replyIsEmpty
+      ? 0
+      : Math.max(
+          1,
+          Math.ceil((inputTokens / 1000) * rates.input + (outputTokens / 1000) * rates.output)
+        );
+    if (cost > 0) {
+      await supaAdmin.from("credit_ledger").insert({
+        user_id: user.id,
+        delta: -cost,
+        reason: "chat_usage",
+        team_id: profileRes.data?.team_id ?? null,
+        metadata: { model: modelKey, input_tokens: inputTokens, output_tokens: outputTokens },
+      });
+    }
     const { data: newBal } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
 
     // Only queried when a cap is actually set -- no extra RPC cost for the
@@ -858,25 +888,27 @@ serve(async (req) => {
     // fire-and-forget) so the receipt is ready to hand to the client in
     // this same response rather than a follow-up round trip.
     let receipt: { receipt_id: string; payload: unknown; signature: string } | undefined;
-    try {
-      const { data: receiptData, error: receiptErr } = await supaAdmin.rpc("create_generation_receipt", {
-        p_user_id: user.id,
-        p_conversation_id: conversationId,
-        p_model: modelKey,
-        p_requested_model: requestedModel,
-        p_input_tokens: inputTokens,
-        p_output_tokens: outputTokens,
-        p_credits: cost,
-        p_sources: {
-          tools_used: toolEvents,
-          memory_context_count: memoryContextCount,
-          document_context_count: documentContextCount,
-        },
-      });
-      if (receiptErr) console.error("chat: create_generation_receipt failed", receiptErr.message);
-      else receipt = receiptData as typeof receipt;
-    } catch (e) {
-      console.error("chat: create_generation_receipt threw", (e as Error).message);
+    if (!replyIsEmpty) {
+      try {
+        const { data: receiptData, error: receiptErr } = await supaAdmin.rpc("create_generation_receipt", {
+          p_user_id: user.id,
+          p_conversation_id: conversationId,
+          p_model: modelKey,
+          p_requested_model: requestedModel,
+          p_input_tokens: inputTokens,
+          p_output_tokens: outputTokens,
+          p_credits: cost,
+          p_sources: {
+            tools_used: toolEvents,
+            memory_context_count: memoryContextCount,
+            document_context_count: documentContextCount,
+          },
+        });
+        if (receiptErr) console.error("chat: create_generation_receipt failed", receiptErr.message);
+        else receipt = receiptData as typeof receipt;
+      } catch (e) {
+        console.error("chat: create_generation_receipt threw", (e as Error).message);
+      }
     }
 
     controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({
