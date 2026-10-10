@@ -515,6 +515,78 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-10** — **Added signup-source attribution** (`profiles.signup_referrer`/
+  `signup_utm`), after a direct cohort investigation (pulling real message
+  content, referral chains, signup timing, and email domains for the
+  "44 of 51 signups in 7 days" figure cited the day before) found that a
+  meaningful share of that recent "growth" shows strong signatures of
+  disposable/freebie-hunter traffic — temp-mail email domains
+  (`onldm.net`/`skidder.wtf`/`vietnam2.mail10p.com`), "what model are you"
+  as an entire first interaction, duplicated verbatim benchmark puzzles
+  across unrelated accounts, and one bot-like referral chain — rather than
+  real prospects. There was no way to tell where any of this traffic
+  originates; it had to be inferred after the fact from message content,
+  which doesn't scale and can't be checked again next time this happens.
+  Two new nullable `profiles` columns, both written exactly once, only by
+  `handle_new_user()` (the `SECURITY DEFINER` trigger on `auth.users`
+  INSERT — see the schema-gotchas note above on this trigger predating
+  the repo's migration history) reading `new.raw_user_meta_data`, which
+  bypasses table grants entirely: **no `UPDATE` grant was added for
+  `authenticated` on either column** — the client has no way to write or
+  overwrite these after signup, by design, least-privilege. Migration:
+  `20261010084656_signup_source_tracking.sql`.
+  Client side: a small first-touch-attribution snippet (document.referrer
+  + any `utm_source`/`utm_medium`/`utm_campaign`/`utm_term`/`utm_content`
+  query params, first-touch-wins via `sessionStorage`, never overwritten
+  by a later in-site page view) added to both `index.html` and
+  `app/chat.html` — both are real external entry points, since most of
+  the homepage's own "Start free" CTAs point straight at
+  `/app/chat.html`'s anonymous trial mode rather than at
+  `/app/signup.html` directly (confirmed by grep before deciding where to
+  put this: only the footer and one mobile-nav CTA link to `signup.html`
+  itself). `app/signup.html` reads that `sessionStorage` snapshot back
+  (falling back to its own `document.referrer`/query string for a direct-
+  to-signup visit, e.g. a shared link landing straight on
+  `/app/signup.html?utm_source=...`) and passes it as `options.data` on
+  both `supabase.auth.signUp()` (email+password) and `signInWithOtp()`
+  (magic link) — landing in `auth.users.raw_user_meta_data`, where the
+  trigger picks it up at insert time.
+  **Known, deliberate gap, not fixed here**: OAuth signups (GitHub/Google)
+  get neither column populated — `signInWithOAuth()` has no equivalent
+  metadata passthrough in `supabase-js` (confirmed by checking its actual
+  options: `redirectTo`/`scopes`/`queryParams` only, no `data`). Both new
+  columns' own `comment on column` note this explicitly. Fixing it would
+  mean a post-redirect client `UPDATE` (needing a new, narrowly-scoped
+  `authenticated` UPDATE grant on just these two columns, guarded so it
+  only ever fires once) — judged bigger scope than what was asked
+  ("cheap, one migration + one line in signup.html") and deferred rather
+  than built speculatively.
+  **Verified live, not just by reading the trigger**: redeployed
+  `test-admin-setup` with real `create`/`delete` handlers (re-stubbed to
+  410 after, confirmed via a live curl), created one throwaway account
+  with synthetic `user_metadata` matching exactly what `signup.html` now
+  sends (`signup_referrer:"https://news.ycombinator.com/item?id=12345"`,
+  `signup_utm:{utm_source:"hackernews",utm_medium:"social"}`) — both
+  columns landed correctly in `profiles`, verbatim. A second throwaway
+  account created with **no** metadata (simulating a direct, un-attributed
+  signup) correctly got `null` for both columns, with zero regression to
+  the existing one-time `referral_codes`/`signup_bonus` creation (still
+  exactly one row each — the double-signup-bonus bug this file already
+  documents fixing once, re-checked here since this PR touches the same
+  trigger). `has_column_privilege` confirmed `authenticated` has `SELECT`
+  but not `UPDATE` on both new columns, `anon` has neither. All 3 touched
+  pages' inline `<script>` blocks syntax-checked clean with `node --check`
+  after editing. Cleaned up both throwaway accounts, confirmed zero
+  orphaned rows across `profiles`/`referral_codes`/`credit_ledger`/
+  `auth.users`.
+  **Scope note**: this only captures attribution going forward — the 51
+  existing accounts from the cohort investigation have `signup_referrer`/
+  `signup_utm` both `null` and stay that way; there's no way to
+  retroactively reconstruct real first-touch data for them. Next time a
+  growth post goes out (the drafted HN/Reddit/Indie-Hackers posts are
+  still sitting unposted), this is what will show whether the resulting
+  signups look like the same low-intent pattern or something different.
+
 - **2026-10-09** — **Added server-side purchase-funnel logging**, after a
   strategy discussion grounded in fresh numbers: 51 total users, 44 signed
   up in the last 7 days, but **still $0 lifetime revenue and 0 purchases,

@@ -26,6 +26,23 @@
 <script>document.addEventListener('DOMContentLoaded',function(){if(window.hljs)hljs.configure({ignoreUnescapedHTML:true});});</script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
+<!-- First-touch attribution, same as index.html -- chat.html is itself a
+     direct external entry point for anyone sharing/linking the live demo. -->
+<script>
+(function(){
+  try{
+    if(sessionStorage.getItem('aethyro_first_touch')) return;
+    var p=new URLSearchParams(location.search), utm={};
+    ['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach(function(k){
+      var v=p.get(k); if(v) utm[k]=v.slice(0,200);
+    });
+    sessionStorage.setItem('aethyro_first_touch', JSON.stringify({
+      referrer: (document.referrer||'').slice(0,500),
+      utm: Object.keys(utm).length ? utm : null
+    }));
+  }catch(e){}
+})();
+</script>
 <style>
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}

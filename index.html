@@ -31,6 +31,25 @@
       else setTimeout(loadGA, 1500);
     })();
   </script>
+  <!-- First-touch attribution: capture document.referrer + any utm_* params once
+       per tab session, so signup.html can read it back later even after a few
+       in-site hops (index.html -> chat.html trial -> "Sign up free"). First
+       touch wins -- never overwritten if the visitor browses elsewhere first. -->
+  <script>
+    (function(){
+      try{
+        if(sessionStorage.getItem('aethyro_first_touch')) return;
+        var p=new URLSearchParams(location.search), utm={};
+        ['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach(function(k){
+          var v=p.get(k); if(v) utm[k]=v.slice(0,200);
+        });
+        sessionStorage.setItem('aethyro_first_touch', JSON.stringify({
+          referrer: (document.referrer||'').slice(0,500),
+          utm: Object.keys(utm).length ? utm : null
+        }));
+      }catch(e){}
+    })();
+  </script>
   <meta property="og:type" content="website"/>
   <meta property="og:url" content="https://aethyro.com/"/>
   <meta property="og:title" content="Aethyro | AI Assistant Powered by Claude Opus 5 — No Install, No Subscription"/>
