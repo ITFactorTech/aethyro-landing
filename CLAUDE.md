@@ -515,6 +515,105 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-10** — **Added real missed-run history + a notification on skip
+  for scheduled routines**, closing the exact gap honestly flagged in a
+  drafted (not yet posted) Reddit reply earlier the same day: "right now it
+  skips, no catch-up — the balance check happens, the run gets marked
+  'skipped,' and the schedule just moves to the next slot with no
+  notification... It's next on my list, not shipped yet." Previously, an
+  empty-balance skip only overwrote `user_routines.last_result` with a
+  one-line note nobody saw unless they happened to open the app — no
+  notification of any kind, and no way to tell "ran fine 10 times, skipped
+  once" from "has never worked," since each run overwrote the only trace
+  of the last one.
+  New `routine_run_log` table (migration `20261010233902_routine_run_log.sql`)
+  records every attempt — `completed`/`skipped_no_credits`/`error` — not
+  just the single most recent one `last_result` already tracked. RLS
+  gated directly on `user_id = auth.uid()` (not a join to `user_routines`,
+  since the row needs to outlive a routine's own potential deletion for
+  history purposes — though in practice `routine_id` cascades today).
+  Same `REVOKE ALL ... FROM PUBLIC, anon, authenticated` + narrow re-grant
+  discipline as every other table in this project: `authenticated` gets
+  `SELECT` only, no `INSERT`/`UPDATE`/`DELETE` — this table is written
+  only by `run-routines`' own service-role client, never the client
+  directly. 90-day retention via a new `cleanup_old_routine_run_log()`
+  function on a new daily `cleanup-routine-run-log-daily` pg_cron job,
+  same shape as the existing `cleanup_old_trial_usage()`/
+  `cleanup_old_rate_limit_counters()` pattern.
+  `run-routines` (now v4) writes a `routine_run_log` row in all three of
+  its existing code paths (the credit-skip branch, the success branch,
+  the catch-all error branch) right alongside each one's existing
+  `user_routines` update — no new code paths, just one more write where
+  the state-transition was already happening. On the credit-skip branch
+  specifically, if the routine has `email_on_result: true`, it now also
+  invokes `send-routine-result-email` with a new `skipped: true` flag —
+  the same opt-in that gets a user a result email now also tells them
+  when a run *didn't* happen and why, closing the "zero notification"
+  half of the gap. `send-routine-result-email` (now v2) branches its
+  subject/body/CTA on `skipped` — "Your '{name}' didn't run — out of
+  credits" with a "Top up credits →" link to `/#pricing` (never a bare
+  Stripe link, per this file's own hard security constraint), distinct
+  from the existing "Your '{name}' is ready" / "Open Aethyro →" success
+  copy, so the two cases read as clearly different things rather than
+  reusing one ambiguous template.
+  `chat.html`'s Routines tab: `loadRoutines()` now does one extra batched
+  fetch of up to 5 most-recent `routine_run_log` rows per visible routine
+  (grouped client-side by `routine_id`, not N+1 queries). Each card shows
+  a new amber warning-triangle badge ("Last run skipped — out of
+  credits") when its most recent attempt was a skip — visible at a
+  glance, without needing to open anything — plus a new "History" toggle
+  button that reveals up to 5 recent attempts with a status icon (✓
+  green completed / ✗ red error / ⚠ amber skipped) and a relative
+  timestamp each.
+  **Verified live end-to-end with a real throwaway account**, not just
+  code review: both edge functions' live source fetched back via
+  `get_edge_function` and diffed byte-for-byte against local disk before
+  trusting either deploy. A real routine with `email_on_result: true`
+  forced to a 0-balance account correctly wrote a `routine_run_log` row
+  (`status: 'skipped_no_credits'`), correctly updated `last_result`, and
+  correctly attempted the skip-notification email — confirmed via a
+  temporary diagnostic proxy (raw `fetch`, not `.functions.invoke()`,
+  which swallows the real response) replaying the exact same invoke
+  `run-routines` makes: reached `send-routine-result-email` and got Resend's
+  real, expected `422 validation_error` for the synthetic `@example.com`
+  test domain — the same documented non-bug this file already notes
+  multiple times (the call genuinely reaches Resend; a real address
+  would have sent). Restoring the account's balance and re-running
+  correctly hit the `completed` branch instead, writing a second
+  `routine_run_log` row with the real model output as `detail`. The
+  `chat.html` UI was verified by driving a real Playwright browser
+  against the real page with the real session injected into
+  `localStorage` — but this sandbox's headless Chromium hits a
+  pre-existing TLS-interception-proxy artifact
+  (`ERR_CERT_AUTHORITY_INVALID`) on every live Supabase REST call, the
+  same documented limitation this file already notes for `feedback.html`
+  and other Playwright checks — so the `user_routines`/`routine_run_log`
+  REST responses were mocked with the exact real row data already
+  confirmed via direct SQL, isolating the rendering-logic check from
+  this sandbox's unrelated network limitation. Confirmed via real DOM
+  inspection (not a source-text search, which gave one initial false
+  positive by matching the JS source's own string literal instead of
+  rendered output): the skip badge renders correctly, and clicking
+  "History" correctly reveals all 3 real attempts in the right order
+  with the right icons. All 4 of `chat.html`'s inline `<script>` blocks
+  syntax-checked clean with `node --check` after editing. Cleaned up:
+  deleted the throwaway account, confirmed zero orphaned rows across
+  `profiles`/`credit_ledger`/`user_routines`/`routine_run_log`/
+  `referral_codes`/`auth.users` (including `routine_run_log`'s own
+  cascade-delete), `test-admin-setup` re-stubbed to 410 and confirmed
+  via a live curl.
+  **Scope note**: this only closes the notification gap for the
+  credit-skip path specifically — a routine that errors (a bad prompt,
+  an Anthropic API failure) still only updates `last_result`/
+  `routine_run_log`, with no equivalent email, since that wasn't the gap
+  the Reddit feedback identified and errors are a different, much
+  rarer failure mode than running out of credits. Also not addressed:
+  true catch-up (running a missed execution once credits return, rather
+  than just skipping to the next scheduled slot) — the honest answer
+  given in the Reddit reply was specifically about *visibility* into
+  skips, which this closes; actual catch-up scheduling is separate,
+  larger scope not attempted here.
+
 - **2026-10-10** — **Fixed: `chat`'s `finalize()` still billed a credit for
   turns that delivered zero output text**, found live auditing real
   production data rather than guessing from a user report (same session
