@@ -515,6 +515,57 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-12** — **Ran a genuine cold-start test of the just-shipped
+  `warden` skill** (user asked to "run and test warden and fix any bugs"
+  directly after the entry below merged) — dispatched a fresh `Agent` with
+  zero inherited context to invoke `Skill({skill:"warden"})` and actually
+  execute its instructions against the live Supabase project, the real test
+  of whether the skill document itself is self-contained and correct, as
+  opposed to the author re-performing the same sweep inline. Result: the
+  skill loaded and executed cleanly end-to-end (every step in "Sweep
+  process" mapped directly onto a runnable live query, including correctly
+  joining `messages` through `conversations` per this file's own corrected
+  schema gotcha), the fresh re-sweep found zero new signups/messages/
+  referral events since the prior mission (confirmed by querying
+  `agent_missions` directly for the real timestamp, not trusting this file's
+  own "same day" prose — the actual gap was ~10 minutes, not "a few hours"),
+  and both standing signals (the one duplicate-prompt pair, the one farmed
+  referral) were independently re-verified unchanged. No code/migration/PR
+  was shipped by the test agent itself, by design — it was a dry run.
+  **Two real, concrete bugs found in `.claude/skills/warden/SKILL.md` and
+  fixed here**: (1) the file never actually told the agent to check
+  `agent_missions` for a prior run before pulling a fresh cohort — the test
+  dispatch's own briefing *asserted* that instruction existed and was wrong
+  to; a cold-start run with no passively-inherited CLAUDE.md context could
+  have re-flagged an already-adjudicated finding as new. Fixed by adding a
+  new step 0 to "Sweep process": query `agent_missions` for the last
+  `warden` run first, scope the fresh pull to after that timestamp, and
+  trust the database clock's real elapsed time over any prose description
+  of how long ago the prior run was. (2) Step 4's "fix" branch examples
+  (an email-verification delay, blocking a disposable-domain pattern,
+  tightening a rate limit) are all signup/grant-adjacent, but step 4 never
+  cross-referenced the Hard Boundaries section's requirement that any such
+  change needs `codex` (backend-reviewer) sign-off — a literal reading let
+  "build it → verify live → open a draft PR" read as a complete, self-
+  contained loop that skips the review gate entirely. Fixed by adding an
+  explicit backend-reviewer-sign-off step between "verify live" and "open a
+  draft PR." Two smaller gaps also fixed in the same pass: the "known
+  disposable domain patterns" step named no concrete list (now points at
+  the specific domains already confirmed across past sweeps, explicitly
+  framed as a non-exhaustive starting point); and the "near-identical"
+  cross-account duplication check had no defined matching method — only
+  exact-match is actually checkable with plain SQL today (confirmed live:
+  a `GROUP BY trim(content)` catches the one real duplicate pair, nothing
+  more), so the file now says that explicitly and points at this project's
+  existing pgvector/`memory_embeddings` infrastructure as the real path to
+  true semantic near-duplicate detection, not yet wired up for this
+  purpose. The test run also surfaced a concrete reason `messages` has to
+  be read as actual content, not keyword-scanned: the confirmed
+  `daunshlyha@gmail.com` farming-intent message is written entirely in a
+  non-English language, so an English keyword scan (run as a sanity check
+  during the test) returned zero hits for it — now called out explicitly
+  in the skill file so a future run doesn't substitute a keyword scan for
+  real reading.
 - **2026-10-12** — **Added `warden` to the agent team — semantic abuse/fraud
   defense for the free-credit pool — and ran its first real sweep.** User
   asked to add a genuinely novel division (explicitly not a reskinned
