@@ -26,21 +26,47 @@ across many accounts at once.
 
 ## Sweep process
 
+0. **Check for a prior sweep before pulling anything.** Query
+   `agent_missions` where `division = 'warden'`, most recent first, for the
+   last run's timestamp, scope, and outcome. Scope this run's cohort/content
+   pull to activity *after* that timestamp (new signups, new messages, new
+   referral events), and don't re-report a finding already logged there
+   unless something material has changed (a new account joining an existing
+   pattern, a repeat occurrence of an escalated-but-unfixed issue, etc.).
+   Trust what the database clock actually shows for elapsed time, not a
+   prose description of "a few hours" or "same day" from CLAUDE.md or a
+   dispatch brief — `now()` minus the prior mission's `created_at` is the
+   real gap, and it can be much shorter than it reads.
 1. **Pull the real cohort.** `auth.users` joined to `profiles` for email
    domain, `signup_referrer`/`signup_utm`, signup timing/clustering.
    Known disposable/throwaway domain patterns are a starting signal, never
    a verdict on their own — plenty of real users sign up with a personal
-   email that happens to look unusual.
+   email that happens to look unusual. No fixed list exists in this repo;
+   go in knowing the specific domains already confirmed suspicious in past
+   sweeps (`onldm.net`, `skidder.wtf`, `gonrr.net`, `*.xyz` throwaway-
+   registrar patterns, `vietnam2.mail10p.com`) as a starting point, and add
+   to this list in `CLAUDE.md`/here as new ones are confirmed — don't treat
+   it as exhaustive or stop at matching against just these.
 2. **Pull real conversation content**, `messages` joined through
    `conversations`, for the cohort in question. Specifically look for:
    - **Stated farming/automation intent** — a user asking the model to
      help script account creation, API-key extraction, or similar
-     (`daunshlyha`'s request is the confirmed template for this).
+     (`daunshlyha`'s request is the confirmed template for this). Read the
+     actual content — don't rely on an English keyword/pattern scan; a real
+     confirmed case was written entirely in a non-English language and a
+     keyword scan would silently miss it.
    - **Cross-account duplication** — the same or near-identical prompt
      text appearing verbatim across accounts with no other connection.
-     This needs a real content comparison across rows, not eyeballing one
-     account at a time — that's exactly the pattern a human reviewer
-     wouldn't practically catch.
+     Only *exact* duplication is checkable with plain SQL right now (a
+     `GROUP BY trim(content)` across the cohort's messages) — true
+     near-identical/paraphrase matching would need a real semantic pass
+     (this repo already has pgvector + `memory_embeddings`/
+     `match_memory_embeddings` infrastructure that could do this; it isn't
+     wired up for cross-account duplicate detection yet). Treat exact-match
+     as what you can actually run today, and name the near-duplicate gap
+     explicitly in your report rather than implying you checked for it —
+     don't silently read a handful of accounts by eye as a substitute; that
+     doesn't scale past a small cohort and isn't what this step claims to do.
    - **Grant-and-abandon velocity** — the free 200-credit grant spent
      within minutes of signup via `credit_ledger`, then the account never
      returns. Weak alone (plenty of real users burn credits fast on their
@@ -54,9 +80,11 @@ across many accounts at once.
    uses:
    - A small, mechanical, reviewable defense (a short email-verification
      delay before the signup bonus grants, blocking a specific confirmed
-     disposable-domain pattern, tightening a rate limit) → build it,
-     verify live with the established throwaway-account pattern, open a
-     draft PR, update `CLAUDE.md`.
+     disposable-domain pattern, tightening a rate limit) → build it, verify
+     live with the established throwaway-account pattern, **get
+     backend-reviewer (`codex`) sign-off** (every one of these examples
+     touches signup/grant logic — see Hard Boundaries below, this is not
+     optional or parallel to it), then open a draft PR, update `CLAUDE.md`.
    - Anything that could plausibly misclassify a real user (broad domain
      blocking, anything that delays or denies a legitimate signup's
      credits) → write up the real evidence and hand the call to the user.
