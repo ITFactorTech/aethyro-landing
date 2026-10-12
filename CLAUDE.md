@@ -515,6 +515,66 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-12** — **Set up a recurring scheduled trigger (a "Routine") to
+  run the restructured `site-guardian` daily** (user asked to "go ahead and
+  set up the cron schedule too" after the entry directly below merged), and
+  in doing so found a real, non-obvious platform limitation worth recording
+  since it'll bite the next attempt to do this for any other skill too.
+  **This is account-level Claude Code infrastructure, not a repo artifact**
+  — there is no file in this repo for it; it's recorded here because it's
+  exactly the kind of institutional knowledge this file exists to capture.
+  First attempt used `create_trigger` with `create_new_session_on_fire:
+  true` (a fresh session spawned per firing, rather than growing one
+  conversation's context forever) — the call itself warned "this trigger
+  stores no MCP connectors, so the sessions it fires will run without
+  connector (`mcp__<server>__*`) tools." Verified this live rather than
+  trusting the warning or ignoring it (`fire_trigger` immediately, then
+  `get_session` on the resulting session id): the fired session's own tool
+  manifest confirmed **zero** `mcp__Supabase__*` and `mcp__github__*`
+  tools, plus a `config:no-git-repo` tag — meaning it had neither the
+  database nor the actual git repository checked out, despite inheriting
+  the exact same `environment_id` as the session that created it.
+  **Root cause, confirmed via `ListConnectors`**: Supabase genuinely is an
+  org-level claude.ai connector (`connected: true`) that `create_trigger`'s
+  `connectors` param can reference by name — simply omitting it was a real,
+  fixable mistake. **GitHub is not** — it never appears in `ListConnectors`
+  at all, because repo access here comes from this specific coding
+  session's environment being created with that repo attached (the GitHub
+  App installation / repo-scope mechanism described at the top of this
+  session's own system prompt), not from an account-level integration.
+  There is currently no parameter on `create_trigger` that attaches a repo
+  to a freshly-spawned session — passing `connectors: ["Supabase"]` would
+  have fixed half the problem but not the GitHub half, and `site-guardian`
+  cannot produce *any* useful output without GitHub (even its "escalate,
+  don't build" path still needs to commit+push a CLAUDE.md update as a
+  PR) — so a fresh-session Routine was a dead end for this specific job
+  regardless of the connectors fix.
+  **Fix**: deleted that Routine and recreated it self-bound to this exact
+  session (`create_trigger` with no `create_new_session_on_fire` and no
+  `persistent_session_id` — the default — binds to the calling session
+  itself; confirmed via the response's `persistent_session_id` matching
+  this session's own id, and the absence of any connector warning on the
+  second call). This session already has confirmed, proven GitHub +
+  Supabase + repo access for the entire duration of this work, so binding
+  to it sidesteps the whole provisioning problem rather than trying to
+  solve it from inside a tool's parameter list. **Known, accepted
+  tradeoff**: `create_trigger`'s `notifications` (push/email) parameter is
+  rejected by the server for self-bound Routines — only fresh-session
+  Routines can carry it — so there's no push/email summary when this
+  fires; the sweep's report lands as a new turn in this same conversation
+  instead, and this chat's context grows by one sweep's worth each day
+  (not re-fetched fresh each time, unlike a fresh-session Routine would
+  be). Schedule: `41 7 * * *` (UTC, deliberately off the `:00`/`:30` mark
+  per this tool's own jitter guidance), daily.
+  **If a future session wants a fresh-session (clean-slate-per-run)
+  Routine for anything in this repo**: it needs either `connectors:
+  ["Supabase"]` explicitly passed (confirmed real and available) plus some
+  as-yet-unknown way to attach repo/GitHub access that doesn't exist in
+  this tool today, or it needs to be created through the claude.ai
+  Routines UI directly, which may expose repo/MCP-server selection this
+  MCP-tool interface doesn't — neither was attempted here since self-bind
+  already solved the actual job.
+
 - **2026-10-12** — **Restructured `site-guardian` from a solo checklist-
   runner into an orchestrator that dispatches a real specialist team**,
   after the user explicitly pushed back on a cheap/easy version of this
