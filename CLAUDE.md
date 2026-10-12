@@ -515,6 +515,103 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-12** — **Ran the first real sweep through the restructured
+  `site-guardian` orchestrator** (user asked to "run the first site-guardian
+  sweep now" right after the restructuring and the self-bound daily Routine
+  both merged, same day). Dispatched all 4 specialists in parallel, ran the
+  serialized checklist myself, and this is the first sweep ever logged to
+  `agent_missions` (`division:'sentinel'`) rather than only hand-written
+  here — closing the exact gap the restructuring PR flagged as newly built
+  but unexercised.
+  **Specialist results**: `codex` (backend-reviewer, sweep mode — no prior
+  cutoff existed, so it scoped to the last 2 weeks of git history plus a
+  full-repo high-risk re-verification of every `SECURITY DEFINER` function)
+  found one real, low-severity finding — see below. `site-guardian-exploit`
+  attempted all 7 roster items live (forced-negative-balance billing
+  bypass, cross-user RPC balance/spend read, `anon` reads of 9 locked-down
+  tables, webhook token replay, referral self/duplicate redemption, routine
+  -chain cycle bypass, raw Stripe-link grep) — **all 7 correctly blocked,
+  zero successful exploits**, confirming every previously-fixed
+  vulnerability on the roster still holds. `site-guardian-drift` ran the
+  *full* migration-version (95/95 exact match) and edge-function byte-diff
+  (all 26 committed functions identical to live, including the 57,915-char
+  `chat`) plus `verify_jwt`-vs-`config.toml` reconciliation (0 mismatches)
+  — completely clean, confirming the 2026-10-09 reconciliation has held
+  through everything shipped since. `oracle` checked pack pricing
+  consistency (clean — ran the repo's own `check-pack-config.mjs` directly,
+  passed) and every credit-cost worked example on `index.html`/
+  `pricing.html`/`developers.html` against the live `CREDIT_RATES`, found
+  one trivial arithmetic drift (see below), and pulled fresh real numbers:
+  **62 total users, 35 signups in the last 7 days, still $0 lifetime
+  revenue, 0 purchases ever** — unchanged monetization story, continued
+  organic growth.
+  **My own serialized checklist**: `get_advisors` (clean, only already-
+  accepted finding classes), the 24h edge-function error-log scan (clean —
+  only 2 singleton expected-error-path codes on `chat`) — and, doing this
+  scan is what finally resolved a real standing tooling limitation: the
+  `function_edge_logs`-as-a-table-name failure documented across 4+ prior
+  sweeps (2026-10-03 ×2, 2026-10-06, 2026-10-09) was never a backend
+  limitation, it was the wrong query shape. The real mechanism: one
+  unified `logs` table, `source` as a filterable **column** (value
+  `function_edge_logs` among 11 others, found via `select distinct source
+  from logs`), and ClickHouse's `CAST(... AS Nullable(Int64))` genuinely
+  erroring on this backend where `toInt64OrZero(...)` works correctly for
+  numeric comparison. Written up as a new
+  `.claude/skills/site-guardian/checks/06-edge-function-error-log-query.md`
+  so no future sweep re-hits this. Static/live page checks all clean
+  (OG tags fine, `robots.txt`/`sitemap.xml` live, unknown path still 404s,
+  zero real `buy.stripe.com` matches); the one stale-subscription-model
+  grep hit (`stripe-webhook`'s `"Subscription checkout"` branch still
+  defaulting `plan` to `"personal"`) is confirmed dead code, not a new
+  bug — unreachable since `create-checkout` (its only possible trigger)
+  has returned 410 since the 2026-09-27 decommission.
+  **Live smoke test** (two real throwaway accounts via a redeployed
+  `test-admin-setup`, restubbed to 410 + `verify_jwt:true` restored and
+  confirmed via a live curl immediately after): signup produced exactly
+  one `profiles`/`referral_codes`/`signup_bonus` row each (no double
+  -bonus regression); a real chat send on all 3 `MODEL_MAP` keys
+  succeeded with correct billing and a real signed generation receipt
+  each; referral redemption happy path (+100) and duplicate-redemption
+  (409) both correct; `buy-credits` resolved to a real `checkout.stripe.com`
+  URL. Zero orphaned rows confirmed across `profiles`/`credit_ledger`/
+  `referral_codes`/`referral_events`/`generation_receipts`/`conversations`/
+  `auth.users` after cleanup.
+  **Two fixes shipped this sweep** (both small, confident, verified live —
+  bundled into one PR per the skill's own output cap): (1)
+  `newsletter_reactions` (backfilled 2026-10-09) never got this project's
+  standard `REVOKE ALL ... FROM anon, authenticated` lockdown before its
+  narrow `GRANT SELECT` — both roles held the full default-privileges
+  floor (SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER). Not
+  currently exploitable (the table's only INSERT policy is `WITH CHECK
+  (false)`, and there's no UPDATE/DELETE policy at all, so RLS already
+  blocked both regardless of the grant) but the same recurring
+  grant-floor pattern already documented for `api_keys`/
+  `routine_webhooks`/`get_credit_balance`. Fixed with
+  `20261012145422_lock_down_newsletter_reactions_grants.sql` — verified
+  live via `has_table_privilege` before/after, plus a real anon curl
+  round-trip (public SELECT still 200s with the correct `Accept-Profile`
+  header, the RPC write path `add_newsletter_reaction()` still succeeds
+  since it's `SECURITY DEFINER` and bypasses table grants entirely, and a
+  direct anon INSERT now correctly 401s with `42501 permission denied`
+  instead of relying on RLS alone). (2) `index.html`'s "what a task
+  actually costs" weekly-usage example said "≈ 40 credits" where its own
+  three component numbers two lines above it actually sum to 43
+  (15×1 + 5×2 + 1×18 = 43, verified in Python) — fixed to the correct
+  "≈ 43 credits"; the "$3/month" conclusion was already correct under
+  either value and needed no change.
+  **One harmless leftover, same documented quirk as before**: a
+  `__site_guardian_verify__` test row in `newsletter_reactions` (created
+  verifying the RPC write path post-fix) couldn't be deleted — the same
+  intermittent `execute_sql` DELETE-cancellation quirk this file already
+  documents, now hit a 5th time (3 consecutive failed attempts this
+  sweep). Left in place; it can never match a real newsletter issue slug
+  and is otherwise inert, same precedent as the `__reconciliation_test__`
+  row from 2026-10-09.
+  **Logged to `agent_missions`** (`division:'sentinel'`, the first-ever
+  row for this division — previously sweeps were only ever written up by
+  hand here, never in the real ledger `app/admin.html`'s Team panel
+  reads from).
+
 - **2026-10-12** — **Set up a recurring scheduled trigger (a "Routine") to
   run the restructured `site-guardian` daily** (user asked to "go ahead and
   set up the cron schedule too" after the entry directly below merged), and
