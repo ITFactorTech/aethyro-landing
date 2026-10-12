@@ -515,6 +515,79 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-12** — **Added `warden` to the agent team — semantic abuse/fraud
+  defense for the free-credit pool — and ran its first real sweep.** User
+  asked to add a genuinely novel division (explicitly not a reskinned
+  human-team role) after two separate, independent pieces of evidence
+  surfaced abuse signatures in this product's real signup data: the
+  2026-10-10 signup-source-tracking investigation flagged disposable-mail
+  domains and duplicated benchmark prompts across unrelated accounts, and
+  a direct pull of real conversation content (same day as this entry)
+  found `daunshlyha@gmail.com` asking the model to write a script that
+  auto-registers Aethyro accounts and harvests the API key from each one.
+  `warden` differs from a traditional fraud-review role in the way this
+  project's agent-team divisions always differ from their human-job-title
+  namesake: it reads the actual **conversation content** (`messages`) for
+  semantic abuse signals — stated farming intent, cross-account duplicate
+  prompts — that no structured heuristic (IP, device, velocity) would
+  ever see. New skill: `.claude/skills/warden/SKILL.md`. Added to the
+  `agent_missions.division` CHECK constraint
+  (`20261012133117_add_warden_division_to_agent_missions.sql`) alongside
+  `nexus`/`oracle`/`codex`/`avery`/`sentinel`/`support`/`forge`; `nexus`'s
+  own division map and `app/admin.html`'s Team-panel division list both
+  updated to include it.
+  **First real mission, and the real headline: the evidence was weaker
+  than it looked once actually quantified, and the mission caught its own
+  wrong hypothesis before shipping anything.** Pulled the full 61-account
+  signup cohort: 13 accounts sit on unusual-looking email domains (random
+  local-parts, obscure TLDs) — but this is **not** a grant-and-abandon
+  pattern: 11 of the 13 show real, if light, product usage (1–170 of
+  their 200 free credits actually spent on real conversations), which
+  directly contradicts the "meaningful share of recent growth looks like
+  freebie-hunter traffic" framing the 2026-10-10 entry left standing.
+  2 of the 13 do share an exact duplicate non-English opening prompt
+  ("你知道类脑吗"), 18 hours apart — a real, if narrow, signal. The
+  sharpest finding: **the product's referral system has had exactly one
+  redemption, ever, in its entire history** — between two of the 13
+  suspect-domain accounts, where the referee's *only* message was a bare
+  "Reply with only OK." connectivity probe, not real engagement, netting
+  +100/+100 credits. Working hypothesis mid-sweep was that the 27-second
+  gap between the referee's signup and the redemption was itself the
+  tell (automated, too fast for a human) — **checked against the actual
+  client code before writing it up, and found wrong**: `index.html`
+  captures `?ref=CODE` into `localStorage`, and `chat.html` auto-fires
+  `redeem-referral` on its very first load with no manual step, so a
+  fast redemption is the normal, by-design behavior for a *genuine*
+  referred signup too, not a reliable abuse signal on its own. Catching
+  and correcting this before it became a false claim is exactly the
+  discipline this project's whole operating history is built on (the
+  same "verify the inherited claim against ground truth" practice
+  applied to muse's briefing and every external report this project has
+  ever graded) — just applied to a hypothesis this session formed itself
+  mid-investigation, not an external document.
+  **Outcome: no code fix shipped this pass, by design.** Real quantified
+  cost of the one confirmed incident is ~200 credits — not large enough,
+  against a referral channel that has otherwise never been used by a
+  single real person, to justify a defense that risks degrading the
+  fast-path for the first genuine referred signup this product gets. A
+  domain blocklist would be overbroad (several of the 13 flagged
+  accounts are plainly real, light users); a redemption time-gate would
+  specifically break the legitimate case, since fast redemption is the
+  intended UX, not an anomaly. Logged to `agent_missions`
+  (`outcome: 'report_only'`, `value_tag: 'security/fraud-defense'`) and
+  handed to the user with the real evidence rather than shipped
+  unilaterally — matching `warden`'s own hard boundary: "when genuinely
+  unsure whether a pattern is abuse or just an unusual real user, say so
+  and lean toward not acting." A narrow, purely additive follow-up (log-
+  only flagging of a bare-probe-message referee for admin visibility,
+  never blocking or delaying) was flagged as a safe option if wanted,
+  not built unilaterally.
+  **Scope note**: `daunshlyha@gmail.com`'s farming-script request (the
+  finding that helped motivate building `warden` in the first place) is
+  a `@gmail.com` account, not on the suspect-domain list at all, and the
+  model already correctly declined the request in-conversation — zero
+  exploitation occurred, nothing to fix in code for that specific case.
+
 - **2026-10-10** — **Added real missed-run history + a notification on skip
   for scheduled routines**, closing the exact gap honestly flagged in a
   drafted (not yet posted) Reddit reply earlier the same day: "right now it
