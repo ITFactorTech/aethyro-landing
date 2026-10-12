@@ -35,6 +35,10 @@ subtask to exactly one of these:
 - **`support`** → the `support-triage` skill (sibling to this one).
   Investigates a specific real user report by pulling their actual DB
   history, the way Dj/Lee's chat-quality complaint was root-caused.
+- **`warden`** → the `warden` skill (sibling to this one). Semantic
+  abuse/fraud defense for the free-credit pool — reads real conversation
+  content for farming/abuse signals a structured heuristic wouldn't catch,
+  never bans or changes production unilaterally.
 - **`forge`** → no fixed skill. Use the `Agent` tool directly
   (`subagent_type: general-purpose` or `claude`) with a tightly scoped
   prompt for net-new feature construction that doesn't fit any of the
@@ -58,7 +62,9 @@ subtask to exactly one of these:
 3. **Respect every division's own hard boundaries.** None of them merge
    their own PRs, push to `main`, or fabricate data/metrics/testimonials —
    this is non-negotiable and inherited from this repo's standing policy,
-   not something Nexus grants or waives.
+   not something Nexus grants or waives. `warden` additionally never bans,
+   deletes, or mutates a specific suspected account directly — only
+   proposes reviewable changes to the signup/grant mechanism itself.
 4. **Dispatch** each subtask via the `Agent` tool, invoking the mapped
    skill (or a scoped `forge` prompt). Brief each dispatch like the
    "Writing the prompt" guidance for the `Agent` tool requires: what you're
