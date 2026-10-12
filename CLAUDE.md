@@ -515,6 +515,80 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-12** — **Restructured `site-guardian` from a solo checklist-
+  runner into an orchestrator that dispatches a real specialist team**,
+  after the user explicitly pushed back on a cheap/easy version of this
+  ask ("what would it take to make it a real advancement, not just the
+  easiest quickest route") and asked a direct architecture question about
+  standing agents vs. a skill with sub-agent workers. The redesign:
+  **Four specialists, dispatched in parallel via the `Agent` tool each
+  sweep** (independent, mostly-disjoint surfaces, so no coordination
+  needed between them): `codex` (`backend-reviewer`, which gained a new
+  **sweep mode** — reviewing every migration/function changed since the
+  cutoff timestamp, not just one PR); a new **`site-guardian-exploit`**
+  (actively *attempts* 7 previously-confirmed live exploits — forced
+  -negative-balance billing bypass, cross-user RPC balance reads, `anon`
+  reads of locked-down tables, webhook replay, referral self/duplicate
+  redemption, routine-chain cycles, raw Stripe-link reachability —
+  instead of inferring safety from static grant review alone, the same
+  distinction that originally caught the `get_credit_balance`
+  service-role bypass: nobody found that by reading the function, it took
+  forcing a real throwaway account to -9801 credits and sending a real
+  message); a new **`site-guardian-drift`** (the *full* migration-version
+  and edge-function byte-diff reconciliation every sweep, not a sample —
+  this project's two worst drift incidents, the month-long migration
+  -history mismatch and the PR #97 auto-model-routing regression, were
+  both only ever found by someone eventually doing the complete diff);
+  and `oracle` for a funnel/content-accuracy pass (pricing/usage claims on
+  public pages vs. real DB + Stripe data).
+  **What stays single-threaded in the orchestrator itself**: the live
+  smoke-test account lifecycle (two dispatches sharing/racing one
+  throwaway account would itself be exactly the kind of bug this skill
+  exists to prevent), Supabase advisors + the 24h error-log scan (cheap
+  enough that a dedicated worker is pure overhead), static-page checks,
+  and the actual aggregate/fix-vs-escalate/PR-building step (has to be one
+  coherent pass so the 5-PR cap is enforced globally and fixes from
+  different specialists don't collide).
+  **The genuinely self-improving piece**: a new
+  `.claude/skills/site-guardian/checks/` corpus — concrete, runnable
+  checks (SQL templates for grant-floor/function-privilege-matrix
+  patterns, full runbooks for the two reconciliation checks that can't be
+  expressed as single queries), seeded with 5 checks mined from this
+  project's highest-value recurring incidents, each verified live against
+  real data before being trusted (not just written and assumed correct).
+  Every sweep that confirms a genuinely new bug class adds one more file
+  here — and, if it's an exploitable pattern specifically, one more item
+  to `site-guardian-exploit`'s attack roster too — so each sweep leaves
+  the team measurably more capable than it found it, instead of
+  re-deriving the same forensic methods from prose every single time.
+  **Also closed a real, previously-unnoticed gap**: every past
+  `site-guardian` sweep was only ever written up by hand in this file's
+  recent-work-log — none of them ever landed a row in the real
+  `agent_missions` ledger the way `nexus`-dispatched work does, meaning
+  `app/admin.html`'s Team panel has never shown `sentinel`'s actual track
+  record despite `'sentinel'` already being a valid division in the
+  ledger's own CHECK constraint since 2026-10-08. `site-guardian`'s own
+  file now instructs it to log every sweep (`division:'sentinel'`,
+  including a clean one as `outcome:'report_only'`) going forward.
+  **Deliberately not built, flagged instead**: turning this into a
+  standing, cron-triggered recurring agent (vs. on-demand `/site-guardian`
+  invocation) — that's a separate decision with real autonomous-execution
+  and ongoing-cost implications (a session waking up and pushing PRs on
+  its own schedule with nobody watching each run), explicitly held back
+  from this PR pending the user's own go-ahead rather than wired in
+  unilaterally just because the capability (`CronCreate`) exists.
+  **Verified before shipping**: both literal-SQL check templates
+  (`01-table-grant-floor.sql`, `02-function-privilege-matrix.sql`) run
+  against real live tables/functions (`api_keys`, `is_admin()`) and the
+  live `credit_ledger_reason_check` constraint pulled fresh for
+  `03-credit-ledger-reason-literals.sql` — none of the three seeded as
+  untested prose pretending to be runnable SQL.
+  **Scope note**: this is pure skill-document/markdown/SQL-template
+  infrastructure — no migration, no edge-function change, nothing
+  touching production code or the live schema beyond the read-only
+  verification queries above. No sweep was actually run through the new
+  structure in this PR; that's the natural next step once this merges.
+
 - **2026-10-12** — **Ran a genuine cold-start test of the just-shipped
   `warden` skill** (user asked to "run and test warden and fix any bugs"
   directly after the entry below merged) — dispatched a fresh `Agent` with

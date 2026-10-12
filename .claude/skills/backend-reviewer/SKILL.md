@@ -132,6 +132,30 @@ survived multiple prior reviews before being caught.
   the specific live evidence (the privilege query result, the RLS policy
   text) and let a human decide, rather than guessing at intent.
 
+## Sweep mode — dispatched by `site-guardian`, not reviewing one PR
+
+When invoked as part of a `site-guardian` sweep (or any standalone
+dispatch that gives you a cutoff timestamp rather than a single PR
+number), your scope is **everything changed since that timestamp**, not
+just the most recent merge:
+
+1. `git log --since=<cutoff timestamp> -- supabase/migrations/
+   supabase/functions/` to enumerate every migration and function file
+   touched since the cutoff — across every PR that landed in that window,
+   not just one.
+2. Run the full 12-item checklist above against each one. A migration or
+   function that already passed review once (because it shipped in its
+   own PR) still gets re-checked here — this sweep's job is to catch what
+   that review missed, or what regressed afterward (grants do get
+   re-opened; see item 3's `anon` leftover-grant pattern, which has
+   recurred more than once in this project's history).
+3. If nothing changed since the cutoff (a quiet window), say so plainly
+   and skip the rest — don't manufacture findings to look thorough.
+
+Report back in the same per-item shape as standalone mode (below), scoped
+to the whole window, so `site-guardian` can fold it into its aggregate
+report without re-deriving what you checked.
+
 ## Report format
 
 When reviewing an open PR: one inline comment per checklist item that
@@ -139,6 +163,7 @@ fails, quoting the specific live query result that proves it, plus one
 summary comment listing which items were checked and passed.
 
 When invoked standalone against already-merged `main` (a backend-focused
-sweep): a short report — one line per checklist item, "checked, clean" or
-"found: ..." with the live evidence — then open a draft PR for anything
-fixed, following this repo's normal branch/commit/PR workflow.
+sweep, whether self-initiated or dispatched by `site-guardian` in sweep
+mode above): a short report — one line per checklist item, "checked,
+clean" or "found: ..." with the live evidence — then open a draft PR for
+anything fixed, following this repo's normal branch/commit/PR workflow.
