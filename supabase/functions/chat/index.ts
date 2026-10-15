@@ -1,3 +1,24 @@
+// chat v54 — multi-provider failover + an explicit "gpt" model pick, via the
+// new supabase/functions/_shared/llm.ts module (shared with trial-chat).
+// Scope, deliberately narrow: the tool-use loop below (web_search/GitHub/
+// Notion) stays Anthropic-only -- OpenAI function-calling would be a much
+// bigger lift than "add a fallback," and llm.ts's own header comment
+// documents this as out of scope for v1. Two integration points instead:
+// (1) if the Anthropic tool-enabled path throws for any reason (an actual
+// outage, most commonly -- but also any other exception from that branch),
+// the outer catch retries tools-free via completeWithFailover(), which
+// itself gives Anthropic one more try before actually failing over to
+// OpenAI. The user loses web_search/GitHub/Notion access for that one
+// message but gets a real answer instead of a hard error. (2) body.model
+// can now be "gpt" -- an explicit pick that skips the tool loop entirely
+// and forces OpenAI via forceProvider, billed at the Sonnet rate (the
+// product's explicit decision: same credit cost as the equivalent Claude
+// tier, regardless of which provider actually answers -- see llm.ts's own
+// billing-note comment). Both failover paths refuse to run if the message
+// has an image attachment: completeWithFailover's OpenAI path flattens
+// Anthropic-shaped content to text only (documented in llm.ts), which would
+// silently drop an image rather than erroring -- better to surface a clear
+// message than bill for an answer that ignored what was attached.
 // chat v53 — fixed billing-without-delivery: finalize() no longer charges
 // any credits (and skips the generation receipt) when assistantReply is
 // genuinely empty (replyIsEmpty -- refusal, thinking-budget exhaustion, or
@@ -150,6 +171,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
+import { completeWithFailover } from "../_shared/llm.ts";
 
 // CORS is locked to aethyro.com + this project's Cloudflare preview
 // subdomains (<branch-or-commit>-aethyro-landing.<account>.workers.dev) —
@@ -175,6 +197,7 @@ const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY"); // optional -- undefined just means no fallback/no "gpt" pick available
 const TAVILY_API_KEY    = Deno.env.get("TAVILY_API_KEY");
 const VOYAGE_API_KEY    = Deno.env.get("VOYAGE_API_KEY");
 
@@ -501,10 +524,24 @@ serve(async (req) => {
   const historyRaw        = Array.isArray(body.history) ? body.history : [];
   const attachments       = Array.isArray(body.attachments) ? body.attachments.slice(0, MAX_ATTACHMENTS) : [];
   const conversationId    = body.conversation_id || null;
-  const requestedModel    = body.model === "auto" ? "auto" : (["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "haiku");
+  const requestedModel: "auto" | "haiku" | "sonnet" | "opus" | "gpt" =
+    body.model === "auto" ? "auto"
+    : body.model === "gpt" ? "gpt"
+    : (["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "haiku");
+  // completeWithFailover's OpenAI path flattens Anthropic-shaped content
+  // blocks to text only (see _shared/llm.ts) -- an image attachment would
+  // silently vanish rather than erroring. An explicit "gpt" pick with an
+  // image attached is rejected up front rather than billing for an answer
+  // that never actually saw it.
+  const hasImageAttachment = attachments.some((a: Attachment) => a.type === "image");
 
   if (!message && !attachments.length)
     return new Response(JSON.stringify({ error: "Empty message" }), {
+      status: 400, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+
+  if (requestedModel === "gpt" && hasImageAttachment)
+    return new Response(JSON.stringify({ error: "GPT doesn't support image attachments yet — switch to a Claude model for this message." }), {
       status: 400, headers: { ...CORS, "Content-Type": "application/json" },
     });
 
@@ -526,19 +563,31 @@ serve(async (req) => {
     embedText(message),
   ]);
 
-  let modelKey = requestedModel === "auto" ? await classifyModelFromEmbedding(supaAdmin, queryEmbedding, message, attachments) : requestedModel;
-  if (requestedModel === "auto" && modelKey === "haiku" && historyRaw.length > 0 && !AUTO_LIGHT_RE.test(message.trim())) {
-    // The classifier only ever embeds this one message -- it has no view of
-    // historyRaw, which is already sitting right here in memory. A short,
-    // substantive reply inside an ongoing technical thread ("i dont have a
-    // hood") reads as trivially "light" in isolation even when the
-    // conversation it's part of is anything but. Reserve the Haiku floor for
-    // genuine trivial acknowledgments (still caught by AUTO_LIGHT_RE below)
-    // and give every other mid-conversation follow-up at least Sonnet.
+  let modelKey: "haiku" | "sonnet" | "opus";
+  // Explicit OpenAI pick skips the embedding classifier entirely and forces
+  // completeWithFailover straight to OpenAI (no Anthropic attempt, no
+  // circuit-breaker check) -- "gpt" is a deliberate choice, not a fallback.
+  let forceProvider: "openai" | undefined;
+  if (requestedModel === "gpt") {
     modelKey = "sonnet";
-  }
-  if (requestedModel === "auto" && modelKey === "opus" && typeof balance === "number" && balance < AUTO_MODEL_CREDIT_FLOOR) {
-    modelKey = "sonnet";
+    forceProvider = "openai";
+  } else if (requestedModel === "auto") {
+    modelKey = await classifyModelFromEmbedding(supaAdmin, queryEmbedding, message, attachments);
+    if (modelKey === "haiku" && historyRaw.length > 0 && !AUTO_LIGHT_RE.test(message.trim())) {
+      // The classifier only ever embeds this one message -- it has no view of
+      // historyRaw, which is already sitting right here in memory. A short,
+      // substantive reply inside an ongoing technical thread ("i dont have a
+      // hood") reads as trivially "light" in isolation even when the
+      // conversation it's part of is anything but. Reserve the Haiku floor for
+      // genuine trivial acknowledgments (still caught by AUTO_LIGHT_RE below)
+      // and give every other mid-conversation follow-up at least Sonnet.
+      modelKey = "sonnet";
+    }
+    if (modelKey === "opus" && typeof balance === "number" && balance < AUTO_MODEL_CREDIT_FLOOR) {
+      modelKey = "sonnet";
+    }
+  } else {
+    modelKey = requestedModel;
   }
   const MODEL    = MODEL_MAP[modelKey];
   const rates    = CREDIT_RATES[modelKey];
@@ -807,7 +856,14 @@ serve(async (req) => {
     }
   }
 
-  async function finalize(controller: ReadableStreamDefaultController, firstMsg: string, assistantReply = "", stopReason?: string) {
+  async function finalize(
+    controller: ReadableStreamDefaultController,
+    firstMsg: string,
+    assistantReply = "",
+    stopReason?: string,
+    provider: "anthropic" | "openai" = "anthropic",
+    actualModel: string = MODEL,
+  ) {
     // A refusal, or the model's (extended-thinking) budget running out before
     // it ever emits answer text, both leave assistantReply empty with no
     // client-visible explanation otherwise -- the user just sees a dead-end
@@ -851,7 +907,7 @@ serve(async (req) => {
         delta: -cost,
         reason: "chat_usage",
         team_id: profileRes.data?.team_id ?? null,
-        metadata: { model: modelKey, input_tokens: inputTokens, output_tokens: outputTokens },
+        metadata: { model: modelKey, input_tokens: inputTokens, output_tokens: outputTokens, provider, actual_model: actualModel },
       });
     }
     const { data: newBal } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
@@ -902,6 +958,8 @@ serve(async (req) => {
             tools_used: toolEvents,
             memory_context_count: memoryContextCount,
             document_context_count: documentContextCount,
+            provider,
+            actual_model: actualModel,
           },
         });
         if (receiptErr) console.error("chat: create_generation_receipt failed", receiptErr.message);
@@ -922,6 +980,8 @@ serve(async (req) => {
         credits: cost,
         model: modelKey,
         requestedModel,
+        provider,
+        actualModel,
         inputTokens,
         outputTokens,
         inputRate: rates.input,
@@ -1071,7 +1131,55 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
   // ── Streaming response ───────────────────────────────────────────────────────
   const stream = new ReadableStream({
     async start(controller) {
-      try {
+      // Shared by both failover integration points: an explicit "gpt" pick
+      // (fp = "openai", forced) and the Claude-down fallback in the outer
+      // catch below (fp = undefined -- completeWithFailover tries Anthropic
+      // once more via the circuit breaker before actually failing to
+      // OpenAI). Never passes `tools:` -- tool calling stays Anthropic-only,
+      // see this file's v54 header comment.
+      async function runFailoverCompletion(fp: "openai" | undefined) {
+        let fullText = "";
+        let thinkingText = "";
+        let thinkingEmitted = false;
+        const result = await completeWithFailover(supaAdmin, ANTHROPIC_API_KEY, OPENAI_API_KEY, {
+          modelKey,
+          anthropicModel: MODEL,
+          system: systemPrompt,
+          messages,
+          maxTokens: supportsThinking ? MAX_TOKENS_THINKING : MAX_TOKENS,
+          thinking: supportsThinking,
+          forceProvider: fp,
+          onTextDelta: (text) => {
+            if (!thinkingEmitted && thinkingText) {
+              controller.enqueue(encoder.encode(THINK_MARK + thinkingText + THINK_MARK));
+              thinkingEmitted = true;
+            }
+            controller.enqueue(encoder.encode(text));
+            fullText += text;
+          },
+          onThinkingDelta: (t) => { thinkingText += t; },
+        });
+        if (!fullText.trim() && thinkingText && !thinkingEmitted) {
+          controller.enqueue(encoder.encode(THINK_MARK + thinkingText + THINK_MARK));
+        }
+        inputTokens += result.inputTokens;
+        outputTokens += result.outputTokens;
+        return { fullText, stopReason: result.stopReason, provider: result.provider, model: result.model };
+      }
+
+      // Generates the reply (fullText/stopReason/provider/model) without ever
+      // calling finalize() -- billing/receipt/notification side effects stay
+      // completely out of the retry-eligible path below. Throws if generation
+      // itself failed (Claude down, a tool-round error, anything before a
+      // reply was produced); never throws once it has returned.
+      async function generateCompletion(): Promise<{ fullText: string; stopReason: string; provider: "anthropic" | "openai"; model: string }> {
+        if (forceProvider === "openai") {
+          // Explicit "gpt" pick -- no tool loop (Anthropic-only), straight to
+          // a forced-OpenAI completion.
+          emitToolPrefix(controller);
+          return await runFailoverCompletion("openai");
+        }
+
         if (TOOLS.length > 0) {
           for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
             const r = await anthropic.messages.create({
@@ -1089,8 +1197,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
               emitToolPrefix(controller);
               const text = r.content.filter(b => b.type === "text").map(b => (b as any).text).join("");
               controller.enqueue(encoder.encode(text));
-              await finalize(controller, message, text, r.stop_reason);
-              return;
+              return { fullText: text, stopReason: r.stop_reason, provider: "anthropic", model: MODEL };
             }
 
             const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -1150,12 +1257,53 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
           controller.enqueue(encoder.encode(THINK_MARK + thinkingText + THINK_MARK));
         }
 
-        await finalize(controller, message, fullText, finalMsg.stop_reason);
+        return { fullText, stopReason: finalMsg.stop_reason, provider: "anthropic", model: MODEL };
+      }
+
+      let result: { fullText: string; stopReason: string; provider: "anthropic" | "openai"; model: string } | null = null;
+      try {
+        result = await generateCompletion();
       } catch (e) {
+        // generateCompletion() threw -- most commonly a real Claude outage,
+        // but any exception from that branch (a tool-round error, anything
+        // before a reply was produced) lands here too. Tool calling can't be
+        // retried against OpenAI (Anthropic-only, see this file's v54 header
+        // comment), so retry once, tools-free, via the shared failover
+        // module -- which itself gives Anthropic one more try (covers a
+        // tool-specific/transient error, not just a real outage) before
+        // actually failing over to OpenAI. Skipped entirely for an image
+        // attachment, which the OpenAI path would otherwise silently drop
+        // rather than error on (see hasImageAttachment above) -- better a
+        // clear error than a billed answer that never saw what was attached.
+        console.error("chat: completion generation failed, retrying tools-free via failover:", e instanceof Error ? e.message : String(e));
         try {
-          controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({ error: "Server error: " + (e as Error).message })));
-        } catch {}
-        controller.close();
+          if (hasImageAttachment) throw e;
+          emitToolPrefix(controller);
+          result = await runFailoverCompletion(undefined);
+        } catch (e2) {
+          try {
+            controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({ error: "Server error: " + (e2 instanceof Error ? e2.message : String(e2)) })));
+          } catch {}
+          controller.close();
+          return;
+        }
+      }
+
+      // finalize() runs exactly once per turn, outside the retry boundary
+      // above -- deliberately. A disconnecting client (tab closed, page
+      // navigation) makes controller.enqueue() inside finalize() throw
+      // *after* the credit_ledger charge has already landed; if finalize()
+      // lived inside the try/catch above, that would have looked like "the
+      // completion failed" and triggered a second full completion AND a
+      // second charge for the same turn. A failure here is real and worth
+      // fixing, but it must never retry the whole turn.
+      try {
+        // result is always non-null here: the only path that leaves it null
+        // (e2 above) returns before this line is ever reached.
+        await finalize(controller, message, result!.fullText, result!.stopReason, result!.provider, result!.model);
+      } catch (e3) {
+        console.error("chat: finalize() threw after a successful completion -- not retrying (would double-bill/duplicate the reply):", e3 instanceof Error ? e3.message : String(e3));
+        try { controller.close(); } catch {}
       }
     },
   });
