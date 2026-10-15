@@ -631,6 +631,69 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-15** — **Fixed: `signup.html` had no existing-session check,
+  dumping an already-logged-in returning user onto a blank signup form
+  instead of straight into checkout.** Found while investigating the $0
+  lifetime-revenue question directly: pulled the real
+  `purchase_funnel_events` history (still just 2 rows ever, both from the
+  same account, both reaching a real Stripe checkout URL but neither
+  completing) and concluded the sample is too thin (n=1) to diagnose a
+  real "Stripe abandonment" pattern — that one account checked pricing
+  within 45 seconds of signing up, before ever sending a message, which
+  reads as a low-intent/comparison-shopping visit rather than a
+  friction-blocked buyer. While confirming `send-low-credit-email`'s
+  content (it does correctly link to `/#pricing` with the real pack list
+  and a "Top up credits →" CTA), traced that page's "Buy credits →"
+  buttons through to where they actually land:
+  `/app/signup.html?next=buy&pack=<pack>` — and found `signup.html` never
+  calls `supabase.auth.getSession()` at all, unlike `login.html`, which
+  already does exactly this check and redirects straight to `nextUrl`
+  (e.g. `chat.html?buy=power`) for an already-authenticated visitor. Every
+  real candidate for this specific repurchase path — the low-credit/
+  depleted email's recipients — is by definition already a registered,
+  likely-still-logged-in user, so they were landing on a signup form with
+  no way forward except noticing a small "Already have an account? Log
+  in" link (which does correctly preserve the `?next=buy&pack=...` query
+  string through to `login.html`) or getting a confusing "already
+  registered" error if they tried to fill the form out. This doesn't
+  explain the one real Stripe-abandonment data point (that account never
+  touched this path — it went straight to the homepage pricing grid), but
+  it's a real, separate, previously-undiscovered friction point on the
+  one repurchase path that actually carries real buying intent.
+  **Fix**: added the same `supabase.auth.getSession().then(...)` check
+  `login.html` already has, right after `signup.html`'s own `nextUrl`/
+  `loginAlt` setup — an already-authenticated visitor now redirects
+  immediately to `nextUrl` (`chat.html?buy=<pack>`, `chat.html`, or
+  `dashboard.html`, matching the existing `next` param logic exactly) and
+  never sees the signup form at all. A logged-out visitor is completely
+  unaffected — the check only fires if a real session is found.
+  **Verified live**, not just by mirroring `login.html`'s pattern: created
+  a real throwaway account via `test-admin-setup` (redeployed, re-stubbed
+  to 410 after, confirmed via a live curl), obtained its real session,
+  and drove the actual edited file with Playwright against a locally-
+  served copy (this sandbox's proxy blocks `setSession()`'s own network
+  round-trip with the documented `ERR_CERT_AUTHORITY_INVALID` artifact,
+  so the real session was injected directly into the
+  `sb-uzmdqbtflcpikjdrggqc-auth-token` localStorage key instead — the
+  same format `supabase-js` itself writes, and `getSession()` reads it
+  synchronously without a network call unless the token is actually
+  expired). Three cases confirmed: a logged-out visit to
+  `signup.html?next=buy&pack=starter` still shows the real form
+  (unaffected); the same URL with a real session present redirects to
+  `chat.html?buy=starter`; a logged-in visit with no `next` param
+  redirects to `dashboard.html`. Zero console errors in any case.
+  Cleaned up: throwaway account deleted, zero orphaned rows confirmed
+  across `profiles`/`credit_ledger`/`referral_codes`/`auth.users`,
+  `test-admin-setup` re-stubbed to 410 and confirmed via a live curl.
+  **Scope note**: this is a plausible, concrete contributor to the
+  standing $0-revenue problem, not a confirmed fix for it — there's no
+  way to measure how many real depleted users hit this exact dead end
+  before this fix, since it never produced an error or a logged event,
+  just silent drop-off at a page that looked like the wrong page. Worth
+  revisiting once `purchase_funnel_events` has enough real volume to show
+  whether repurchase attempts (as opposed to first purchases) start
+  completing more often now.
+
 - **2026-10-15** — **Added OpenAI as a second LLM provider — explicit model
   pick plus automatic fallback if Claude is unavailable** — user-requested
   directly ("I want to add openai and others so have veriety of models and
