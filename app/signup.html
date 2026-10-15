@@ -73,6 +73,12 @@
   var nextAbs = window.location.origin + nextUrl.replace('./','/app/');
   var nextQs = nextParam ? '?next='+encodeURIComponent(nextParam)+(packParam?'&pack='+encodeURIComponent(packParam):'') : '';
   if(nextParam) document.getElementById('loginAlt').href='./login.html'+nextQs;
+  // An already-signed-in visitor landing here (e.g. a returning, depleted
+  // user clicking "Top up credits" from the low-credit email, through the
+  // homepage pricing grid's signup.html?next=buy&pack=... link) should go
+  // straight to nextUrl instead of seeing a signup form — matches the same
+  // check login.html already does.
+  supabase.auth.getSession().then(function(r){ if(r.data && r.data.session) location.href=nextUrl; });
 
   // Signup-source attribution: prefer the first-touch snapshot captured on
   // index.html/chat.html (survives the index->chat trial->"Sign up free" hop,
