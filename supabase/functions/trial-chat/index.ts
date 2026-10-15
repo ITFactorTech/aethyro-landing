@@ -1,18 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
+import { completeWithFailover } from "../_shared/llm.ts";
 
 // Public, unauthenticated preview endpoint for the homepage inline try-box
 // and chat.html's anonymous trial mode. Gated solely by a per-IP daily
 // counter (3 messages/day) — no Turnstile token required.
+//
+// v17 — now goes through the shared multi-provider module
+// (_shared/llm.ts): if Claude is down, automatically fails over to
+// OpenAI (gpt-5.4-pro, matching this endpoint's existing opus-tier
+// model) rather than erroring outright. No explicit model choice here
+// (this endpoint has never had a model picker) — pure availability
+// improvement, same preview behavior either way.
 
-const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY"); // optional -- undefined just means no fallback available
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-const MODEL = "claude-opus-5";
+const ANTHROPIC_MODEL = "claude-opus-5";
 const MAX_TOKENS = 400;
 const DAILY_LIMIT_PER_IP = 3;
 const MAX_MESSAGE_LEN = 600;
@@ -86,22 +94,19 @@ serve(async (req) => {
       let errorMessage: string | null = null;
 
       try {
-        const anthropicStream = anthropic.messages.stream({
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
+        let streamedText = "";
+        const result = await completeWithFailover(supabase, ANTHROPIC_API_KEY, OPENAI_API_KEY, {
+          modelKey: "opus",
+          anthropicModel: ANTHROPIC_MODEL,
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: message }],
+          maxTokens: MAX_TOKENS,
+          onTextDelta: (text) => {
+            controller.enqueue(enc.encode(text));
+            streamedText += text;
+          },
         });
 
-        let streamedText = "";
-        for await (const event of anthropicStream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            controller.enqueue(enc.encode(event.delta.text));
-            streamedText += event.delta.text;
-          }
-        }
-
-        const final = await anthropicStream.finalMessage();
         // Broadened beyond the original "refusal"-only check (found live
         // 2026-10-08 investigating a real user report of a dead-end "(no
         // response)" on an unusual prompt): Claude can occasionally land on
@@ -110,10 +115,10 @@ serve(async (req) => {
         // through to chat.html's generic "(no response)" fallback with no
         // explanation either way.
         if (!streamedText.trim()) {
-          errorMessage = final.stop_reason === "refusal"
+          errorMessage = result.stopReason === "refusal"
             ? "Aethyro declined to answer that request."
             : "Aethyro didn't generate a reply to that — try rephrasing your question.";
-        } else if (final.stop_reason === "max_tokens") {
+        } else if (result.stopReason === "max_tokens") {
           // The free preview's 400-token cap can cut a real answer off
           // mid-sentence with no indication to the user that it was
           // truncated rather than just ending there. Append a visible note

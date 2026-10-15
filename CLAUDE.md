@@ -346,9 +346,28 @@ it to the `?buy=` pattern instead.
   (see the `run-agent-task` redeploy in the same sweep, where comment-
   divider dash-counts drifted with zero functional change) — the
   risk/benefit was judged wrong for a 58KB file with no real exploit at
-  stake. Will self-correct the next time any PR merges to `main` touching
-  `supabase/**`, since `deploy-supabase.yml` deploys from `config.toml`'s
-  already-correct value.
+  stake. ~~Will self-correct the next time any PR merges to `main` touching
+  `supabase/**`~~ — **it did, same day**: later on 2026-10-15 the user
+  independently asked, in a fresh instruction unrelated to this sweep,
+  for real multi-provider fallback ("add openai and others... in case
+  Claude is down"), so the "rebuild it as a real, committed, reviewed
+  PR" item just above got done properly the same day it was written,
+  not as a restoration of the orphaned canary but as a fresh build (see
+  the recent-work-log entry below for the full feature). That PR's
+  `chat` redeploys were done with `verify_jwt: true` passed explicit
+  throughout (matching `config.toml`), which also closed this exact
+  `chat`-gateway mismatch as a side effect — confirmed live via
+  `list_edge_functions` after the deploy.
+  **The orphaned `provider_health` table is now the formal one**: the
+  new migration (`20261015133950_provider_health.sql`) uses `CREATE
+  TABLE IF NOT EXISTS` against the live out-of-band table's real
+  confirmed column shape and `ON CONFLICT DO NOTHING` on the seed
+  insert, so it adopts the existing table (and its one real
+  `anthropic`/0-failures row) into source control rather than fighting
+  or duplicating it — the grant-floor lockdown this item called for
+  (`REVOKE ALL ... FROM public, anon, authenticated`, zero RLS
+  policies) is in the same migration, verified live via
+  `has_table_privilege` before the PR shipped.
 
 ~~- The remote Supabase migration-history table and this repo's
   `supabase/migrations/` folder had never been in CLI-sync~~ — **fully
@@ -611,6 +630,108 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-15** — **Added OpenAI as a second LLM provider — explicit model
+  pick plus automatic fallback if Claude is unavailable** — user-requested
+  directly ("I want to add openai and others so have veriety of models and
+  fallback in case Claude is down for some reason"), resolved via an
+  explicit clarifying question into 4 decisions up front: providers =
+  OpenAI only (not every provider); feature shape = both an explicit
+  "GPT" model-picker option *and* automatic fallback on the existing
+  Claude-only path; scope = both the authenticated `chat` function and
+  the anonymous `trial-chat` function; billing = a reply served by OpenAI
+  (whether by explicit pick or fallback) bills at the **same** credit
+  rate as the Claude tier it stands in for, never a separate
+  OpenAI-cost-accurate rate — so switching providers is invisible to a
+  user's bill.
+  Coincidentally, but not accidentally, this is also the proper version
+  of the out-of-band "FAILOVER CANARY" governance item written up in
+  "Pending" above, found by the same day's earlier `site-guardian` sweep
+  — see that item's resolution note for how the two connect. This build
+  is a fresh implementation, not a restoration of the orphaned module.
+  **New `supabase/functions/_shared/llm.ts`**: `completeWithFailover()` —
+  Anthropic primary, OpenAI-compatible fallback (model names verified
+  live against the real `/v1/models` list for this project's configured
+  key: `gpt-5.4`/`gpt-5.4-mini`/`gpt-5.4-pro`), backed by a
+  `provider_health`-table circuit breaker (3 consecutive failures trips
+  it open for 2 minutes, self-heals). New migration
+  `20261015133950_provider_health.sql` — see the Pending-item resolution
+  note above for how it adopts the already-live out-of-band table rather
+  than conflicting with it. Verified live via `has_table_privilege`:
+  `anon`/`authenticated` all `false`, `service_role` `true` — locked down
+  from the start, not found-and-fixed after the fact.
+  **`trial-chat`** (now v36) and **`chat`** (now v75) both route their
+  completion through `completeWithFailover()` instead of calling
+  `anthropic.messages.stream()`/`.create()` directly — `chat`'s existing
+  tool-use loop (web_search/GitHub/Notion, unchanged, still Anthropic-
+  only by design) is the one exception: an explicit `model:"gpt"` pick
+  skips the tool loop entirely (no tool access for OpenAI in this v1,
+  documented as a deliberate scope limit in `llm.ts`'s own header), and
+  the tool-enabled path's own failure is what triggers the automatic
+  fallback. `modelKey` (the billing tier) is always resolved *before*
+  knowing which provider actually answers — for an explicit "gpt" pick,
+  `modelKey` is hardcoded to `"sonnet"` — and `finalize()`'s cost
+  computation reads from `CREDIT_RATES[modelKey]` regardless of which
+  provider served the reply, per the billing decision above. An image
+  attachment with `model:"gpt"` is rejected with a clear 400 up front
+  (OpenAI's path flattens content to text-only, which would silently
+  drop an image otherwise), and the catch-block fallback explicitly
+  skips itself (`if (hasImageAttachment) throw e;`) rather than silently
+  answering without having seen an attached image.
+  **A critical bug found and fixed via self-review before this ever
+  shipped, not after**: dispatched the `backend-reviewer` skill against
+  the uncommitted working tree before opening a PR. The first version of
+  `chat`'s restructured streaming handler had every `finalize()` call
+  (which performs the real `credit_ledger` billing insert) living
+  *inside* the same try/catch block now wired to retry the whole
+  completion via `completeWithFailover()` on any exception. `finalize()`
+  calls an un-wrapped `controller.enqueue()` *after* billing already
+  succeeds — and `enqueue()` throws if the client has disconnected
+  mid-stream (an everyday occurrence: tab close, navigation,
+  backgrounding), which would have been caught by that same outer catch
+  and misread as "the completion failed," triggering a second real
+  Anthropic/OpenAI call **and a second `credit_ledger` charge for the
+  same turn**. Confirmed this was a genuine regression introduced by
+  this session's own restructure, not a pre-existing bug — the original,
+  pre-session catch block never retried anything. Fixed by separating
+  completion-generation (`generateCompletion()`, the only retry-eligible
+  part) from billing (`finalize()`, called exactly once, after the
+  try/catch resolves, in its own separate non-retrying try/catch that on
+  failure just logs and closes the stream rather than retrying).
+  Redeployed as `chat` v75, byte-diff-verified clean against local disk
+  before trusting it, then re-tested live end-to-end against the fixed
+  code with a fresh throwaway account: a normal Haiku send billed
+  exactly once (200→199 credits), and an explicit "gpt" pick — which,
+  with this project's OpenAI account currently at zero billing credits
+  (an external, non-code blocker), correctly hit a real OpenAI quota
+  error and fell through to Anthropic — also billed exactly once
+  (199→198, `reason:'chat_usage'`, `metadata.provider:'anthropic'`,
+  `requested_model:'gpt'`, billed at the sonnet rate per the billing
+  decision above). Checked `credit_ledger` directly afterward: exactly 3
+  rows total for the test account (signup bonus + the 2 real sends), no
+  duplicates from either path. Cleaned up: throwaway account deleted,
+  zero orphaned rows confirmed, `test-admin-setup` re-stubbed to 410 and
+  confirmed via a live curl.
+  **`app/chat.html`**: added a 5th model-picker button ("GPT", alongside
+  Auto/Haiku/Sonnet/Opus) with a tooltip explaining the fallback
+  behavior and that it bills at the Sonnet rate; worst-case cost
+  estimation, the low-balance-warning threshold, and the cloud-note
+  label all treat `gpt` as equivalent to `sonnet` (matching the real
+  server-side billing tier); an explicit client-side guard blocks
+  sending an image attachment with `model:"gpt"` selected, with the same
+  user-facing message as the server's own 400.
+  **What this does NOT establish, honestly**: this project's OpenAI
+  account has zero billing credits right now (external, not a code
+  blocker) — every live test of the OpenAI path so far has exercised a
+  real OpenAI *quota failure* correctly falling through to Anthropic,
+  never a successful OpenAI-served reply. The error-handling and
+  fallback chain is proven correct; "OpenAI itself can serve a real
+  chat reply through this code" has not been. Worth a quick live check
+  once the account is funded.
+  **Explicitly queued next, not started**: a LinkedIn post about Aethyro
+  asking people to try the product and comment — a separate, later
+  request from the same conversation, deliberately sequenced after this
+  feature shipped.
 
 - **2026-10-15** — **Consolidated `site-guardian` sweep covering 3 missed
   daily firings** (2026-10-13, 10-14, 10-15 — the self-bound daily Routine

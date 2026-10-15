@@ -541,6 +541,7 @@
         <button class="model-btn" data-model="haiku" id="mBtnHaiku">Haiku<span class="model-cost">~1 cr/msg</span></button>
         <button class="model-btn" data-model="sonnet" id="mBtnSonnet" title="Scales with reply length — longer answers cost more">Sonnet<span class="model-cost">~1-15 cr/msg</span></button>
         <button class="model-btn" data-model="opus" id="mBtnOpus" title="Scales with reply length — a long reply can cost significantly more than a short one">Opus<span class="model-cost">~5-80 cr/msg</span></button>
+        <button class="model-btn" data-model="gpt" id="mBtnGpt" title="Routes to OpenAI's GPT instead of Claude — billed at the same rate as Sonnet. Falls back to Claude automatically if OpenAI is unavailable.">GPT<span class="model-cost">~1-15 cr/msg</span></button>
       </div>
       <div id="attachChips" style="display:none"></div>
       <form class="composer" id="composer">
@@ -939,7 +940,7 @@ I often need help with: client quotes, contract review, business Instagram posts
   var session=null, history=[], busy=false, trialLocked=false, depleted=false;
   var currentConvId=null;
   var TRIAL_URL=window.AETHYRO_FN_URL+'/trial-chat';
-  var currentModel=(function(){ var m=localStorage.getItem('aethyro_model'); return ['auto','haiku','sonnet','opus'].includes(m)?m:'auto'; })();
+  var currentModel=(function(){ var m=localStorage.getItem('aethyro_model'); return ['auto','haiku','sonnet','opus','gpt'].includes(m)?m:'auto'; })();
   var USAGE_MARK='\u0000';
   var THINK_MARK='\u0002';
 
@@ -969,9 +970,12 @@ I often need help with: client quotes, contract review, business Instagram posts
   var CLIENT_CREDIT_RATES={haiku:{input:0.08,output:0.40},sonnet:{input:0.30,output:1.50},opus:{input:1.50,output:7.50}};
   var CLIENT_MAX_TOKENS=4096, CLIENT_MAX_TOKENS_THINKING=8192;
   function estimateWorstCaseCost(modelKey, text){
-    var rates=CLIENT_CREDIT_RATES[modelKey]||CLIENT_CREDIT_RATES.sonnet;
+    /* "gpt" bills at the Sonnet rate server-side regardless of which
+       provider actually answers (see chat/index.ts's requestedModel==="gpt"
+       branch) -- mirror that here so the estimate matches the real bill. */
+    var rates=CLIENT_CREDIT_RATES[modelKey==='gpt'?'sonnet':modelKey]||CLIENT_CREDIT_RATES.sonnet;
     var estInputTokens=Math.ceil((text||'').length/4);
-    var supportsThinking=modelKey==='sonnet'||modelKey==='opus';
+    var supportsThinking=modelKey==='sonnet'||modelKey==='opus'||modelKey==='gpt';
     var estMaxTokens=supportsThinking?CLIENT_MAX_TOKENS_THINKING:CLIENT_MAX_TOKENS;
     return Math.max(1, Math.ceil((estInputTokens/1000)*rates.input + (estMaxTokens/1000)*rates.output));
   }
@@ -1011,6 +1015,8 @@ I often need help with: client quotes, contract review, business Instagram posts
     var names={auto:'Auto', haiku:'Haiku', sonnet:'Sonnet', opus:'Opus'};
     $('cloudNote').textContent = currentModel==='auto'
       ? '// Aethyro Cloud — Auto routing (Haiku/Sonnet/Opus by message) · credits billed per token'
+      : currentModel==='gpt'
+      ? '// Aethyro Cloud — GPT (OpenAI) · credits billed per token'
       : '// Aethyro Cloud — Claude '+names[currentModel]+' · credits billed per token';
   }
 
@@ -1187,7 +1193,7 @@ I often need help with: client quotes, contract review, business Instagram posts
      of only after the balance already dropped low in absolute terms. */
   function lowBalanceThreshold(model){
     if(model==='opus' || model==='auto') return 80;
-    if(model==='sonnet') return 15;
+    if(model==='sonnet' || model==='gpt') return 15;
     return 10;
   }
   function updateLowBalanceWarning(n){
@@ -1198,7 +1204,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       $('lowBalanceVal').textContent=n;
       $('lowBalanceModelNote').textContent =
         (currentModel==='opus' || currentModel==='auto') ? ' — an Opus reply can cost up to ~80 credits and may not complete' :
-        (currentModel==='sonnet') ? ' — a Sonnet reply can cost up to ~15 credits' : '';
+        (currentModel==='sonnet' || currentModel==='gpt') ? ' — a reply at this rate can cost up to ~15 credits' : '';
     } else {
       $('lowBalance').style.display='none';
     }
@@ -1629,6 +1635,15 @@ I often need help with: client quotes, contract review, business Instagram posts
   /* ── Send ── */
   async function send(message, attachments){
     if(busy||trialLocked) return;
+    /* chat/index.ts rejects model:"gpt" + an image attachment outright
+       (completeWithFailover's OpenAI path would silently drop the image
+       rather than seeing it) -- catch this client-side before sending so
+       the user gets a clear, specific message instead of chat.html's
+       generic "Something went wrong" fallback for an unrecognized 400. */
+    if(currentModel==='gpt' && attachments && attachments.some(function(a){ return a.type==='image'; })){
+      showToast('GPT doesn\'t support image attachments yet — switch to a Claude model for this message.','err');
+      return;
+    }
     busy=true; $('sendBtn').disabled=true;
     addMessage('user',message);
 
