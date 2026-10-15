@@ -253,11 +253,44 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
-- **P0, escalated 2026-10-15 — an undocumented, out-of-band production
+~~- **P0, escalated 2026-10-15 — an undocumented, out-of-band production
   deploy with zero paper trail exists right now and needs a human
-  decision.** Found by `site-guardian-drift` during the 2026-10-15
-  consolidated sweep (doing the *full* edge-function byte-diff, not a
-  sample): `trial-chat`'s **live** source imports a brand-new
+  decision.**~~ — **confirmed 2026-10-15, same day**: the user (leer4030@gmail.com)
+  confirmed directly ("I set the API key and everything in supabase just
+  never opened a pr or committed to merge") that this was their own
+  deliberate work-in-progress — a real multi-provider LLM failover canary,
+  set up straight in Supabase (API key + the `_shared/llm.ts` module +
+  the `provider_health` table), just never routed through this repo's
+  normal commit → PR → merge path. Not unauthorized access; closed as a
+  governance question. **What's NOT resolved, and is the real remaining
+  risk**: this exact kind of out-of-band Supabase change is now proven to
+  be silently destructible by this repo's own CI. PR #171 (the same sweep
+  that found this) merged a few hours later, touching only
+  `supabase/migrations/` — but `deploy-supabase.yml` redeploys **every**
+  committed edge function unconditionally on any `supabase/**` push, and
+  since `_shared/llm.ts` was never committed, that routine merge silently
+  reverted `trial-chat` back to plain Anthropic-only, with zero one
+  anyone decided to do that. Re-verified live the same day: `trial-chat`,
+  `chat`, and `api-chat` all show the identical post-merge `updated_at`
+  and zero `_shared/llm.ts`/OpenAI references — the whole failover canary
+  is gone from what's actually running, not just undocumented anymore.
+  `provider_health` (1 row, `anthropic`/0 failures — the OpenAI fallback
+  path itself was likely never actually exercised) is now orphaned, read
+  by nothing live. **If this feature is still wanted**, it needs to be
+  rebuilt as a real, committed, reviewed PR (module + a migration for
+  `provider_health`, including its own grant-floor lockdown — it
+  currently carries this project's recurring default-privileges floor to
+  anon/authenticated, harmless only because RLS has zero policies) rather
+  than restored by hand in Supabase again, or the next `supabase/**`
+  merge will just as silently erase it a second time. **General lesson
+  for this project**: any future out-of-band Supabase experiment
+  (dashboard or CLI, not through this repo) is now a documented, proven
+  casualty risk of the self-healing CI pipeline — worth remembering
+  before prototyping anything live again outside git.
+  Original finding, left intact below for the forensic detail: found by
+  `site-guardian-drift` during the 2026-10-15 consolidated sweep (doing
+  the *full* edge-function byte-diff, not a sample): `trial-chat`'s
+  **live** source (at the time) imported a brand-new
   `supabase/functions/_shared/llm.ts` — a multi-provider LLM failover
   module (Anthropic primary, OpenAI-compatible fallback, a DB-backed
   circuit breaker) — that **does not exist anywhere in this repo's git
@@ -274,32 +307,18 @@ it to the `?buy=` pattern instead.
   all redeployed in the same ~2026-10-13 batch but are byte-identical to
   `main` — this looks like prep for the stated rollout, not yet executed
   on them.
-  **Nobody has claimed this work.** It wasn't done by any site-guardian
-  sweep, any PR in this repo's history, or (as far as this session can
-  tell) deliberately by this conversation. Given the style — a detailed
-  header comment explaining the rollout plan, careful single-function
-  canary scoping — it reads like real, deliberate engineering, not
-  tampering, but that's an inference, not a fact: **this needs the human
-  owner (leer4030@gmail.com) to confirm whether this was their own
-  work (via Supabase's dashboard, the CLI, or another session) or
-  something that needs investigating as unauthorized access.** Practical
+  ~~Nobody has claimed this work... this needs the human owner to
+  confirm whether this was their own work~~ — confirmed above, it was.
+  Practical
   risk today is low (trial-chat is anonymous/rate-limited/400-max-tokens;
   behavior is unchanged if `OPENAI_API_KEY` isn't set, since the fallback
   hop is filtered out) — this is a governance-trail gap, not an active
   incident, but it's the kind of gap that normally doesn't happen in this
   project at all (every other deploy in this repo's history has a commit,
   a PR, and this file's own recent-work-log entry behind it).
-  **What to do once intent is confirmed**: if intentional and wanted,
-  formalize it properly — a real migration for `provider_health` (plus
-  its own grant-floor lockdown; it currently carries the same
-  default-privileges floor to anon/authenticated this file documents
-  repeatedly, inert only because RLS has zero policies), a reviewed PR
-  for `_shared/llm.ts`, and a decision on whether to actually continue the
-  rollout to the other four functions. If unintentional, revert
-  `trial-chat` to committed `main` and investigate how the deploy
-  happened. Not reverted or merged by this sweep either way — picking a
-  side on unreviewed production code is exactly what `site-guardian`'s
-  own hard boundaries say not to do unilaterally.
+  ~~What to do once intent is confirmed~~ — see the confirmation note at
+  the top of this item for the real current state and what rebuilding it
+  properly would take.
   **One real security gap from the same incident was already fixed,
   independent of the above decision**: the same out-of-band batch flipped
   `run-routines`' gateway `verify_jwt` to `false` against
