@@ -253,6 +253,84 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **P0, escalated 2026-10-15 — an undocumented, out-of-band production
+  deploy with zero paper trail exists right now and needs a human
+  decision.** Found by `site-guardian-drift` during the 2026-10-15
+  consolidated sweep (doing the *full* edge-function byte-diff, not a
+  sample): `trial-chat`'s **live** source imports a brand-new
+  `supabase/functions/_shared/llm.ts` — a multi-provider LLM failover
+  module (Anthropic primary, OpenAI-compatible fallback, a DB-backed
+  circuit breaker) — that **does not exist anywhere in this repo's git
+  history** (checked all branches, reflog, and every GitHub PR). The
+  module's own header: *"FAILOVER CANARY (2026-10-13): first function on
+  the shared multi-provider module... If the canary behaves, roll the
+  same pattern out to chat / api-chat / run-agent-task / run-routines."*
+  It depends on a new `public.provider_health` table that **exists live**
+  (one seeded `anthropic` row) but has **no migration anywhere** —
+  confirmed via an independent, separately-verified exact 96/96
+  `list_migrations`-vs-local match, so this table was created via raw
+  DDL/dashboard action, bypassing the migration system entirely, not just
+  bypassing git. `chat`/`run-agent-task`/`run-routines`/`api-chat` were
+  all redeployed in the same ~2026-10-13 batch but are byte-identical to
+  `main` — this looks like prep for the stated rollout, not yet executed
+  on them.
+  **Nobody has claimed this work.** It wasn't done by any site-guardian
+  sweep, any PR in this repo's history, or (as far as this session can
+  tell) deliberately by this conversation. Given the style — a detailed
+  header comment explaining the rollout plan, careful single-function
+  canary scoping — it reads like real, deliberate engineering, not
+  tampering, but that's an inference, not a fact: **this needs the human
+  owner (leer4030@gmail.com) to confirm whether this was their own
+  work (via Supabase's dashboard, the CLI, or another session) or
+  something that needs investigating as unauthorized access.** Practical
+  risk today is low (trial-chat is anonymous/rate-limited/400-max-tokens;
+  behavior is unchanged if `OPENAI_API_KEY` isn't set, since the fallback
+  hop is filtered out) — this is a governance-trail gap, not an active
+  incident, but it's the kind of gap that normally doesn't happen in this
+  project at all (every other deploy in this repo's history has a commit,
+  a PR, and this file's own recent-work-log entry behind it).
+  **What to do once intent is confirmed**: if intentional and wanted,
+  formalize it properly — a real migration for `provider_health` (plus
+  its own grant-floor lockdown; it currently carries the same
+  default-privileges floor to anon/authenticated this file documents
+  repeatedly, inert only because RLS has zero policies), a reviewed PR
+  for `_shared/llm.ts`, and a decision on whether to actually continue the
+  rollout to the other four functions. If unintentional, revert
+  `trial-chat` to committed `main` and investigate how the deploy
+  happened. Not reverted or merged by this sweep either way — picking a
+  side on unreviewed production code is exactly what `site-guardian`'s
+  own hard boundaries say not to do unilaterally.
+  **One real security gap from the same incident was already fixed,
+  independent of the above decision**: the same out-of-band batch flipped
+  `run-routines`' gateway `verify_jwt` to `false` against
+  `supabase/config.toml`'s `true` — and unlike `chat` (which independently
+  rejects a missing/garbage JWT in its own code regardless of the gateway
+  setting), `run-routines` has no such rejection path; an empty JWT falls
+  through to "run every due routine for every user" (intentional design,
+  for `pg_cron`'s own anon-key invocation) with no gateway check gating
+  who can trigger it. **This meant any unauthenticated request from
+  anywhere could have triggered real users' routines and billed their
+  `credit_ledger`.** Fixed by redeploying `run-routines` with its exact
+  current committed source (zero code change) and `verify_jwt: true`
+  explicit, verified live via a byte-diff. `run-agent-task` had the same
+  mismatch (self-protecting in its own code, so not independently
+  exploitable, but the gateway mismatch was real) — also redeployed with
+  `verify_jwt: true` for consistency.
+  **One mismatch remains, deliberately not fixed this sweep**: `chat`
+  also shows live `verify_jwt: false` vs. `config.toml`'s `true`. Content
+  is byte-identical to `main` (confirmed via a full diff of its ~58KB
+  source) and `chat`'s own code independently validates the JWT
+  regardless of the gateway setting, so this is defense-in-depth only,
+  not an active exploit. Not manually redeployed because retyping a file
+  this large into a tool-call parameter has already shown cosmetic
+  transcription drift on much smaller files in this project's history
+  (see the `run-agent-task` redeploy in the same sweep, where comment-
+  divider dash-counts drifted with zero functional change) — the
+  risk/benefit was judged wrong for a 58KB file with no real exploit at
+  stake. Will self-correct the next time any PR merges to `main` touching
+  `supabase/**`, since `deploy-supabase.yml` deploys from `config.toml`'s
+  already-correct value.
+
 ~~- The remote Supabase migration-history table and this repo's
   `supabase/migrations/` folder had never been in CLI-sync~~ — **fully
   reconciled 2026-10-09**, see the recent-work-log entry below for the
@@ -514,6 +592,82 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-15** — **Consolidated `site-guardian` sweep covering 3 missed
+  daily firings** (2026-10-13, 10-14, 10-15 — the self-bound daily Routine
+  fired each day, but the session was occupied each time with unrelated
+  user-directed work; ran one combined sweep instead of three redundant
+  ones, scoped against the last real `sentinel` row, 2026-10-12). Dispatched
+  all 4 specialists in parallel (as `general-purpose` `Agent` dispatches
+  carrying each specialist's full methodology inline — this environment's
+  `Agent` tool doesn't register `codex`/`site-guardian-exploit`/
+  `site-guardian-drift`/`oracle` as distinct subagent types the way earlier
+  sweeps' write-ups imply; worth the next session checking whether that's
+  this environment specifically or a packaging gap).
+  **The headline finding, by far**: `site-guardian-drift`'s full byte-diff
+  (not a sample) found a real, undocumented, out-of-band production deploy
+  from 2026-10-13 — a new multi-provider LLM failover module
+  (`_shared/llm.ts`) live on `trial-chat`, backed by a `provider_health`
+  table that exists live with **zero migration anywhere**. Nobody in this
+  repo's history claims this work — no commit, no PR, no CI run. Written
+  up in full, escalated (not reverted or merged), in "Pending / not yet
+  applied" above — this needs the human owner to confirm intent. The same
+  incident also flipped `run-routines`' `verify_jwt` to `false`, a real,
+  actively-exploitable gap (no gateway check on a function whose own code
+  has no JWT-rejection path) — **fixed live** (redeployed with
+  `verify_jwt: true`, zero code change, byte-diff verified). `run-agent-task`
+  had the same mismatch (not independently exploitable, self-protecting in
+  its own code) — also fixed for consistency. `chat`'s identical mismatch
+  was deliberately left unfixed this sweep (not exploitable — `chat`
+  validates the JWT itself regardless of the gateway setting — and a manual
+  redeploy of its ~58KB source was judged not worth the transcription-drift
+  risk for a defense-in-depth-only gap; will self-correct on the next
+  `supabase/**` merge via CI).
+  **`backend-reviewer` (sweep mode)**: window was effectively empty — the
+  one commit since the 2026-10-12 cutoff was that sweep's own already-
+  reviewed PR #170 fix, re-verified still correct live. Nothing new, no PR.
+  **`site-guardian-exploit`**: all 7 roster items re-attempted live, all 7
+  still correctly blocked, zero new exploits. Surfaced a real process gap,
+  not a security bug: two specialists racing to redeploy/restub the shared
+  `test-admin-setup` diagnostic function concurrently caused a live version
+  collision mid-sweep (self-corrected — the exploit specialist adapted to
+  the other's redeploy and still finished cleanly, confirmed restubbed to
+  410 at the end) — worth a future fix (unique per-specialist function
+  names, or serializing this specific resource) rather than assuming it'll
+  keep self-correcting.
+  **`oracle`**: zero pricing/content drift anywhere (re-verified every pack
+  name/price/credit claim across 6 public pages plus every worked-example's
+  arithmetic — all correct). Pulled real current numbers: 77 total users, 35
+  signups in the last 7 days (75 in the last 30 — almost the entire user
+  base), still **0 real purchases ever**. But `purchase_funnel_events`
+  (built 2026-10-09, empty until now) got its **first-ever rows**: one
+  brand-new account clicked Buy on two different packs within 2 seconds of
+  each other, 45 seconds after signing up, reached real Stripe checkout
+  both times, completed neither, and never sent a single chat message. One
+  data point, not a trend, but the first real signal this product has ever
+  had on "does nobody click Buy, or does everyone abandon at Stripe" — this
+  one says abandon-at-Stripe (or a non-serious visit), not never-found.
+  **My own serialized checks**: advisors surfaced 2 more instances of the
+  recurring grant-floor pattern (`teams`, `email_drip_state` — both inert
+  under RLS already, same as every prior instance of this bug class) —
+  fixed (`20261015093749_lock_down_teams_and_email_drip_state_grants.sql`),
+  verified live via `has_table_privilege`. (A third, `provider_health`, is
+  the undocumented canary table above — left alone pending the human
+  decision on that feature, not fixed in isolation.) 24h error-log scan
+  clean (zero 4xx/5xx of any kind). Live smoke test clean: two throwaway
+  accounts, exactly one `profiles`/`referral_codes`/`signup_bonus` row
+  each, real chat sends billed correctly on all 3 models with real signed
+  generation receipts, `buy-credits` resolved to a real `checkout.stripe.com`
+  URL, and the full referral matrix (happy/duplicate/self/invalid) all
+  correct. Static pages and the hard Stripe-link constraint both re-grepped
+  clean. `auth.users` triggers (4) and `pg_cron` jobs (7) both matched this
+  file's documented baseline exactly.
+  **Scope note**: no new `checks/` corpus entry or exploit-roster addition
+  this sweep — nothing found was a genuinely new *bug class* with a
+  repeatable check shape; the headline finding is a one-off governance
+  incident, not a recurring pattern to automate detection for (beyond what
+  `site-guardian-drift`'s existing full-byte-diff methodology already
+  caught on its own).
 
 - **2026-10-12** — **Ran the first real sweep through the restructured
   `site-guardian` orchestrator** (user asked to "run the first site-guardian
