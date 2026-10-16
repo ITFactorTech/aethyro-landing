@@ -253,6 +253,45 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **P0, found 2026-10-16 — the live `ANTHROPIC_API_KEY` has exhausted its
+  billing credits. This breaks ALL real chat traffic right now** (`chat`,
+  `trial-chat`, `api-chat`, `run-agent-task`, `run-routines` — every
+  caller of `completeWithFailover()`'s Anthropic path). Confirmed via a
+  direct Anthropic API call through a temporary diagnostic action, which
+  returned `400 invalid_request_error: "Your credit balance is too low to
+  access the Anthropic API."` This is an external billing issue on the
+  Anthropic Console account, not a code bug — no migration, deploy, or PR
+  can fix it. The OpenAI-fallback path (`_shared/llm.ts`) only helps if
+  `OPENAI_API_KEY` is set and funded; see the next item — as of this
+  writing the OpenAI account also has zero billing credits (per the
+  2026-10-15 recent-work-log entry), so **right now neither provider can
+  actually serve a real reply** — a live message will fail both legs of
+  the failover chain. **Needs a human to add billing credits to the
+  Anthropic Console account** (and, ideally, the OpenAI account too, so
+  the fallback is actually live rather than just correctly wired).
+- **P0, found 2026-10-16 — `TAVILY_API_KEY` is unset in the live Supabase
+  edge function environment.** Confirmed via a direct
+  `Deno.env.get("TAVILY_API_KEY")` check through a temporary diagnostic
+  action: `key_set: false`, `key_len: 0`. This breaks the existing
+  `web_search` tool (previously documented in this file as working) and
+  the new `fetch_url` tool (below) identically — both call Tavily with
+  this same key, and both will return their generic "unavailable"/
+  "failed" fallback string to the model on every call, silently, with no
+  error surfaced anywhere a human would see it. Not a code regression —
+  grepping this file's history shows no record of when/why this secret
+  went missing; it may have never been set in this particular project's
+  environment despite the code assuming it is, or it may have been
+  rotated/removed at some point with no PR trail (same class of
+  out-of-band-change risk this file already documents for Supabase
+  generally). **Needs a human to set/restore `TAVILY_API_KEY` as a
+  Supabase Edge Function secret** (`create_edge_function_secret` or the
+  dashboard) — no MCP tool available in this session can create a new
+  Tavily account or retrieve an existing key. Until fixed, every
+  `web_search`/`fetch_url` tool call silently degrades to "no results"
+  rather than erroring loudly, so this is easy to miss in normal use —
+  worth a `site-guardian` check going forward (the `key_info`-style
+  direct env check used to find this, not just "the code looks right").
+
 ~~- **P0, escalated 2026-10-15 — an undocumented, out-of-band production
   deploy with zero paper trail exists right now and needs a human
   decision.**~~ — **confirmed 2026-10-15, same day**: the user (leer4030@gmail.com)
@@ -630,6 +669,77 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-16** — **Added a `fetch_url` tool to `chat`** (user asked "does
+  Aethyro have search/crawl abilities?", then "how hard would full
+  crawling be?", then picked the cheap Tier-1 option — read one page a
+  user pastes a link to, not a multi-page site crawl — over the larger
+  async-job-based crawler). `web_search` (Tavily `/search`, already live)
+  only discovers URLs from a query; it has no way to read the full
+  content of a specific URL the user already has. New `executeFetchUrl()`
+  calls Tavily's `/extract` endpoint for exactly that — one URL in, up to
+  10k chars of markdown content out, no link-following. Deliberately
+  **not** a crawler: a real multi-page crawl needs an async job (edge
+  functions have a wall-clock execution ceiling a real crawl can exceed)
+  and belongs in its own feature reusing the existing `agent_tasks`
+  infrastructure, not a synchronous tool call here — noted explicitly in
+  the function's own header comment so this doesn't get casually
+  extended into one. Same scope boundary as `web_search`/GitHub/Notion:
+  Anthropic-only tool loop, an explicit `model:"gpt"` pick skips it
+  entirely. `chat` now at v80.
+  **A real auth-style gotcha, not obvious from Tavily's own docs**: their
+  docs describe Bearer-header auth for `/extract`
+  (`Authorization: Bearer <key>`), but this account's key rejects that
+  live with a 401. The already-proven-working `/search` call in this same
+  file uses `api_key` in the JSON body instead — `executeFetchUrl` was
+  written to match that same convention rather than the docs, for
+  internal consistency, independent of whatever the root cause of the
+  Bearer-auth rejection actually is.
+  **What stopped this from being verified fully live, and why it's still
+  correct to ship**: diagnosing the above 401 surfaced two pre-existing,
+  completely unrelated production blockers — written up in full as two
+  new P0s in "Pending / not yet applied" above — that between them
+  currently prevent *any* real tool-use call (old or new) from being
+  exercised end-to-end: the live `ANTHROPIC_API_KEY` has exhausted its
+  billing credits (confirmed via a direct API call returning
+  `"Your credit balance is too low"`), and `TAVILY_API_KEY` is unset
+  entirely in the live environment (confirmed via a direct
+  `Deno.env.get()` check returning `key_set: false`) — meaning the
+  **already-shipped, previously-documented-as-working** `web_search` tool
+  is *also* currently non-functional, for the same missing-secret reason,
+  not because of anything this PR changed. Confirmed this isn't a
+  regression introduced here by testing the pre-existing `/search` call
+  directly with the same (missing) key and getting an identical 401.
+  Both are infrastructure/billing issues outside this repo's code — fixing
+  either needs a human with Anthropic Console / Supabase dashboard access,
+  not a PR. Verification for this feature therefore rests on: the code
+  correctly mirrors `web_search`'s own already-proven request/response
+  shape and error handling, `chat`'s v80 live source was fetched back and
+  diffed byte-for-byte clean against local disk (including the unrelated
+  `_shared/llm.ts` sibling file the deploy also carries), and the 401
+  itself (before the missing-key root cause was found) proved the
+  request actually reaches Tavily's real API rather than erroring before
+  the network call. **A true "this returns real page content" success-path
+  test was not possible this session** and is worth re-running once
+  `TAVILY_API_KEY` is restored.
+  **One self-caught deploy mistake worth recording**: while debugging a
+  bundler error resolving the `../_shared/llm.ts` relative import (the
+  sibling file needs that `../`-prefixed name in the deploy's `files`
+  array to resolve against the entrypoint's effective `source/`
+  subdirectory — a flat `_shared/llm.ts` name fails with `Module not
+  found`), a test deploy was sent with literal placeholder content
+  (`"PLACEHOLDER_WILL_BE_REPLACED"`) just to check the path-naming fix in
+  isolation — this briefly put broken placeholder content on live `chat`
+  (v78) before being caught and corrected immediately (v79, then v80 for
+  the real auth fix). No user-facing report of this happened because it
+  self-corrected within the same tool-call sequence, but it's exactly the
+  kind of mistake this file's own existing warning ("never embed large
+  generated data as source-code literals... verify a large deploy by
+  fetching it back") is meant to prevent, extended here to cover test/
+  placeholder content specifically, not just large real payloads: **never
+  send literal placeholder/test content in a `deploy_edge_function` call
+  for a production function** — it replaces what's live immediately,
+  with no staging step.
 
 - **2026-10-15** — **Fixed: `signup.html` had no existing-session check,
   dumping an already-logged-in returning user onto a blank signup form
