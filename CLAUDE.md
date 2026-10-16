@@ -670,6 +670,57 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-16** — **Added Tier 2 of the crawling work: a `crawl_site` tool
+  in `run-agent-task`** (user asked "what's next phase 2?" after the
+  `fetch_url` PR merged, then "Let's do it" after I laid out the plan and
+  flagged that it'd ship unverified given the same two infra blockers —
+  user chose to proceed now rather than wait). Deliberately **not** a new
+  task type/DB schema/dedicated UI — reuses the existing `agent_tasks`
+  infrastructure exactly as `chat/index.ts`'s own `fetch_url` comment
+  said Tier 2 should: a real multi-page crawl needs an async job because
+  an edge function has a wall-clock ceiling a synchronous tool call can
+  exceed, and `run-agent-task` already *is* that async job (dispatched
+  as its own request from `chat.html`'s "New Agentic Task" form, not
+  inline in a chat turn). `crawl_site` is just a third tool alongside
+  the existing `web_search`/`synthesize`, gated the same way on
+  `TAVILY_API_KEY` being set. Calls Tavily's `/crawl` endpoint (distinct
+  from `fetch_url`'s `/extract`) with a hard `MAX_CRAWL_PAGES = 8` cap
+  regardless of what the model requests. `run-agent-task` now at v3 (v30
+  by Supabase's own deploy counter), byte-diff-verified clean against
+  local disk.
+  **Same honesty posture as the `fetch_url` PR, stated directly in the
+  function's own header comment**: Tavily's `/crawl` request/response
+  shape here is taken from their public docs, not live-verified — the
+  same missing `TAVILY_API_KEY` blocking `fetch_url`'s and the existing
+  `web_search`'s verification blocks this too. Uses the same
+  `api_key`-in-body auth convention already proven for `/search` (not
+  the Bearer-header style Tavily's docs show for `/extract`, which this
+  account's key rejected) for consistency, not because it's confirmed
+  correct for `/crawl` specifically. Also flagged, not fixed: this
+  function already makes a long chain of sequential Anthropic calls per
+  task with no independently-verified wall-clock ceiling of its own —
+  adding one more potentially-45s Tavily call per crawl is proportionally
+  small against that existing risk, not a new class of one, but it's
+  still unchecked against this project's actual Supabase plan limit.
+  **Small adjacent fixes bundled in, found while wiring this up**:
+  `chat.html`'s tool-call-card renderer (`TOOL_ICONS`/the per-tool label
+  `if`-chain) never got a `fetch_url` entry when that tool shipped
+  earlier the same day — it was rendering with the generic wrench icon
+  and the raw string `"fetch_url"` instead of a readable label. Fixed
+  both gaps at once: `fetch_url` now shows the existing document icon
+  and "Read: `<url>`"; the new `crawl_site` gets a new globe icon
+  (reused from `use-cases.html`/`index.html`'s existing globe shape, not
+  invented) and "Crawled: `<url>`". Also added a one-line hint under the
+  Tasks tab's Goal field ("Can search the web, read a page you link, or
+  crawl across a whole site... when the goal calls for it") so the
+  capability is discoverable without reading this file.
+  **What this does NOT establish**: a true "crawl actually returns real
+  multi-page content" success-path test — blocked by the same
+  `TAVILY_API_KEY`-unset and Anthropic-credits-exhausted P0s as the
+  `fetch_url` work earlier the same day (see "Pending" above); worth a
+  real live run of an agentic task with a goal naming a multi-page site
+  once both are resolved.
+
 - **2026-10-16** — **Added a `fetch_url` tool to `chat`** (user asked "does
   Aethyro have search/crawl abilities?", then "how hard would full
   crawling be?", then picked the cheap Tier-1 option — read one page a

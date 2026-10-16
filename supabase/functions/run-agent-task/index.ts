@@ -1,5 +1,27 @@
-// run-agent-task v2 — Long-horizon agentic task runner
+// run-agent-task v3 — Long-horizon agentic task runner
 // Plans a goal into steps, executes each with tool use, stores progress in DB.
+//
+// v3 adds a crawl_site tool (Tavily's /crawl endpoint) -- a real multi-page
+// crawl, as opposed to chat/index.ts's single-page fetch_url. This is
+// exactly the "Tier 2" capability that function's own header comment
+// deferred to agent_tasks: an edge function has a wall-clock execution
+// ceiling a real crawl can exceed, so it needs to run as a background task
+// (which this function already is, dispatched via a fire-and-forget POST
+// from chat.html, not awaited inline in a chat turn) rather than a
+// synchronous tool call inside a streaming chat reply. No new DB schema --
+// a crawl is just another tool the planner/executor can reach for, same as
+// web_search/synthesize, scoped by MAX_CRAWL_PAGES below.
+//
+// Honesty note on verification: Tavily's /crawl endpoint's exact request/
+// response shape here is taken from their public docs, not live-verified --
+// TAVILY_API_KEY is unset in this project's live environment as of this
+// writing (see CLAUDE.md's Pending section), so neither this nor the
+// already-shipped web_search tool above it could be exercised end-to-end
+// this session. Uses the same api_key-in-body auth convention already
+// proven live for /search (not the Bearer-header style Tavily's docs show
+// for /extract, which this account's key rejected -- see chat/index.ts's
+// fetch_url comment) for consistency, pending a real live check once the
+// key is restored.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -42,6 +64,7 @@ const MAX_STEPS      = 6;
 const STEP_MAX_TOOLS = 4;  // tool-use rounds per step
 const STEP_MAX_TOK   = 2048;
 const MIN_CREDITS    = 50; // gate: refuse if balance below this
+const MAX_CRAWL_PAGES = 8; // hard cap regardless of what the model requests
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
@@ -53,6 +76,20 @@ const ALL_TOOLS: Anthropic.Tool[] = [
       type: "object" as const,
       properties: { query: { type: "string", description: "Search query" } },
       required: ["query"],
+    },
+  },
+  {
+    name: "crawl_site",
+    description:
+      `Crawl multiple pages of a website (up to ${MAX_CRAWL_PAGES}), following internal links from the given starting URL, and return their content. ` +
+      "Use this when the goal needs information spread across several pages of one site (e.g. a docs site, a multi-page article series) -- not for a single known page (use web_search's results directly for that) and not for discovering unrelated sites.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        url: { type: "string", description: "The starting URL to crawl from, including https://" },
+        max_pages: { type: "number", description: `How many pages to crawl, up to ${MAX_CRAWL_PAGES} (default ${MAX_CRAWL_PAGES})` },
+      },
+      required: ["url"],
     },
   },
   {
@@ -70,7 +107,50 @@ const ALL_TOOLS: Anthropic.Tool[] = [
 ];
 
 function agentTools(): Anthropic.Tool[] {
-  return TAVILY_API_KEY ? ALL_TOOLS : ALL_TOOLS.filter(t => t.name !== "web_search");
+  return TAVILY_API_KEY ? ALL_TOOLS : ALL_TOOLS.filter(t => t.name !== "web_search" && t.name !== "crawl_site");
+}
+
+// ── Multi-page crawl ──────────────────────────────────────────────────────────
+// Tavily's /crawl endpoint -- a real multi-page crawl (follows internal links
+// from a starting URL), distinct from chat/index.ts's single-page fetch_url
+// (Tavily's /extract). Runs here, not in chat's synchronous streaming loop,
+// because this function already makes up to MAX_STEPS*STEP_MAX_TOOLS
+// sequential Anthropic calls per task regardless of this tool, so the
+// architecture already accepts a long-running total request; one more
+// potentially-45s call per crawl invocation is proportionally small next to
+// that, not a new risk class. Not independently verified against this
+// project's actual edge-function wall-clock ceiling (plan-dependent,
+// unchecked) -- worth watching for timeouts on a goal that triggers several
+// crawls in one task.
+
+async function crawlSite(url: string, requestedMaxPages: number | undefined): Promise<string> {
+  if (!TAVILY_API_KEY) return "Site crawl unavailable.";
+  const limit = Math.max(1, Math.min(MAX_CRAWL_PAGES, requestedMaxPages || MAX_CRAWL_PAGES));
+  try {
+    const resp = await fetch("https://api.tavily.com/crawl", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        url,
+        max_depth: 2,
+        limit,
+        extract_depth: "basic",
+        format: "markdown",
+      }),
+      signal: AbortSignal.timeout(45000), // a multi-page crawl is slower than a single fetch
+    });
+    if (!resp.ok) return `Crawl failed (${resp.status}).`;
+    const data = await resp.json();
+    const pages = Array.isArray(data.results) ? data.results.slice(0, limit) : [];
+    if (!pages.length) return "Crawl returned no pages.";
+    const out = pages
+      .map((p: any) => `### ${p.url || "(unknown URL)"}\n${(p.raw_content || "").slice(0, 3000)}`)
+      .join("\n\n");
+    return `Crawled ${pages.length} page(s) from ${url}:\n\n${out}`.slice(0, 16000);
+  } catch {
+    return "Site crawl timed out or failed.";
+  }
 }
 
 // ── Web search ────────────────────────────────────────────────────────────────
@@ -159,6 +239,11 @@ async function executeStep(
         const q = (blk.input as any).query || "";
         toolResult = await webSearch(q);
         toolCalls.push({ tool: "web_search", query: q });
+      } else if (blk.name === "crawl_site") {
+        const crawlUrl = (blk.input as any).url || "";
+        const maxPages = (blk.input as any).max_pages;
+        toolResult = await crawlSite(crawlUrl, maxPages);
+        toolCalls.push({ tool: "crawl_site", url: crawlUrl });
       } else if (blk.name === "synthesize") {
         result = `**${(blk.input as any).title ?? "Result"}**\n\n${(blk.input as any).content ?? ""}`;
         done = true;
