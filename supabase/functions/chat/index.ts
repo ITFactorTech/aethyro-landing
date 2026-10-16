@@ -1,3 +1,12 @@
+// chat v55 — added a fetch_url tool (Tavily's /extract endpoint, same key
+// already configured for web_search) so the model can read the actual
+// content of a URL the user pastes/references instead of guessing from the
+// link text alone. Deliberately scoped to one page per call, no link-
+// following -- a real multi-page site crawl needs an async job (edge
+// functions have a wall-clock ceiling a real crawl can exceed) and belongs
+// in its own feature reusing the existing agent_tasks infrastructure, not a
+// synchronous tool call here. Same Anthropic-only tool-loop scope as
+// web_search/GitHub/Notion -- an explicit "gpt" pick still skips all of it.
 // chat v54 — multi-provider failover + an explicit "gpt" model pick, via the
 // new supabase/functions/_shared/llm.ts module (shared with trial-chat).
 // Scope, deliberately narrow: the tool-use loop below (web_search/GitHub/
@@ -362,6 +371,47 @@ async function executeWebSearch(query: string): Promise<string> {
   }
 }
 
+// ── Single-page fetch (read a specific URL) ─────────────────────────────────
+// Tavily's /extract endpoint, not /search -- same account/key, pulls clean
+// content from a URL the user already knows about (a link they pasted),
+// rather than discovering URLs from a query. Deliberately NOT a crawler: one
+// request, up to a few explicit URLs, no link-following. A real multi-page
+// crawl needs an async job (edge functions have a wall-clock execution
+// ceiling a real crawl can exceed) and belongs in its own feature reusing
+// the existing agent_tasks infrastructure, not a synchronous tool call here.
+
+async function executeFetchUrl(url: string): Promise<string> {
+  if (!TAVILY_API_KEY) return "Page fetch unavailable.";
+  try {
+    // Tavily's own docs describe Bearer-header auth for /extract, but this
+    // account's key rejected that live (401 "missing or invalid API key") --
+    // confirmed via a direct curl before shipping. The existing /search call
+    // below already proves this key works via the api_key body param, so
+    // /extract uses the same style rather than trusting the generic docs.
+    const resp = await fetch("https://api.tavily.com/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        urls: [url],
+        format: "markdown",
+        extract_depth: "basic",
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!resp.ok) return `Fetch failed (${resp.status}).`;
+    const data = await resp.json();
+    const result = data.results?.[0];
+    if (result?.raw_content) {
+      return result.raw_content.slice(0, 10000);
+    }
+    const failure = data.failed_results?.[0];
+    return failure?.error ? `Could not read that page: ${failure.error}` : "That page returned no readable content.";
+  } catch {
+    return "Page fetch timed out or failed.";
+  }
+}
+
 // ── GitHub proxy ───────────────────────────────────────────────────────────────
 
 async function githubRequest(token: string, path: string): Promise<any> {
@@ -629,7 +679,7 @@ serve(async (req) => {
   let documentContextCount = 0;
 
   if (TAVILY_API_KEY) {
-    systemPrompt += " You have a web_search tool — use it proactively not just for current events, news, prices, scores, and release dates, but for any specific real-world product, part number, or compatibility question where actual documented data (specs, forum reports, manufacturer pages) would beat general reasoning. Search before telling a user to go acquire or test something physically just to find out — check whether the answer is already documented online first. Answer from knowledge alone only for timeless, well-established facts.";
+    systemPrompt += " You have a web_search tool — use it proactively not just for current events, news, prices, scores, and release dates, but for any specific real-world product, part number, or compatibility question where actual documented data (specs, forum reports, manufacturer pages) would beat general reasoning. Search before telling a user to go acquire or test something physically just to find out — check whether the answer is already documented online first. Answer from knowledge alone only for timeless, well-established facts. You also have a fetch_url tool — use it whenever the user pastes or references a specific URL they want read, summarized, or asked about, instead of guessing at a page's contents from its URL or title alone. It reads one page at a time; it does not crawl a whole site.";
   }
 
   // Flat JSONB memory (structured facts)
@@ -761,6 +811,15 @@ serve(async (req) => {
           properties: { query: { type: "string", description: "Concise, specific search query" } },
           required: ["query"],
         },
+      },
+      {
+        name: "fetch_url",
+        description: "Read the full content of one specific web page the user has given you a URL for (pasted a link, referenced an article/doc/product page). Returns the page's text content. Does not search for a URL and does not crawl beyond the one page given.",
+        input_schema: {
+          type: "object" as const,
+          properties: { url: { type: "string", description: "The full URL to read, including https://" } },
+          required: ["url"],
+        },
       }]
     : [];
 
@@ -771,6 +830,10 @@ serve(async (req) => {
     try {
       if (blk.name === "web_search") {
         return await executeWebSearch((blk.input as any).query || "");
+      }
+
+      if (blk.name === "fetch_url") {
+        return await executeFetchUrl((blk.input as any).url || "");
       }
 
       if (blk.name.startsWith("github_") && githubInt?.access_token) {
