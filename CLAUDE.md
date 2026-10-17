@@ -760,6 +760,91 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-17** — **Added a generalized "JEV-style" typed-decision primitive
+  (`decision_centroids`/`classify_decision()`)** — user asked how to "build
+  on a layer to implement JEV into aethyro.com to create a LLM/JEV hybrid."
+  "JEV" (per the user's own description, attributed to an entity "TypeSafe",
+  with speed-gain claims the user themselves flagged as unverified/
+  unpublished) is a typed-decision model outputting `Choice`/`Score`/`Bool`
+  primitives instead of free text, with two build paths offered: Path A
+  (constrained decoding / a small classifier on the existing stack, "no
+  research risk") or Path B (a dedicated distilled, confidence-calibrated
+  encoder with its own training pipeline). **Picked Path A, scoped to
+  aethyro.com only, without re-asking** — "AgentEconomy"/"ModelBreeder,"
+  named in the user's answer as existing projects to possibly wire this
+  into, aren't in this session's repo scope (only `aethyro-landing` is) and
+  don't appear anywhere in this repo or its history, so there's no way to
+  act on them from here; the original request was specifically "into
+  aethyro.com" regardless. Path B was ruled out for this codebase
+  specifically: this stack is Cloudflare Workers + Supabase edge functions
+  with zero GPU/model-training infrastructure anywhere in it — there's
+  nowhere to run a distillation pipeline even if the research risk were
+  acceptable. Path A, by contrast, already has a proven production instance
+  in this exact codebase: `classify_router_tier()` (Phase 3, 2026-09-28) —
+  a pgvector nearest-centroid classifier already serving `chat`'s
+  `model:"auto"` routing on every message, zero added latency since it
+  reuses the embedding `chat` already computes.
+  **What shipped**: `classify_router_tier()` generalized into a reusable
+  primitive — new `decision_centroids` table (`decision_type, label,
+  centroid, updated_at`) + `classify_decision(p_decision_type, p_embedding)`
+  RPC, returning `{"label", "margin"}` where `margin` is the gap between the
+  best and second-best cosine distance among that decision_type's own
+  centroids. That margin is the actual "LLM/JEV hybrid" piece: a future
+  caller can trust the fast label when the margin is large and defer to the
+  full LLM when it's small (genuinely ambiguous), the same confidence-gated
+  escalation Path B's own design described, produced here by Path A's much
+  cheaper mechanism instead of a dedicated encoder. Deliberately does **not**
+  bake in a `confident: true/false` cutoff — there's no real calibration
+  data yet for what margin threshold is "confident" for any given decision
+  type (the router's own 94.7% accuracy figure took real leave-one-out
+  validation on ~25 curated examples per tier before anyone trusted it);
+  hardcoding a threshold here would look calibrated without being
+  calibrated. Callers get the raw margin and set their own threshold once
+  they have real validation data for their own decision type.
+  **Deliberately does not touch `model_router_centroids`/
+  `classify_router_tier`** — both stay exactly as they are, proven and
+  live-billing-adjacent; this is purely additive infrastructure, and nothing
+  calls `classify_decision()` yet. Migration:
+  `20261017224646_decision_centroids.sql`. Locked down identically to
+  `classify_router_tier` from the start (not found-and-fixed after the
+  fact, unlike that function's own history): verified live via
+  `has_table_privilege`/`has_function_privilege` that `anon`/`authenticated`
+  are both `false` and `service_role`/`postgres` both `true` on both the
+  table and the function.
+  **Verified live, mechanism only — not a classification-accuracy claim**:
+  copied the 3 real `model_router_centroids` vectors into
+  `decision_centroids` under a throwaway `decision_type`, then called
+  `classify_decision()` with each centroid as its own input — all 3
+  self-classified correctly (light→light, medium→medium, heavy→heavy) with
+  non-trivial, non-identical margins (0.2249, 0.2249, 0.3308), proving the
+  SQL mechanics (the join, the row_number/filter logic, the margin
+  arithmetic) work and produce sensible, discriminating output — not a
+  claim that the mechanism classifies real novel inputs accurately, which
+  would need the same per-decision-type curated-example validation the
+  router itself got. **One harmless leftover**: the 3 throwaway rows used
+  for this smoke test couldn't be deleted — the same intermittent
+  `execute_sql` DELETE-cancellation quirk this file already documents
+  elsewhere (3 consecutive `{"status":"cancelled"}` attempts). Left in
+  place under their own clearly-named, never-reused `decision_type`
+  (`smoketest_router_copy`), same precedent as the `__reconciliation_test__`/
+  `__site_guardian_verify__` rows elsewhere in this history.
+  **Deliberately not wired into anything live this pass**: considered
+  piloting a real decision type immediately (a "does this message need
+  tool access" Bool, to pre-filter whether `chat`'s tool loop even attaches
+  `web_search`/GitHub/Notion for a given message) — checked live first
+  rather than assuming: `select count(*) from generation_receipts` = 128,
+  zero of which have a non-empty `tool_calls` array, confirming (consistent
+  with this file's own 2026-10-17 `TAVILY_API_KEY` writeup) that there is
+  currently **no real historical labeled data** to ground that specific
+  pilot in. Shipping a guessed decision boundary from zero real examples
+  would have been exactly the kind of unverified claim this project's own
+  operating discipline exists to avoid, so this PR stops at the generalized
+  mechanism and does not pick a first real decision type. Worth revisiting
+  once either `web_search`/`fetch_url`/`crawl_site` usage accumulates real
+  tool-call-vs-not examples, or a decision type is identified that (like the
+  router's own tiers) can be grounded in hand-curated examples instead of
+  mined production data.
+
 - **2026-10-17** — **Published newsletter Issue #2** (user asked to "add a
   new newsletter to update" — clarified via quick questions into: a
   general AI/ML-interest piece rather than an Aethyro product-update
