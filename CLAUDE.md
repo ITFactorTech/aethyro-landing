@@ -760,6 +760,61 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-17** — **Targeted the post-first-reply nudge at the specific
+  pattern a real returner-vs-non-returner comparison found, instead of
+  showing the same generic copy to everyone.** Grounded in a real,
+  if small (n=7 real returners vs. 49 non-returners), data pull the same
+  day: the clearest difference between accounts that come back and
+  accounts that don't isn't who they are, it's what their very first
+  message asked for. Non-returners' openers cluster into one-shot
+  deliverable requests ("give me this as a PDF/Word doc/PowerPoint,
+  don't explain anything") — a closed transaction with nothing pulling
+  the user back once the file lands — plus pure model-tourism ("what
+  model are you," one literal "pelican riding a bicycle" SVG prompt, a
+  known AI-hobbyist benchmark phrase) and bare greetings with no task at
+  all. Returners' openers were overwhelmingly open-ended instead: an
+  ongoing creative-writing/worldbuilding thread, a real business idea
+  being worked through, a specific mechanical problem (Dj's car-intake
+  question, already documented above) that will need follow-up. The
+  existing nudge (PR #124, 2026-10-05) already fires once ever per
+  browser after a first completed reply, but with the same "Aethyro can
+  also read your documents or run this on a schedule" copy regardless of
+  which kind of request that reply answered — exactly useless for the
+  deliverable case, since routine-scheduling is the one relevant feature
+  there and it's one of two competing CTAs instead of the obvious single
+  ask.
+  `app/chat.html`'s `maybeShowPostReplyNudge()` now takes the triggering
+  message and checks it against a small, language-agnostic regex for
+  explicit file-format nouns (pdf/docx/pptx/xlsx/html/csv/mp4/etc. —
+  these appeared as bare English tokens even inside Vietnamese/Arabic/
+  Russian/Polish messages in the real sample, so the check doesn't need
+  per-language handling). A match swaps in copy that only offers the
+  routine path ("Need something like this again? Turn it into a
+  recurring routine...") instead of the default two-option text. The
+  nudge bar's dynamic half was wrapped in a new `#nudgeText` span so the
+  swap only touches that span; the three action buttons
+  (`#nudgeDoc`/`#nudgeRoutine`/`#nudgeDismiss`) are now wired via one
+  delegated listener on the stable `#postReplyNudge` container instead
+  of three direct listeners — a direct listener on `#nudgeRoutine` would
+  have been silently dropped the moment its parent's `innerHTML` got
+  reassigned to swap the copy, since that replaces the button node
+  itself.
+  **Verified headless**, not live-account, matching the bar this file
+  already sets for a change this size and shape (see the PR #124 entry
+  above for the same reasoning): a standalone harness carrying the exact
+  markup and JS driven with Playwright confirmed all four cases — a
+  deliverable-style message shows only the routine button and firing it
+  calls the right handler and hides the bar; a generic message keeps the
+  original two-button copy and both still work; the once-ever gate still
+  holds on a second call; and dismiss still works through the delegated
+  listener after the text swap. `node --check` on every inline
+  `<script>` block in `chat.html`, clean.
+  **Scope note, stated plainly**: this is a hypothesis grounded in a real
+  but small sample (7 returners), not a proven retention fix — worth
+  comparing real return-rate data from before and after this ships, not
+  assumed to have worked just because it shipped. No migration, no
+  edge-function change — pure frontend copy/logic.
+
 - **2026-10-17** — **Fixed the confident-fabrication-on-total-failure bug in
   `run-agent-task` flagged (not fixed) by the same day's `site-guardian`
   sweep** (user explicitly asked to fix it after the sweep closed out).
