@@ -282,11 +282,25 @@ it to the `?buy=` pattern instead.
   `credit_ledger` rows tagged `metadata.provider`, all `anthropic`; 0 rows
   anywhere with `requested_model`/`model`='gpt') — the failover code is now
   live-capable, just never yet exercised for a real user.
-- **P0, found 2026-10-16, still open as of 2026-10-17 — `TAVILY_API_KEY` is
-  unset in the live Supabase edge function environment.** Re-verified live
-  twice more since the original finding (most recently by `oracle` during
-  the 2026-10-17 sweep: `tavily_key_set: false, tavily_key_len: 0`,
-  unchanged) — this breaks `web_search`/`fetch_url`/`crawl_site` identically,
+~~- **P0, found 2026-10-16, still open as of 2026-10-17 — `TAVILY_API_KEY` is
+  unset...**~~ — **resolved 2026-10-17.** The user set a new key directly in
+  the Supabase dashboard; verified live immediately after (same
+  check-then-restub diagnostic pattern as every prior check in this
+  section): `tavily_key_set: true, tavily_key_len: 58`, and a real test
+  search against Tavily's `/search` endpoint returned a genuine `200` with
+  real results (found `aethyro.com` itself). `web_search`/`fetch_url`/
+  `crawl_site` are all unblocked as of this fix — worth a real live
+  end-to-end tool-use test next time any of the three comes up (none has
+  ever had a true success-path test; every prior verification of this
+  feature area was necessarily code-review-only, blocked by this exact P0).
+  Left the full original finding below intact for the forensic detail
+  (the root-cause confusion between a Claude-account MCP connector and this
+  project's own edge-function secret is worth remembering if a future
+  secret ever looks "already set" but isn't actually reaching the backend).
+  Original finding, found 2026-10-16, re-verified unset twice more
+  (most recently by `oracle` during the 2026-10-17 sweep:
+  `tavily_key_set: false, tavily_key_len: 0`) before the fix above — this
+  broke `web_search`/`fetch_url`/`crawl_site` identically,
   all three silently degrading to "no results" on every call. Independently
   corroborated by `oracle` from the other direction: of 124 real
   `generation_receipts` checked, zero mention `web_search`/`fetch_url`/
