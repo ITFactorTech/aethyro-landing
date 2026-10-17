@@ -760,6 +760,42 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-17** — **Fixed: `get_admin_stats()` and `get_admin_users()` have
+  always computed "paid users"/"revenue"/"is_paid" against the wrong
+  column, meaning the admin dashboard would show $0 revenue and 0 paid
+  users even once a real purchase lands.** Found while answering a direct
+  question about whether 4 admin RPCs (`admin_adjust_credits`,
+  `get_admin_stats`, `get_admin_users`, `moderate_testimonial`) are
+  properly `is_admin()`-gated — all 4 are (verified by reading every
+  definition and, for the highest-stakes one, a live simulated non-admin
+  call that correctly raised `Forbidden` before any mutation) — but
+  reading `get_admin_stats`'s source while in there surfaced this
+  separate, real correctness bug: both functions filtered on
+  `reason LIKE 'pack:%'`, the exact pattern this file's own schema-gotchas
+  section already documents as wrong (corrected 2026-09-28) — a real
+  purchase's `reason` is the bare literal `'purchase'`, with the pack key
+  in `metadata.credit_pack`. The `dashboard.html` fix from that date never
+  got carried over to these two admin RPCs. No auth/security change here —
+  both already correctly gate on `is_admin()`, confirmed separately.
+  Migration `20261017220211_fix_admin_stats_purchase_reason_match.sql`:
+  `get_admin_stats`'s paid-user count and revenue CASE now read
+  `reason = 'purchase'` / `metadata->>'credit_pack'` (dollar amounts per
+  pack unchanged — they were already correct, 4/10/30/90, just never
+  reachable); `get_admin_users`' `is_paid` subquery same fix.
+  **Verified live, not just by reading the SQL**: zero real `reason =
+  'purchase'` rows exist in this project yet (consistent with the
+  standing $0-lifetime-revenue finding), so this couldn't be checked
+  against a real purchase — instead seeded a synthetic, real-shaped
+  purchase row (`reason:'purchase'`, `metadata:{credit_pack:'power'}`,
+  `delta:2000`) for the real admin account inside a transaction, called
+  both functions under a simulated admin JWT, confirmed `get_admin_stats`
+  now correctly reports `paid:1`/`revenue:30` and `get_admin_users`
+  correctly flags that account `is_paid:true` — then rolled back,
+  confirmed via a direct count that zero rows were left behind. Re-ran
+  the non-admin-call check post-fix too: still correctly raises
+  `Forbidden`, confirming the `CREATE OR REPLACE` didn't disturb the
+  guard clause.
+
 - **2026-10-17** — **Targeted the post-first-reply nudge at the specific
   pattern a real returner-vs-non-returner comparison found, instead of
   showing the same generic copy to everyone.** Grounded in a real,
