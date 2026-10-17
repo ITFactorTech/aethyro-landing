@@ -278,44 +278,87 @@ it to the `?buy=` pattern instead.
   original bug was found — deliberately not patched in the same PR as the
   `crawl_site` auth fix, since this is a prompt/behavior change deserving
   its own review and test pass, not a bundled fix for an unrelated bug.
-- **P0, found 2026-10-16 — the live `ANTHROPIC_API_KEY` has exhausted its
-  billing credits. This breaks ALL real chat traffic right now** (`chat`,
-  `trial-chat`, `api-chat`, `run-agent-task`, `run-routines` — every
-  caller of `completeWithFailover()`'s Anthropic path). Confirmed via a
-  direct Anthropic API call through a temporary diagnostic action, which
-  returned `400 invalid_request_error: "Your credit balance is too low to
-  access the Anthropic API."` This is an external billing issue on the
-  Anthropic Console account, not a code bug — no migration, deploy, or PR
-  can fix it. The OpenAI-fallback path (`_shared/llm.ts`) only helps if
-  `OPENAI_API_KEY` is set and funded; see the next item — as of this
-  writing the OpenAI account also has zero billing credits (per the
-  2026-10-15 recent-work-log entry), so **right now neither provider can
-  actually serve a real reply** — a live message will fail both legs of
-  the failover chain. **Needs a human to add billing credits to the
-  Anthropic Console account** (and, ideally, the OpenAI account too, so
-  the fallback is actually live rather than just correctly wired).
-- **P0, found 2026-10-16 — `TAVILY_API_KEY` is unset in the live Supabase
-  edge function environment.** Confirmed via a direct
-  `Deno.env.get("TAVILY_API_KEY")` check through a temporary diagnostic
-  action: `key_set: false`, `key_len: 0`. This breaks the existing
-  `web_search` tool (previously documented in this file as working) and
-  the new `fetch_url` tool (below) identically — both call Tavily with
-  this same key, and both will return their generic "unavailable"/
-  "failed" fallback string to the model on every call, silently, with no
-  error surfaced anywhere a human would see it. Not a code regression —
-  grepping this file's history shows no record of when/why this secret
-  went missing; it may have never been set in this particular project's
-  environment despite the code assuming it is, or it may have been
-  rotated/removed at some point with no PR trail (same class of
-  out-of-band-change risk this file already documents for Supabase
-  generally). **Needs a human to set/restore `TAVILY_API_KEY` as a
-  Supabase Edge Function secret** (`create_edge_function_secret` or the
-  dashboard) — no MCP tool available in this session can create a new
-  Tavily account or retrieve an existing key. Until fixed, every
-  `web_search`/`fetch_url` tool call silently degrades to "no results"
-  rather than erroring loudly, so this is easy to miss in normal use —
-  worth a `site-guardian` check going forward (the `key_info`-style
-  direct env check used to find this, not just "the code looks right").
+~~- **P0, found 2026-10-16 — the live `ANTHROPIC_API_KEY` has exhausted its
+  billing credits...**~~ — **resolved, confirmed 2026-10-17** by the
+  `oracle` specialist during the day's `site-guardian` sweep: a direct live
+  Anthropic API call now returns a real `200`, and `provider_health` shows
+  real chat completions succeeding as recently as 2026-10-17T06:14:58Z
+  (~1.5h before that sweep started, including one real 24,830-input-token
+  Opus call) — well after the circuit breaker had tripped open for
+  `anthropic` the previous evening (`opened_until` 2026-10-16T22:21:37Z).
+  Someone (presumably the account owner) added billing credits sometime
+  between the 2026-10-16 writeup and now; no PR or migration was involved,
+  consistent with this always having been an external billing issue, not a
+  code bug. **Same `oracle` sweep separately confirmed `OPENAI_API_KEY` is
+  now also funded and working** (a direct `gpt-5.4-mini` call returned a
+  real `200`) — contradicting the 2026-10-15 entry's "zero billing credits"
+  claim for that account, which is now stale. Neither provider's
+  `provider_health.consecutive_failures` counter has reset since (still
+  reads 3/anthropic, 6/openai, stale from the outage), but this is cosmetic,
+  not a live bug — `isCircuitOpen()` only ever checks whether `opened_until`
+  is still in the future, which it isn't, so the circuit correctly reads
+  closed right now regardless of the stale counter. The one real,
+  if minor, consequence: a *future* single failure (not three fresh
+  consecutive ones) would re-trip the circuit immediately, since
+  `recordFailure()` increments from the stale count instead of 0 — a
+  conservative failure mode (fails safe sooner, not later), not urgent
+  enough to fix unprompted this sweep. **Separately verified**: zero real
+  users have ever actually been served a reply via OpenAI yet (13
+  `credit_ledger` rows tagged `metadata.provider`, all `anthropic`; 0 rows
+  anywhere with `requested_model`/`model`='gpt') — the failover code is now
+  live-capable, just never yet exercised for a real user.
+~~- **P0, found 2026-10-16, still open as of 2026-10-17 — `TAVILY_API_KEY` is
+  unset...**~~ — **resolved 2026-10-17.** The user set a new key directly in
+  the Supabase dashboard; verified live immediately after (same
+  check-then-restub diagnostic pattern as every prior check in this
+  section): `tavily_key_set: true, tavily_key_len: 58`, and a real test
+  search against Tavily's `/search` endpoint returned a genuine `200` with
+  real results (found `aethyro.com` itself). `web_search`/`fetch_url`/
+  `crawl_site` are all unblocked as of this fix — worth a real live
+  end-to-end tool-use test next time any of the three comes up (none has
+  ever had a true success-path test; every prior verification of this
+  feature area was necessarily code-review-only, blocked by this exact P0).
+  Left the full original finding below intact for the forensic detail
+  (the root-cause confusion between a Claude-account MCP connector and this
+  project's own edge-function secret is worth remembering if a future
+  secret ever looks "already set" but isn't actually reaching the backend).
+  Original finding, found 2026-10-16, re-verified unset twice more
+  (most recently by `oracle` during the 2026-10-17 sweep:
+  `tavily_key_set: false, tavily_key_len: 0`) before the fix above — this
+  broke `web_search`/`fetch_url`/`crawl_site` identically,
+  all three silently degrading to "no results" on every call. Independently
+  corroborated by `oracle` from the other direction: of 124 real
+  `generation_receipts` checked, zero mention `web_search`/`fetch_url`/
+  `crawl_site` in any payload and zero have a non-empty `tool_calls` array —
+  no real user has ever gotten a working tool-use reply through any of
+  these three tools.
+  **Root cause finally found 2026-10-17, directly from the user**: this was
+  never actually missing by accident. The user has a **Tavily MCP connector
+  connected to their own Claude account** (confirmed live — a real
+  `tavily_search` call through it returned a genuine result,
+  `auth_mode:"keyed"`) and had reasonably assumed that was the same thing as
+  the website's backend having a working Tavily key. It isn't: a claude.ai/
+  Claude Code account-level MCP connector only ever gives *that Claude
+  session* its own ability to call Tavily directly — it has no path into a
+  *separate* Supabase project's edge-function secret store, which is what
+  `chat`/`trial-chat`/`run-agent-task`'s own `Deno.env.get("TAVILY_API_KEY")`
+  actually reads from. Two unrelated systems that happen to share a provider
+  name, with zero bridge between them — the user had genuinely already set
+  Tavily up once, just not in the place this specific secret needs to live.
+  **Also tried and failed this session**: `create_edge_function_secret`
+  (the one MCP tool that can prompt a human to enter a secret value in the
+  Supabase dashboard) returned `{"status":"cancelled"}` on two separate
+  attempts, even after explicit user go-ahead — the dashboard-handoff flow
+  this tool depends on didn't complete in this session type (likely a
+  remote/cloud-session limitation, not a permission issue; no tool exists
+  that can read the raw key value back from the user's Tavily connector
+  either, so there was never a value this session could have typed in on
+  the user's behalf regardless). **Still needs a human to set
+  `TAVILY_API_KEY` directly** — Supabase Dashboard → SovereignNation
+  project (`uzmdqbtflcpikjdrggqc`) → Edge Functions → Secrets → add
+  `TAVILY_API_KEY` with the real value from tavily.com's own dashboard.
+  This is now a confirmed one-time manual step, not a repeating one — once
+  set, it covers `web_search`/`fetch_url`/`crawl_site` for good.
 
 ~~- **P0, escalated 2026-10-15 — an undocumented, out-of-band production
   deploy with zero paper trail exists right now and needs a human
@@ -694,6 +737,104 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-17** — **`site-guardian` daily sweep, consolidated** (the actual
+  2026-10-16 firing never ran — the session was mid-way through the
+  `fetch_url`/`crawl_site` feature work and a `TAVILY_API_KEY`-sourcing
+  investigation when it fired, and nobody ever returned to it; closed out
+  with an honest `report_only`/no-findings note and folded its window into
+  this sweep instead of pretending it happened). Dispatched all 4
+  specialists in parallel; this is the first sweep where two of them
+  (`site-guardian-exploit`, `oracle`) took a genuinely anomalous ~6 hours
+  each to report — far outside every prior sweep's norm (minutes to tens of
+  minutes) — for a comparable amount of actual tool-call volume (37-41 calls
+  each). No root cause confirmed; both produced coherent, well-evidenced
+  reports once nudged with a status check, so this is logged as an observed
+  anomaly, not chased further this sweep.
+  **Headline finding, from `oracle`**: both standing P0s from 2026-10-16 have
+  changed status. `ANTHROPIC_API_KEY` is **resolved** — real billing credits
+  now present, confirmed by both a direct API call and real production chat
+  traffic succeeding hours before the sweep. `OPENAI_API_KEY` is **also now
+  funded**, contradicting the 2026-10-15 entry — though zero real users have
+  ever been served via it yet. `TAVILY_API_KEY` is **still unset**, and its
+  real root cause was finally found the same day, directly from the user: a
+  Tavily MCP connector on their own Claude account is not the same thing as
+  this Supabase project's edge-function secret — two unrelated systems that
+  share a provider name, with zero bridge between them. Full detail,
+  including why `create_edge_function_secret`'s dashboard-handoff flow
+  failed twice even with explicit go-ahead, moved into "Pending" above.
+  **`backend-reviewer`** (sweep mode) found and fixed a real new bug class in
+  the 3-day-old OpenAI-failover code: `chat`'s retry-to-failover path and
+  `_shared/llm.ts`'s own internal Anthropic→OpenAI escalation could both
+  double-bill a turn or hand the client a duplicated/garbled reply, if a
+  completion failed *after* already banking a tool round's tokens or
+  streaming real bytes to the client — the retry/fallback would then run on
+  top of, not instead of, that partial progress. Fixed with a
+  `hadPartialProgress`/`anthropicEmittedOutput` guard in each file
+  respectively, gating the retry/fallback the same way the existing
+  `hasImageAttachment` guard already did. Draft PR
+  [#177](https://github.com/ITFactorTech/aethyro-landing/pull/177) — not
+  deployed live from the sweep itself (retyping `chat/index.ts`'s ~69KB
+  content risked the same transcription drift this file already documents
+  on smaller files, for a bug that isn't reachable under today's failure
+  mode anyway, since every call fails on its *first* attempt when a key is
+  truly dead, which is exactly the case where the new guards stay
+  inactive) — reviewed and found sound; recommend deploying via the normal
+  CI path on merge. Added as checklist item 13 in `backend-reviewer`'s own
+  `SKILL.md`, since this is a real, generalizable pattern for *any* future
+  retry-after-partial-progress code in this codebase, not a one-off.
+  **`site-guardian-drift`**: fully clean — 98/98 migrations exact 1:1,
+  `chat`/`trial-chat`/`_shared/llm.ts` byte-diff clean against `main`, all 26
+  functions' `verify_jwt` matching `config.toml`. The one real-looking
+  mismatch (`run-agent-task` live serving the still-open, unmerged PR #176's
+  content rather than `main`'s) is the project's own established
+  build→verify→draft-PR workflow working as intended, not drift — correctly
+  not touched.
+  **`site-guardian-exploit`**: only ran **partial** coverage before being
+  told to wrap up early once its 6-hour runtime was noticed — attack #1
+  (forced-negative-balance) verified only on the `chat` leg (blocked
+  correctly, confirmed via `credit_ledger`: no silent extra charge on the
+  402), and #7 (raw Stripe link) clean (zero real matches, grep-verified).
+  Attacks #2 (cross-user RPC read), #4 (webhook replay), #5 (referral
+  self/duplicate), and #6 (routine-chain cycle) were **not attempted this
+  sweep** — explicitly flagged by the specialist itself as unverified, not
+  assumed safe. I picked up #3 myself directly (anon REST reads against all
+  14 zero-policy/locked-down tables, including the 5 newer ones —
+  `provider_health`/`purchase_funnel_events`/`testimonials`/`teams`/
+  `email_drip_state` — not just the original 9) — all 14 correctly 404
+  ("Could not find the table in the schema cache", the strongest possible
+  result: `anon` can't even confirm the table exists). **Next sweep should
+  prioritize #2/#4/#5/#6 specifically**, not re-run the whole roster from
+  scratch assuming nothing changed.
+  **Real numbers from `oracle`** (compare to 2026-10-15's "77 users, $0
+  revenue"): 84 total users (+7), 67.9% ever activated (57/84), only 14% of
+  activated users (8 total) ever returned on a 2nd distinct day — same
+  shape as every prior sweep, no new regression. Still **$0 lifetime
+  revenue**, still only 2 real `purchase_funnel_events` rows ever (zero new
+  purchase attempts in ~2 days). Credit-ledger reason breakdown, model mix,
+  and every pricing/worked-example claim across 7 public pages all
+  re-verified clean, no drift anywhere. **One real, actionable item
+  surfaced, not yet acted on**: 6 real users have a `testimonials` row at
+  `status:'pending'` (the auto-request RPC has been quietly firing since
+  2026-10-09) with nobody ever reviewing them in `admin.html`'s Reviews
+  panel — worth the user's own attention, not something to auto-approve.
+  **Second recurrence of a known process gap, fixed this time**: two
+  specialists (`oracle`, then `site-guardian-exploit`) collided on the
+  shared `test-admin-setup` diagnostic function mid-sweep — the same
+  no-serialization gap first seen 2026-10-15. Both runs self-corrected (no
+  real damage, cleanup confirmed by both), but a second occurrence of the
+  identical gap is exactly the bar this skill's own "grow the team" section
+  sets for actually fixing a specialist's methodology rather than hoping it
+  keeps self-correcting. Added explicit "check the live source first, and
+  if it isn't the expected inert stub, another specialist is using it —
+  wait and retry rather than overwrite" guidance to `site-guardian`'s own
+  `SKILL.md` ("What stays serialized") and to `site-guardian-exploit`'s.
+  **Draft PR** (process/documentation only — the `CLAUDE.md` updates above,
+  the new `backend-reviewer` checklist item, and the two collision-avoidance
+  `SKILL.md` edits) opened alongside #177, separately, since that one is a
+  real code fix and this one isn't.
+  Logged to `agent_missions` (`division:'sentinel'`), closing out both this
+  sweep and the orphaned 2026-10-16 row.
 
 - **2026-10-16** — **Added Tier 2 of the crawling work: a `crawl_site` tool
   in `run-agent-task`** (user asked "what's next phase 2?" after the

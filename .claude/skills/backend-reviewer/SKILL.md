@@ -119,6 +119,24 @@ survived multiple prior reviews before being caught.
     key on `.functions.invoke()` calls, and a function that checks a
     custom header (like `send-low-credit-email`'s `X-Internal-Key`) gets
     nothing at all by default.
+13. **Any code path that retries or falls over to a second attempt after
+    partial progress?** (A failed completion retried via a different
+    provider/model; a failed step re-run after an earlier step already
+    committed something.) Check whether the first attempt could have
+    already done anything irreversible — incremented a token/cost counter
+    that a later `finalize()`/billing step will read, or streamed real
+    bytes to the client (`controller.enqueue()`) — *before* the exception
+    that triggers the retry. If so, the retry needs an explicit guard (a
+    flag set the moment that irreversible thing happens, checked before
+    attempting the fallback) or it will double-bill the same turn and/or
+    hand the client a second, duplicated/garbled reply on top of the
+    first. (Found 2026-10-17: `chat`'s retry-to-OpenAI-failover path and
+    `_shared/llm.ts`'s own internal Anthropic→OpenAI escalation both had
+    exactly this gap three days after the failover feature shipped —
+    neither the original PR's own review nor its author caught it, because
+    reading either function's one-attempt-at-a-time logic in isolation
+    looks correct; the bug only exists in the *retry* path's interaction
+    with state the first attempt already mutated.)
 
 ## Fix vs. flag
 

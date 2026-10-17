@@ -110,6 +110,16 @@ one specific PR).
   helper is exactly the kind of bug this skill exists to prevent, not
   cause. If `site-guardian-exploit` also needs a throwaway account, have
   it use its own separate one rather than sharing yours.
+  **This has actually collided twice now** (2026-10-15, then again
+  2026-10-17 — `oracle` and `site-guardian-exploit` both redeploying
+  `test-admin-setup` mid-sweep) — self-corrected both times with no real
+  damage, but don't rely on that a third time. Before redeploying
+  `test-admin-setup` for any purpose, call `get_edge_function` on it
+  first: if its current source is **not** the inert 410 stub, another
+  specialist is actively using it right now — wait a bit and check again
+  rather than overwriting it, and if you must proceed anyway, restore
+  whatever source you actually found (not blindly the inert stub) if your
+  own use turns out to be the thing that got interrupted.
 - **Supabase advisors** (`get_advisors`, both `security` and `performance`
   lint types) and the **24h error-log scan** (`query_logs`) — cheap and
   fast enough that a dedicated worker would be pure overhead. Diff against
