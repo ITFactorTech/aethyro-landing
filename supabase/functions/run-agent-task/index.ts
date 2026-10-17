@@ -12,16 +12,22 @@
 // a crawl is just another tool the planner/executor can reach for, same as
 // web_search/synthesize, scoped by MAX_CRAWL_PAGES below.
 //
-// Honesty note on verification: Tavily's /crawl endpoint's exact request/
-// response shape here is taken from their public docs, not live-verified --
-// TAVILY_API_KEY is unset in this project's live environment as of this
-// writing (see CLAUDE.md's Pending section), so neither this nor the
-// already-shipped web_search tool above it could be exercised end-to-end
-// this session. Uses the same api_key-in-body auth convention already
-// proven live for /search (not the Bearer-header style Tavily's docs show
-// for /extract, which this account's key rejected -- see chat/index.ts's
-// fetch_url comment) for consistency, pending a real live check once the
-// key is restored.
+// Verified live 2026-10-17 (TAVILY_API_KEY was restored the same day): a
+// real agentic task with a crawl-this-site goal ran end-to-end, but
+// crawl_site itself 401'd on every attempt -- "missing API key in
+// Authorization header". Root-caused directly, not assumed: /crawl, unlike
+// /search, rejects the api_key-in-body convention this file originally
+// copied from webSearch() below. Confirmed live against both aethyro.com
+// and a Wikipedia control URL -- both failed identically with api_key-in-
+// body and both succeeded once switched to Bearer-header auth. Fixed in
+// crawlSite() below. Separate, more concerning finding from the same test
+// run, NOT fixed here: with crawl_site and web_search both failing, the
+// final synthesize step still produced a long, confident, specific-looking
+// "report" instead of surfacing the failure -- worth a real fix to
+// executeStep's synthesize handling (e.g. refuse or caveat clearly when
+// stepContext shows every research step failed), flagged in CLAUDE.md
+// rather than patched here, since it's a prompt/behavior change deserving
+// its own review, not a one-line fix bundled into this auth bug.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -66,7 +72,7 @@ const STEP_MAX_TOK   = 2048;
 const MIN_CREDITS    = 50; // gate: refuse if balance below this
 const MAX_CRAWL_PAGES = 8; // hard cap regardless of what the model requests
 
-// ── Tool definitions ──────────────────────────────────────────────────────────
+// ── Tool definitions ──────────────────────────────────────────────────────────────────────
 
 const ALL_TOOLS: Anthropic.Tool[] = [
   {
@@ -110,7 +116,7 @@ function agentTools(): Anthropic.Tool[] {
   return TAVILY_API_KEY ? ALL_TOOLS : ALL_TOOLS.filter(t => t.name !== "web_search" && t.name !== "crawl_site");
 }
 
-// ── Multi-page crawl ──────────────────────────────────────────────────────────
+// ── Multi-page crawl ──────────────────────────────────────────────────────────────────────
 // Tavily's /crawl endpoint -- a real multi-page crawl (follows internal links
 // from a starting URL), distinct from chat/index.ts's single-page fetch_url
 // (Tavily's /extract). Runs here, not in chat's synchronous streaming loop,
@@ -129,9 +135,18 @@ async function crawlSite(url: string, requestedMaxPages: number | undefined): Pr
   try {
     const resp = await fetch("https://api.tavily.com/crawl", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // /crawl (unlike /search) rejects api_key-in-body with a 401
+        // ("missing API key in Authorization header") -- confirmed live
+        // 2026-10-17 against both aethyro.com and a Wikipedia control URL,
+        // both failing identically with api_key-in-body and both
+        // succeeding with Bearer-header auth. Not an aethyro.com-specific
+        // block, as the original 401s during live testing appeared to
+        // suggest -- a plain wrong-auth-shape bug.
+        "Authorization": `Bearer ${TAVILY_API_KEY}`,
+      },
       body: JSON.stringify({
-        api_key: TAVILY_API_KEY,
         url,
         max_depth: 2,
         limit,
@@ -153,7 +168,7 @@ async function crawlSite(url: string, requestedMaxPages: number | undefined): Pr
   }
 }
 
-// ── Web search ────────────────────────────────────────────────────────────────
+// ── Web search ──────────────────────────────────────────────────────────────────────────────
 
 async function webSearch(query: string): Promise<string> {
   if (!TAVILY_API_KEY) return "Web search unavailable.";
@@ -184,7 +199,7 @@ async function webSearch(query: string): Promise<string> {
   }
 }
 
-// ── Execute one step ──────────────────────────────────────────────────────────
+// ── Execute one step ─────────────────────────────────────────────────────────────────────────────
 
 async function executeStep(
   anthropic: Anthropic,
@@ -273,7 +288,7 @@ async function executeStep(
   return { result, toolCalls, done, inputTokens, outputTokens };
 }
 
-// ── Credits helper ────────────────────────────────────────────────────────────
+// ── Credits helper ──────────────────────────────────────────────────────────────────────────────
 
 function calcCredits(
   totalInput: number,
@@ -285,7 +300,7 @@ function calcCredits(
   return Math.max(10, Math.ceil(raw));
 }
 
-// ── Main handler ──────────────────────────────────────────────────────────────
+// ── Main handler ──────────────────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
   const CORS = corsHeadersFor(req);
@@ -324,7 +339,7 @@ serve(async (req) => {
   const modelKey = ["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "sonnet";
   const supaAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // ── Credit gate ───────────────────────────────────────────────────────────
+  // ── Credit gate ───────────────────────────────────────────────────────────────
   const { data: taskProfile } = await supaAdmin
     .from("profiles").select("team_id").eq("id", user.id).single();
   const { data: balance } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
@@ -335,7 +350,7 @@ serve(async (req) => {
       error: `Insufficient credits — need at least ${MIN_CREDITS}, have ${currentBalance}`,
     }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
 
-  // ── Create task record ────────────────────────────────────────────────────
+  // ── Create task record ─────────────────────────────────────────────────────────
   const { data: task, error: taskErr } = await supaAdmin
     .from("agent_tasks")
     .insert({ user_id: user.id, goal, status: "running" })
@@ -350,7 +365,7 @@ serve(async (req) => {
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   let totalInput = 0, totalOutput = 0;
 
-  // ── Planning phase ────────────────────────────────────────────────────────
+  // ── Planning phase ───────────────────────────────────────────────────────────────────
   let plan: string[] = [];
   try {
     const planRes = await anthropic.messages.create({
@@ -377,7 +392,7 @@ serve(async (req) => {
     plan.map((desc, i) => ({ task_id: taskId, step_index: i, description: desc, status: "pending" }))
   );
 
-  // ── Execution phase ───────────────────────────────────────────────────────
+  // ── Execution phase ───────────────────────────────────────────────────────────────
   let stepContext = `Goal: ${goal}\n\n`;
   let finalResult = "";
   let taskFailed = false;
@@ -425,7 +440,7 @@ serve(async (req) => {
     }
   }
 
-  // ── Final synthesis if no step called synthesize ──────────────────────────
+  // ── Final synthesis if no step called synthesize ────────────────────────────────
   if (!finalResult && !taskFailed) {
     try {
       const synthRes = await anthropic.messages.create({
@@ -442,7 +457,7 @@ serve(async (req) => {
     } catch { finalResult = stepContext.trim() || "Task complete."; }
   }
 
-  // ── Billing ───────────────────────────────────────────────────────────────
+  // ── Billing ──────────────────────────────────────────────────────────────────────────────
   const cost = calcCredits(totalInput, totalOutput, modelKey);
   const { error: ledgerErr } = await supaAdmin.from("credit_ledger").insert({
     user_id: user.id,
@@ -452,7 +467,7 @@ serve(async (req) => {
   });
   if (ledgerErr) console.error("agent_task credit_ledger insert failed", ledgerErr.message);
 
-  // ── Finalise task record ──────────────────────────────────────────────────
+  // ── Finalise task record ──────────────────────────────────────────────────────────
   await supaAdmin.from("agent_tasks").update({
     status:       taskFailed ? "failed" : "completed",
     result:       finalResult.slice(0, 20000),

@@ -253,6 +253,31 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **Found 2026-10-17, NOT fixed — `run-agent-task`'s `synthesize` step
+  will produce a confident, polished report even when every single
+  research step it ran explicitly reported total failure.** Found live
+  while testing `crawl_site` (see the recent-work-log entry below): before
+  the `crawl_site` auth bug was fixed, a task's own step results literally
+  said "blocked (401), cannot access, cannot complete this step" three
+  times in a row — and the model still called `synthesize` with a long,
+  structured, specific-sounding "report," rather than surfacing that the
+  underlying research never actually succeeded. The fabricated content
+  happened to be factually correct in this specific case (it matched this
+  project's own real, published pricing), which is arguably a worse
+  failure mode than an obviously-wrong fabrication: nothing in the output
+  gives a user any signal that it wasn't actually verified against real
+  crawled content. `executeStep()`'s current prompt
+  (`supabase/functions/run-agent-task/index.ts`) tells the model to call
+  `synthesize` "when you have enough information" but never explicitly
+  instructs it to refuse or caveat clearly when `stepContext` shows the
+  opposite — every tool it tried failed. **Needs a real fix, not a
+  one-line patch**: likely an explicit instruction addition to the
+  `executeStep` prompt (e.g. "if every tool call in this step's context
+  failed, say so plainly in your result instead of answering from
+  general knowledge"), verified against a forced-failure case the way the
+  original bug was found — deliberately not patched in the same PR as the
+  `crawl_site` auth fix, since this is a prompt/behavior change deserving
+  its own review and test pass, not a bundled fix for an unrelated bug.
 - **P0, found 2026-10-16 — the live `ANTHROPIC_API_KEY` has exhausted its
   billing credits. This breaks ALL real chat traffic right now** (`chat`,
   `trial-chat`, `api-chat`, `run-agent-task`, `run-routines` — every
@@ -714,12 +739,38 @@ that). Newest first.
   Tasks tab's Goal field ("Can search the web, read a page you link, or
   crawl across a whole site... when the goal calls for it") so the
   capability is discoverable without reading this file.
-  **What this does NOT establish**: a true "crawl actually returns real
-  multi-page content" success-path test — blocked by the same
-  `TAVILY_API_KEY`-unset and Anthropic-credits-exhausted P0s as the
-  `fetch_url` work earlier the same day (see "Pending" above); worth a
-  real live run of an agentic task with a goal naming a multi-page site
-  once both are resolved.
+  **Update 2026-10-17 — the real success-path test finally ran, found a
+  real bug, fixed it, and confirmed the fix live.** Once `TAVILY_API_KEY`
+  was restored (see "Pending" above — the Tavily-connector-vs-edge-
+  function-secret mixup), a real `run-agent-task` call with a goal naming
+  `aethyro.com`'s pricing/trust/developers pages ran end-to-end but
+  `crawl_site` 401'd on every single attempt — "missing API key in
+  Authorization header". Root-caused directly rather than assumed: it
+  wasn't aethyro.com-specific — a raw `/crawl` call against a Wikipedia
+  control URL with the exact same `api_key`-in-body auth this file's
+  `crawlSite()` used (copied from `webSearch()`, which works fine for
+  `/search`) failed identically; switching to `Authorization: Bearer
+  <key>` fixed both immediately. `/crawl`, unlike `/search`, simply
+  doesn't accept the body-based convention — this was a plain wrong-auth-
+  shape bug hiding behind what looked like a site-specific block. Fixed
+  in `crawlSite()`, deployed as v32, byte-diff-verified. Re-ran the exact
+  same goal: `crawl_site` succeeded 3 times (pricing/trust/developers
+  URLs), the step completed in one round with no failures, and the
+  synthesized report was grounded in real crawled content (matching this
+  file's own documented real pricing figures). Verified via
+  `agent_task_steps.tool_calls` directly, not just the final text looking
+  plausible. Cleaned up: throwaway account deleted, zero orphaned rows
+  across `auth.users`/`profiles`/`agent_tasks`/`agent_task_steps`/
+  `credit_ledger`, `test-admin-setup` restubbed and curl-confirmed 410.
+  **A second, separate, more concerning finding from the *first* (pre-fix)
+  test run, deliberately NOT fixed yet** — see the new Pending item below:
+  when every single research step explicitly reported total failure
+  ("401, cannot access, blocked"), the final `synthesize` step still
+  produced a long, confident, specific-sounding report instead of
+  surfacing that failure to the user. That report happened to contain
+  real, accurate facts anyway (this file's own documented pricing figures)
+  — which is arguably worse than an obviously-wrong fabrication, since
+  nothing about the output signaled "this wasn't actually verified."
 
 - **2026-10-16** — **Added a `fetch_url` tool to `chat`** (user asked "does
   Aethyro have search/crawl abilities?", then "how hard would full
