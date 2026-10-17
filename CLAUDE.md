@@ -253,31 +253,53 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
-- **Found 2026-10-17, NOT fixed — `run-agent-task`'s `synthesize` step
+~~- **Found 2026-10-17, NOT fixed — `run-agent-task`'s `synthesize` step
   will produce a confident, polished report even when every single
-  research step it ran explicitly reported total failure.** Found live
-  while testing `crawl_site` (see the recent-work-log entry below): before
-  the `crawl_site` auth bug was fixed, a task's own step results literally
-  said "blocked (401), cannot access, cannot complete this step" three
-  times in a row — and the model still called `synthesize` with a long,
-  structured, specific-sounding "report," rather than surfacing that the
-  underlying research never actually succeeded. The fabricated content
-  happened to be factually correct in this specific case (it matched this
-  project's own real, published pricing), which is arguably a worse
-  failure mode than an obviously-wrong fabrication: nothing in the output
-  gives a user any signal that it wasn't actually verified against real
-  crawled content. `executeStep()`'s current prompt
-  (`supabase/functions/run-agent-task/index.ts`) tells the model to call
-  `synthesize` "when you have enough information" but never explicitly
-  instructs it to refuse or caveat clearly when `stepContext` shows the
-  opposite — every tool it tried failed. **Needs a real fix, not a
-  one-line patch**: likely an explicit instruction addition to the
-  `executeStep` prompt (e.g. "if every tool call in this step's context
-  failed, say so plainly in your result instead of answering from
-  general knowledge"), verified against a forced-failure case the way the
-  original bug was found — deliberately not patched in the same PR as the
-  `crawl_site` auth fix, since this is a prompt/behavior change deserving
-  its own review and test pass, not a bundled fix for an unrelated bug.
+  research step it ran explicitly reported total failure.**~~ — **fixed
+  2026-10-17**, same day, in its own separate PR per the original note's
+  own plan. Two changes, not one: `webSearch()`/`crawlSite()`
+  (`supabase/functions/run-agent-task/index.ts`) now return `{ok, text}`
+  instead of a bare string, with `text` prefixed `"TOOL_FAILED: ..."` on
+  any failure/empty-result branch; `executeStep()`'s prompt now explicitly
+  tells the model that a `TOOL_FAILED`-marked result means the lookup
+  didn't succeed and it must say so rather than substitute general
+  knowledge presented as verified. That alone is a prompt instruction,
+  not a guarantee — so a second, **deterministic** layer was added on top,
+  independent of whether the model actually obeys the instruction: both
+  `executeStep()` and the no-step-synthesized final-synthesis fallback now
+  track `toolAttempts`/`toolFailures` across the whole task and prepend a
+  `"> ⚠️ Research failed..."` markdown-blockquote banner to the result
+  whenever every tool call actually attempted came back `ok:false` — the
+  `toolAttempts > 0` guard keeps a step that called no tool at all (pure
+  reasoning) from false-triggering.
+  **Verified live with two real throwaway-account runs, not just code
+  review**, both via a goal naming a deliberately non-existent
+  `.invalid`-TLD domain (no production secret touched, no real site
+  affected): run 1 (goal allowed any tool) planned a step that called
+  `web_search` (which came back `ok:true` — Tavily returns real, if
+  unhelpful, results even for a garbage query) *and* `crawl_site` (which
+  correctly came back `ok:false`) — since not every tool call in that
+  step failed, the deterministic banner correctly stayed silent, and the
+  model's own text still correctly reported failure ("Goal Status:
+  FAILED", "Pricing Information Found: None") rather than fabricating —
+  confirming the softer prompt-instruction path works on its own. Run 2
+  (goal explicitly restricted to `crawl_site` only) produced a step whose
+  only tool call failed, and the deterministic banner fired exactly as
+  designed — confirmed both in the API response and directly in
+  `agent_tasks.result`/`agent_task_steps.tool_calls` via SQL, not just
+  by reading the HTTP response. `run-agent-task` now at v4 (v37 by
+  Supabase's own deploy counter), byte-diff-verified clean against local
+  disk. Cleaned up: both tasks' throwaway account deleted, zero orphaned
+  rows confirmed across `profiles`/`credit_ledger`/`agent_tasks`/
+  `agent_task_steps`/`auth.users`, `test-admin-setup` restubbed to 410
+  and confirmed via a live curl.
+  **Scope note**: this closes the specific "confident fabrication on
+  total tool failure" bug for `run-agent-task` only — `chat`'s own
+  tool-use loop (`web_search`/GitHub/Notion/`fetch_url`/`crawl_site` via
+  `chat.html`) has a structurally different, synchronous, no-multi-step-
+  planning shape and wasn't touched; if the same failure pattern is ever
+  found there, it needs its own look rather than assuming this fix
+  covers it.
 ~~- **P0, found 2026-10-16 — the live `ANTHROPIC_API_KEY` has exhausted its
   billing credits...**~~ — **resolved, confirmed 2026-10-17** by the
   `oracle` specialist during the day's `site-guardian` sweep: a direct live
@@ -737,6 +759,34 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-17** — **Fixed the confident-fabrication-on-total-failure bug in
+  `run-agent-task` flagged (not fixed) by the same day's `site-guardian`
+  sweep** (user explicitly asked to fix it after the sweep closed out).
+  Full detail of the fix and its live verification is in the "Pending"
+  section's now-resolved entry above — summary here. Root cause:
+  `executeStep()`'s `synthesize` path and the no-step-synthesized
+  fallback both had zero way to tell the model (or itself) that a tool
+  call had actually failed vs. succeeded with real content, so a step
+  whose only research came back empty/erroring still produced a
+  confident, specific-sounding report with nothing in the output
+  signaling it wasn't verified. Fixed with a `{ok, text}` + `TOOL_FAILED:`
+  marker convention on `webSearch()`/`crawlSite()`'s return values, a
+  prompt instruction telling the model not to fabricate when it sees that
+  marker, and — the actual fix, not just a nicer prompt — a deterministic
+  warning banner prepended whenever every tool call a step/task actually
+  attempted came back failed, regardless of whether the model honored the
+  instruction. Verified live with two real throwaway-account runs against
+  a deliberately non-existent domain (no production secret touched): one
+  run showed the softer prompt-instruction path working on its own (one
+  tool succeeded, one failed, model still correctly reported failure with
+  no fabrication); the other, with tool choice constrained to force every
+  call in a step to fail, showed the deterministic banner firing exactly
+  as designed, confirmed in both the API response and direct SQL against
+  `agent_tasks`/`agent_task_steps`. `run-agent-task` now at v4 (v37 by
+  Supabase's deploy counter), byte-diff-verified clean. Cleaned up: both
+  throwaway accounts deleted, zero orphaned rows confirmed, `test-admin-
+  setup` restubbed to 410 and confirmed via a live curl.
 
 - **2026-10-17** — **`site-guardian` daily sweep, consolidated** (the actual
   2026-10-16 firing never ran — the session was mid-way through the

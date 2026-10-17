@@ -20,14 +20,20 @@
 // copied from webSearch() below. Confirmed live against both aethyro.com
 // and a Wikipedia control URL -- both failed identically with api_key-in-
 // body and both succeeded once switched to Bearer-header auth. Fixed in
-// crawlSite() below. Separate, more concerning finding from the same test
-// run, NOT fixed here: with crawl_site and web_search both failing, the
-// final synthesize step still produced a long, confident, specific-looking
-// "report" instead of surfacing the failure -- worth a real fix to
-// executeStep's synthesize handling (e.g. refuse or caveat clearly when
-// stepContext shows every research step failed), flagged in CLAUDE.md
-// rather than patched here, since it's a prompt/behavior change deserving
-// its own review, not a one-line fix bundled into this auth bug.
+// crawlSite() below.
+//
+// Separate, more concerning finding from the same test run, fixed
+// 2026-10-17 in a follow-up pass: with crawl_site and web_search both
+// failing, the final synthesize step still produced a long, confident,
+// specific-looking "report" instead of surfacing the failure -- nothing
+// about the output signaled it wasn't actually verified. webSearch() and
+// crawlSite() now return {ok, text} with a "TOOL_FAILED:" marker in text
+// on any failure; executeStep()'s prompt tells the model not to answer
+// from general knowledge when it sees that marker, and both executeStep()
+// and the no-step-synthesized fallback below apply a deterministic
+// warning banner whenever every tool call attempted actually failed --
+// independent of whether the model honored the prompt instruction, so a
+// confident-but-unverified report can no longer reach a user silently.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
@@ -129,8 +135,18 @@ function agentTools(): Anthropic.Tool[] {
 // unchecked) -- worth watching for timeouts on a goal that triggers several
 // crawls in one task.
 
-async function crawlSite(url: string, requestedMaxPages: number | undefined): Promise<string> {
-  if (!TAVILY_API_KEY) return "Site crawl unavailable.";
+// Returns {ok, text} rather than a bare string so the caller (executeStep)
+// can tell a real result apart from an error/empty-result message -- see
+// the TOOL_FAILED marker convention below, added to fix a real bug found
+// live 2026-10-17: with every tool call failing, the model still produced
+// a confident, specific-sounding report with no signal to the user that
+// nothing was actually verified. ok=false always pairs with a `text` that
+// starts with "TOOL_FAILED:" -- executeStep's prompt instructs the model
+// to treat that marker as "do not answer from general knowledge as if
+// this succeeded," and executeStep applies a deterministic banner on top
+// regardless of whether the model honors that instruction.
+async function crawlSite(url: string, requestedMaxPages: number | undefined): Promise<{ ok: boolean; text: string }> {
+  if (!TAVILY_API_KEY) return { ok: false, text: "TOOL_FAILED: site crawl is unavailable (no API key configured)." };
   const limit = Math.max(1, Math.min(MAX_CRAWL_PAGES, requestedMaxPages || MAX_CRAWL_PAGES));
   try {
     const resp = await fetch("https://api.tavily.com/crawl", {
@@ -155,23 +171,24 @@ async function crawlSite(url: string, requestedMaxPages: number | undefined): Pr
       }),
       signal: AbortSignal.timeout(45000), // a multi-page crawl is slower than a single fetch
     });
-    if (!resp.ok) return `Crawl failed (${resp.status}).`;
+    if (!resp.ok) return { ok: false, text: `TOOL_FAILED: crawl request failed (HTTP ${resp.status}).` };
     const data = await resp.json();
     const pages = Array.isArray(data.results) ? data.results.slice(0, limit) : [];
-    if (!pages.length) return "Crawl returned no pages.";
+    if (!pages.length) return { ok: false, text: "TOOL_FAILED: crawl returned no pages." };
     const out = pages
       .map((p: any) => `### ${p.url || "(unknown URL)"}\n${(p.raw_content || "").slice(0, 3000)}`)
       .join("\n\n");
-    return `Crawled ${pages.length} page(s) from ${url}:\n\n${out}`.slice(0, 16000);
+    return { ok: true, text: `Crawled ${pages.length} page(s) from ${url}:\n\n${out}`.slice(0, 16000) };
   } catch {
-    return "Site crawl timed out or failed.";
+    return { ok: false, text: "TOOL_FAILED: site crawl timed out or errored." };
   }
 }
 
 // ── Web search ──────────────────────────────────────────────────────────────────────────────
 
-async function webSearch(query: string): Promise<string> {
-  if (!TAVILY_API_KEY) return "Web search unavailable.";
+// Same {ok, text} convention as crawlSite() above -- see its comment.
+async function webSearch(query: string): Promise<{ ok: boolean; text: string }> {
+  if (!TAVILY_API_KEY) return { ok: false, text: "TOOL_FAILED: web search is unavailable (no API key configured)." };
   try {
     const r = await fetch("https://api.tavily.com/search", {
       method: "POST",
@@ -185,7 +202,7 @@ async function webSearch(query: string): Promise<string> {
       }),
       signal: AbortSignal.timeout(12000),
     });
-    if (!r.ok) return `Search error (${r.status}).`;
+    if (!r.ok) return { ok: false, text: `TOOL_FAILED: search request failed (HTTP ${r.status}).` };
     const d = await r.json();
     let out = d.answer ? `Summary: ${d.answer}\n\n` : "";
     if (d.results?.length) {
@@ -193,9 +210,10 @@ async function webSearch(query: string): Promise<string> {
         `${i + 1}. ${x.title}\n   ${(x.content || "").slice(0, 500)}`
       ).join("\n\n");
     }
-    return out.slice(0, 8000) || "No results.";
+    if (!out) return { ok: false, text: "TOOL_FAILED: search returned no results." };
+    return { ok: true, text: out.slice(0, 8000) };
   } catch {
-    return "Search timed out.";
+    return { ok: false, text: "TOOL_FAILED: search timed out or errored." };
   }
 }
 
@@ -213,6 +231,8 @@ async function executeStep(
   done: boolean;
   inputTokens: number;
   outputTokens: number;
+  toolAttempts: number;
+  toolFailures: number;
 }> {
   const model = EXECUTOR_MODEL_MAP[modelKey] ?? EXECUTOR_MODEL_MAP.haiku;
   const tools = agentTools();
@@ -223,6 +243,7 @@ async function executeStep(
       `You are executing step "${stepDesc}" as part of the larger goal: "${goal}"\n\n` +
       `Context so far:\n${stepContext}\n\n` +
       `Complete this step. Use tools if needed. ` +
+      `If a tool result is marked "TOOL_FAILED", that lookup did not succeed -- do not answer as if it had, and do not substitute your own general/background knowledge and present it as verified information from that tool. Say plainly in your result that the lookup failed and that part of your answer is unverified. ` +
       `When you have enough information to fully answer the entire goal, call the synthesize tool.`,
   }];
 
@@ -231,6 +252,8 @@ async function executeStep(
   let done = false;
   let inputTokens = 0;
   let outputTokens = 0;
+  let toolAttempts = 0;
+  let toolFailures = 0;
 
   for (let round = 0; round < STEP_MAX_TOOLS; round++) {
     const r = await anthropic.messages.create({
@@ -252,13 +275,17 @@ async function executeStep(
 
       if (blk.name === "web_search") {
         const q = (blk.input as any).query || "";
-        toolResult = await webSearch(q);
-        toolCalls.push({ tool: "web_search", query: q });
+        const res = await webSearch(q);
+        toolResult = res.text;
+        toolCalls.push({ tool: "web_search", query: q, ok: res.ok });
+        toolAttempts++; if (!res.ok) toolFailures++;
       } else if (blk.name === "crawl_site") {
         const crawlUrl = (blk.input as any).url || "";
         const maxPages = (blk.input as any).max_pages;
-        toolResult = await crawlSite(crawlUrl, maxPages);
-        toolCalls.push({ tool: "crawl_site", url: crawlUrl });
+        const res = await crawlSite(crawlUrl, maxPages);
+        toolResult = res.text;
+        toolCalls.push({ tool: "crawl_site", url: crawlUrl, ok: res.ok });
+        toolAttempts++; if (!res.ok) toolFailures++;
       } else if (blk.name === "synthesize") {
         result = `**${(blk.input as any).title ?? "Result"}**\n\n${(blk.input as any).content ?? ""}`;
         done = true;
@@ -285,7 +312,20 @@ async function executeStep(
     );
   }
 
-  return { result, toolCalls, done, inputTokens, outputTokens };
+  // Deterministic backstop, independent of whether the model honored the
+  // instruction above: if every tool call this step actually attempted
+  // failed, say so in the result regardless of what the model wrote. This
+  // is the fix for the real bug found live 2026-10-17 -- a step whose only
+  // tool calls all 401'd still produced a confident, specific-sounding
+  // report with no signal to the user that nothing was verified.
+  // toolAttempts > 0 guards a step that never called a tool at all (pure
+  // reasoning, nothing to fail).
+  if (toolAttempts > 0 && toolFailures === toolAttempts) {
+    const failedTools = toolCalls.filter(t => t.tool !== "synthesize").map(t => t.tool).join(", ");
+    result = `> ⚠️ **Research failed for this step** — every tool call (${failedTools}) returned an error or no data. The text below reflects the model's own general knowledge, not information verified by this step.\n\n${result}`;
+  }
+
+  return { result, toolCalls, done, inputTokens, outputTokens, toolAttempts, toolFailures };
 }
 
 // ── Credits helper ──────────────────────────────────────────────────────────────────────────────
@@ -396,6 +436,8 @@ serve(async (req) => {
   let stepContext = `Goal: ${goal}\n\n`;
   let finalResult = "";
   let taskFailed = false;
+  let totalToolAttempts = 0;
+  let totalToolFailures = 0;
 
   for (let i = 0; i < plan.length; i++) {
     // Mark step running
@@ -405,11 +447,13 @@ serve(async (req) => {
       .eq("step_index", i);
 
     try {
-      const { result, toolCalls, done, inputTokens: si, outputTokens: so } =
+      const { result, toolCalls, done, inputTokens: si, outputTokens: so, toolAttempts, toolFailures } =
         await executeStep(anthropic, goal, plan[i], stepContext, modelKey);
 
       totalInput  += si;
       totalOutput += so;
+      totalToolAttempts += toolAttempts;
+      totalToolFailures += toolFailures;
 
       stepContext += `\nStep ${i + 1} (${plan[i]}):\n${result}\n`;
 
@@ -442,19 +486,31 @@ serve(async (req) => {
 
   // ── Final synthesis if no step called synthesize ────────────────────────────────
   if (!finalResult && !taskFailed) {
+    // Same real bug this file's header comment and the 2026-10-17
+    // CLAUDE.md entry describe, reached via the other code path: a task
+    // whose every tool call failed still got a confident report here too,
+    // since this prompt never saw the per-step failure markers or had any
+    // instruction not to fabricate. Same fix: instruct + deterministic
+    // backstop, independent of model compliance.
+    const allToolsFailed = totalToolAttempts > 0 && totalToolFailures === totalToolAttempts;
     try {
       const synthRes = await anthropic.messages.create({
         model:      EXECUTOR_MODEL_MAP[modelKey] ?? EXECUTOR_MODEL_MAP.haiku,
         max_tokens: 2000,
         messages: [{
           role:    "user",
-          content: `You completed research for this goal: "${goal}"\n\nWork done:\n${stepContext}\n\nWrite a comprehensive final answer/report in markdown.`,
+          content:
+            `You completed research for this goal: "${goal}"\n\nWork done:\n${stepContext}\n\n` +
+            `Write a comprehensive final answer/report in markdown. If any part of the work above is marked "TOOL_FAILED" or otherwise shows a research step that failed, say so plainly instead of filling the gap with your own general knowledge presented as verified fact.`,
         }],
       });
       totalInput  += synthRes.usage.input_tokens;
       totalOutput += synthRes.usage.output_tokens;
       finalResult = (synthRes.content.find(b => b.type === "text") as any)?.text || "Task complete.";
     } catch { finalResult = stepContext.trim() || "Task complete."; }
+    if (allToolsFailed) {
+      finalResult = `> ⚠️ **Research failed** — every tool call attempted for this task returned an error or no data. This report reflects the model's own general knowledge, not information verified during this task.\n\n${finalResult}`;
+    }
   }
 
   // ── Billing ──────────────────────────────────────────────────────────────────────────────
