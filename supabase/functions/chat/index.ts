@@ -1,3 +1,18 @@
+// chat v56 — backend-reviewer sweep fix (2026-10-17): the v54 retry-to-
+// -failover path (generateCompletion() throws -> runFailoverCompletion())
+// could trigger after the failed attempt had already consumed real tool-
+// -round tokens or streamed real text/thinking bytes to the client, since
+// inputTokens/outputTokens/controller.enqueue all happened eagerly, before
+// the attempt was known to succeed. A later exception in the SAME attempt
+// then triggered a full retry that double-counted tokens against the
+// retry's own usage (finalize() bills off the combined running total) and
+// could hand the client a second, concatenated reply glued onto a
+// truncated first one. New `hadPartialProgress` flag: set the moment any
+// of that happens, and the catch block now skips the retry (same as the
+// existing hasImageAttachment guard) rather than risking either. A
+// matching fix landed in _shared/llm.ts's own internal Anthropic-then-
+// -OpenAI escalation (completeWithFailover), which has the identical shape
+// and is trial-chat's primary completion path, not just this file's retry.
 // chat v55 — added a fetch_url tool (Tavily's /extract endpoint, same key
 // already configured for web_search) so the model can read the actual
 // content of a URL the user pastes/references instead of guessing from the
@@ -906,6 +921,15 @@ serve(async (req) => {
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   const encoder = new TextEncoder();
   let inputTokens = 0, outputTokens = 0;
+  // Set the moment generateCompletion() has done anything irreversible for
+  // THIS attempt -- billed a tool round's tokens, or streamed real bytes to
+  // the client -- so a later exception in the SAME attempt can't trigger a
+  // retry that would double-bill (tool-loop tokens already added, then a
+  // fresh completion's tokens added again) or hand the client a second,
+  // concatenated reply after a partial one already streamed out (the plain
+  // completion branch enqueues text_delta chunks live, before the stream is
+  // known to have succeeded). See the catch block below.
+  let hadPartialProgress = false;
 
   type ToolEvent = { tool: string; input: Record<string, any> };
   const toolEvents: ToolEvent[] = [];
@@ -1255,6 +1279,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
             });
             inputTokens += r.usage.input_tokens;
             outputTokens += r.usage.output_tokens;
+            hadPartialProgress = true;
 
             if (r.stop_reason !== "tool_use") {
               emitToolPrefix(controller);
@@ -1295,6 +1320,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
 
         for await (const chunk of finalStream) {
           if (chunk.type === "content_block_delta") {
+            hadPartialProgress = true;
             if (chunk.delta.type === "thinking_delta") {
               thinkingText += chunk.delta.thinking;
             } else if (chunk.delta.type === "text_delta") {
@@ -1338,9 +1364,17 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
         // attachment, which the OpenAI path would otherwise silently drop
         // rather than error on (see hasImageAttachment above) -- better a
         // clear error than a billed answer that never saw what was attached.
+        // Also skipped if THIS attempt already made partial progress
+        // (hadPartialProgress) -- a tool round's tokens already landed in
+        // inputTokens/outputTokens, or real text/thinking bytes already
+        // streamed to the client, before the exception. Retrying here would
+        // either double-count those tokens against the retry's own tokens
+        // (finalize() bills off the combined running total) or hand the
+        // client a second, concatenated reply glued onto a truncated first
+        // one -- a clean error is strictly better than either.
         console.error("chat: completion generation failed, retrying tools-free via failover:", e instanceof Error ? e.message : String(e));
         try {
-          if (hasImageAttachment) throw e;
+          if (hasImageAttachment || hadPartialProgress) throw e;
           emitToolPrefix(controller);
           result = await runFailoverCompletion(undefined);
         } catch (e2) {

@@ -207,13 +207,33 @@ export async function completeWithFailover(
   if (!wantsOpenAIDirectly) {
     const anthropicOpen = await isCircuitOpen(supaAdmin, "anthropic");
     if (!anthropicOpen) {
+      // Tracks whether the Anthropic attempt already delivered real output
+      // via the caller's onTextDelta/onThinkingDelta before failing partway
+      // through its own stream. Those callbacks typically write straight
+      // through to an outgoing HTTP response (see chat/index.ts and
+      // trial-chat/index.ts) -- bytes already sent that way can't be
+      // un-sent. Falling over to OpenAI after that point would enqueue a
+      // second, complete reply on top of the truncated first one, so this
+      // gates whether a fallback attempt is even safe to make.
+      let anthropicEmittedOutput = false;
+      const trackedReq: CompletionRequest = {
+        ...req,
+        onTextDelta: (text) => { anthropicEmittedOutput = true; req.onTextDelta(text); },
+        onThinkingDelta: req.onThinkingDelta
+          ? (t) => { anthropicEmittedOutput = true; req.onThinkingDelta!(t); }
+          : undefined,
+      };
       try {
-        const result = await runAnthropic(anthropicApiKey, req);
+        const result = await runAnthropic(anthropicApiKey, trackedReq);
         await recordSuccess(supaAdmin, "anthropic");
         return result;
       } catch (err) {
         console.error("llm: anthropic call failed, attempting openai fallback:", err instanceof Error ? err.message : String(err));
         await recordFailure(supaAdmin, "anthropic");
+        if (anthropicEmittedOutput) {
+          console.error("llm: anthropic already streamed partial output before failing -- not falling over to openai (would duplicate the reply)");
+          throw err;
+        }
       }
     } else {
       console.error("llm: anthropic circuit open, skipping straight to openai fallback");
