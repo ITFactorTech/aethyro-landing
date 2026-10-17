@@ -760,6 +760,54 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-17** — **Published newsletter Issue #2** (user asked to "add a
+  new newsletter to update" — clarified via quick questions into: a
+  general AI/ML-interest piece rather than an Aethyro product-update
+  recap, archive-only for now (not sent via `send-newsletter`), free
+  tier). Topic picked deliberately: a `WebSearch` pass for "notable AI/ML
+  breakthroughs October 2026" came back mostly unverifiable aggregator
+  content and unsourced "GPT-whatever" rumors — not something to build a
+  newsletter issue's factual claims on, and specifically the kind of
+  "press release dressed up as news" this newsletter's own voice (Issue
+  #1: "what's complete nonsense dressed up in a press release") exists to
+  push back on. Wrote instead about a genuinely well-established,
+  verifiable trend — inference-time/test-time compute ("thinking"
+  models) — and used the noisy search results themselves as the issue's
+  honest opening hook, rather than inventing a fake specific headline to
+  open with. Ties back to two things that are real and already shipped in
+  this product: the chat's own "Reasoning" panel (extended thinking,
+  documented above) and the `model:"auto"` router (cheap tier for easy
+  questions, expensive tier for hard ones) — both cited accurately, no
+  new claims about either. Matched the existing issues' exact voice/
+  structure (pulled `issue-001`'s full body first) — `# Aethyro Dispatch`
+  header, issue number + date, em-dash section breaks, a "Quick Shots"
+  bullet list, the same closing/p.s. CTA pattern.
+  Inserted via `supabase/migrations/20261017221501_seed_newsletter_issue_002_thinking_models.sql`
+  (slug `issue-002-why-your-ai-pauses-before-answering`, `is_premium:
+  false`) — matches this project's established pattern of seeding content
+  via a committed migration (same as `seed_official_routine_templates`),
+  not a one-off untracked `execute_sql` insert. Confirmed `anon` has no
+  `INSERT` on `newsletter_issues` before inserting (content additions here
+  are migration-only by design, same as every other seeded-content table
+  in this project). Verified live: the real `newsletter_index()` RPC
+  (what `app/newsletter.html`'s listing actually calls) returns the new
+  issue first, correctly ordered by `published_at desc` ahead of the
+  existing 3. The committed migration file hardcodes the exact
+  `published_at` timestamp the live `now()` insert actually produced
+  (`2026-10-17 22:15:01.774327+00`), not a fresh `now()` call, so a
+  from-scratch migration replay reproduces the same ordering rather than
+  landing at whatever moment it's re-run.
+  **One pre-existing cosmetic quirk noticed, not fixed (out of scope of
+  what was asked)**: the index page's `#N` badge numbers issues by
+  position (`total count − index`), not by each issue's own "Issue #N"
+  title text — so this issue's badge will show `#4` even though its
+  title says "Issue #2," the same mismatch `issue-001`'s badge already
+  has today (shows `#2`/`#3` depending on count, title says "#1"). Not
+  something this change introduced or was asked to fix.
+  **Scope note**: archive-only, per the explicit answer above — nobody
+  has been emailed. Sending it for real is a separate, later step
+  (`send-newsletter`), not done here.
+
 - **2026-10-17** — **Fixed: `get_admin_stats()` and `get_admin_users()` have
   always computed "paid users"/"revenue"/"is_paid" against the wrong
   column, meaning the admin dashboard would show $0 revenue and 0 paid
