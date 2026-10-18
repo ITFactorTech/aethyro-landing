@@ -760,6 +760,30 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-18** — **Fixed: `decision_centroids` (added in PR #183, same day as
+  the entry below) had no RLS enabled at all** — found by this day's
+  `site-guardian` sweep running `get_advisors` and noticing the table's
+  conspicuous *absence* from the `rls_enabled_no_policy` finding list where
+  every sibling zero-client-access table (`admin_users`, `agent_missions`,
+  `app_secrets`, `model_router_centroids`, `provider_health`,
+  `purchase_funnel_events`, `rate_limit_counters`, `testimonials`) correctly
+  appears. Not currently exploitable — no role but `service_role`/`postgres`
+  holds any grant on the table regardless — but a real deviation from this
+  project's own established defense-in-depth convention for this table
+  class: table-level `REVOKE`/`GRANT` alone has no second layer catching a
+  future accidental grant loosening, whereas RLS-enabled-zero-policies would
+  still correctly deny all rows even then. Fixed with
+  `20261018074437_decision_centroids_enable_rls.sql`
+  (`alter table public.decision_centroids enable row level security;`),
+  applied live and verified (`pg_class.relrowsecurity` now `true`). Same
+  fix independently flagged (not applied) by both dispatched specialists
+  this sweep — `backend-reviewer` and `site-guardian-drift` each found the
+  already-applied-live, already-uncommitted migration file sitting in the
+  shared working tree mid-sweep and correctly declined to commit it
+  themselves to avoid a collision with whoever authored it. Committed here
+  by the orchestrator (who did in fact author it) once the sweep's own
+  container restart was recovered from.
+
 - **2026-10-17** — **Added a generalized "JEV-style" typed-decision primitive
   (`decision_centroids`/`classify_decision()`)** — user asked how to "build
   on a layer to implement JEV into aethyro.com to create a LLM/JEV hybrid."
