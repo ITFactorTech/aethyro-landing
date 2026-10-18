@@ -1,3 +1,20 @@
+// chat v57 — backend-reviewer sweep fix (2026-10-18), closing a gap the
+// v56 fix directly below left open: runFailoverCompletion()'s own
+// onTextDelta/onThinkingDelta callbacks (used for BOTH the explicit
+// model:"gpt" forced-OpenAI completion and the retry-path call below) never
+// set hadPartialProgress, even though they enqueue real bytes to the client
+// exactly like the plain Anthropic branches that DO set it. Concretely: an
+// explicit "gpt" pick (forceProvider="openai") that streamed some text via
+// this callback and then threw mid-stream would leave hadPartialProgress
+// false, so the outer catch block's `if (hasImageAttachment ||
+// hadPartialProgress) throw e;` guard would NOT fire, and it would retry via
+// a second runFailoverCompletion(undefined) call -- streaming a second,
+// duplicated reply on top of the first partial one. The exact bug class v56
+// fixed for the tool-loop/plain-stream paths, just missed for this one.
+// Fixed by setting hadPartialProgress = true inside both callbacks here too.
+// Not deployed from this session -- same reasoning as v56's own note below
+// (retyping this ~70KB file into a deploy call risks transcription drift);
+// recommend the normal deploy-supabase.yml CI path on merge.
 // chat v56 — backend-reviewer sweep fix (2026-10-17): the v54 retry-to-
 // -failover path (generateCompletion() throws -> runFailoverCompletion())
 // could trigger after the failed attempt had already consumed real tool-
@@ -1237,6 +1254,18 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
           thinking: supportsThinking,
           forceProvider: fp,
           onTextDelta: (text) => {
+            // backend-reviewer sweep (2026-10-18): this callback enqueues
+            // real bytes to the client exactly like the plain Anthropic
+            // branches above, which already set hadPartialProgress -- this
+            // one didn't, which left a gap in the v56 double-bill/duplicate-
+            // -reply fix: an explicit model:"gpt" pick (forceProvider=
+            // "openai") that streamed partial text here and then threw would
+            // leave hadPartialProgress false, so the outer catch block would
+            // still retry via a second runFailoverCompletion(undefined) call
+            // and stream a second reply on top of this one. Setting it here
+            // closes that gap the same way the tool-loop/plain-stream
+            // branches already do.
+            hadPartialProgress = true;
             if (!thinkingEmitted && thinkingText) {
               controller.enqueue(encoder.encode(THINK_MARK + thinkingText + THINK_MARK));
               thinkingEmitted = true;
@@ -1244,7 +1273,7 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
             controller.enqueue(encoder.encode(text));
             fullText += text;
           },
-          onThinkingDelta: (t) => { thinkingText += t; },
+          onThinkingDelta: (t) => { hadPartialProgress = true; thinkingText += t; },
         });
         if (!fullText.trim() && thinkingText && !thinkingEmitted) {
           controller.enqueue(encoder.encode(THINK_MARK + thinkingText + THINK_MARK));

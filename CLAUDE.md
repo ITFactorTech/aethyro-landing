@@ -760,6 +760,53 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-18** — **`backend-reviewer` sweep (dispatched as part of a
+  `site-guardian` run), covering changes since the 2026-10-17T07:43:27Z
+  cutoff** (PR #177's own retry fix, the `crawl_site` auth fix, the
+  `run-agent-task` synthesize/no-fabricate fix, the `get_admin_stats`/
+  `get_admin_users` purchase-column fix, the newsletter Issue #2 seed, and
+  PR #183's `decision_centroids`/`classify_decision()` addition). All six
+  checked clean against the grant/correctness checklist except one real,
+  confirmed gap found in PR #177's own fix, one day after it merged:
+  **`runFailoverCompletion()`'s `onTextDelta`/`onThinkingDelta` callbacks —
+  used for both the explicit `model:"gpt"` forced-OpenAI completion and the
+  retry-path call inside the outer catch block — never set
+  `hadPartialProgress`, even though they `controller.enqueue()` real bytes
+  to the client exactly like the plain-Anthropic branches that correctly do
+  set it.** Concretely: an explicit "gpt" pick that streamed some real text
+  via this callback and then threw mid-stream left `hadPartialProgress`
+  `false`, so the outer catch's `if (hasImageAttachment ||
+  hadPartialProgress) throw e;` guard would not fire — it would retry via a
+  second `runFailoverCompletion(undefined)` call and stream a second,
+  duplicated reply on top of the first partial one. This is the exact bug
+  class the v56/PR #177 fix closed for the tool-loop and plain-Anthropic-
+  -stream paths; it just didn't reach this third call site, which shares
+  the same risk shape (real bytes already sent to the client before a
+  possible mid-stream failure). Fixed in `chat` (now v57, header comment
+  updated) by setting `hadPartialProgress = true` inside both callbacks,
+  mirroring exactly how the tool-loop/plain-stream branches already do it.
+  Verified by code-path read (tracing every call site of
+  `runFailoverCompletion` and confirming the flag is now set before any
+  `controller.enqueue()` in that function) and a `tsc --noEmit` syntax
+  check (zero `TS1xxx` errors) — not deployed live from this session,
+  same reasoning as v56's own note (retyping this ~70KB file into a deploy
+  call risks the transcription drift this file already documents
+  elsewhere); draft PR opened, recommend the normal `deploy-supabase.yml`
+  CI path on merge. **Also found, not mine to fix**: `decision_centroids`
+  (PR #183) was missing the `enable row level security` backstop every
+  sibling zero-client-access table in this project carries as defense in
+  depth — found already live-fixed by a concurrent specialist in this same
+  sweep (an uncommitted `20261018074437_decision_centroids_enable_rls.sql`
+  sitting in the working tree, matching the live `schema_migrations` row
+  exactly) — left alone to avoid a commit collision with whoever owns it.
+  Everything else in the window (the `get_admin_stats`/`get_admin_users`
+  fix, the newsletter seed, `run-agent-task`'s two fixes) re-verified
+  clean live: correct grants, correct `is_admin()` gating preserved,
+  `credit_ledger_reason_check` unaffected, and `chat`/`_shared/llm.ts`/
+  `run-agent-task` all confirmed byte-for-byte live-matching `main` as of
+  the pre-fix commit (CI's `deploy-supabase.yml` had already redeployed
+  everything cleanly).
+
 - **2026-10-17** — **Added a generalized "JEV-style" typed-decision primitive
   (`decision_centroids`/`classify_decision()`)** — user asked how to "build
   on a layer to implement JEV into aethyro.com to create a LLM/JEV hybrid."
