@@ -760,6 +760,41 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-19** — **`site-guardian` daily sweep.** Window since the
+  2026-10-18T07:42:50Z cutoff was quiet (only yesterday's own sweep PRs
+  #184/#185, both already reviewed and independently re-verified live by
+  this sweep's `backend-reviewer`/`site-guardian-drift` dispatches — zero
+  drift, zero regressions). Two real findings:
+  **(1) Fixed: 4 more instances of the unverifiable "world's most
+  capable/best" model claim**, the exact overclaim class the 2026-10-08
+  entry already fixed once on `pricing.html` and apparently missed
+  elsewhere — found by `oracle`'s funnel/content-accuracy pass via a
+  fresh repo-wide grep. Reworded all 4 to "Anthropic's most capable"
+  (same substitution as the original fix): `use-cases.html`'s hero
+  subhead, `app/share.html`'s shared-conversation footer, `app/chat.html`'s
+  onboarding-modal body, and a second, different line on `pricing.html`
+  itself ("world's best AI" in the final CTA, distinct from the line
+  already fixed 2026-10-08).
+  **(2) Fixed: two orphaned throwaway test accounts
+  (`sentinel-a`/`sentinel-b-1792178176@example.com`) from a prior sweep's
+  `site-guardian-exploit` dispatch had been sitting live, undeleted, for 3
+  days** (created 2026-10-16T19:16Z) — found while investigating two
+  `send-onboarding-email` 500s in the 24h error-log scan that didn't match
+  this sweep's own (cleaned-up) smoke-test accounts. Each had a real
+  `profiles`/`credit_ledger` (signup bonus)/`referral_codes` row and 6
+  `scheduled_emails` rows, firing a real (correctly-rejected-by-Resend,
+  same documented non-bug pattern) send every day via the
+  `send-onboarding-emails` cron job — this is what the two 500s traced
+  back to. Deleted both via `test-admin-setup`; confirmed zero orphaned
+  rows across `profiles`/`credit_ledger`/`scheduled_emails`/`auth.users`
+  afterward. **Not itself a new bug class** (the exploit specialist's own
+  accounts, not a real customer's) but a genuine cleanup-discipline gap —
+  worth noting that 24h error-log scans are a real way to catch this kind
+  of lingering orphan, not just application bugs.
+  `site-guardian-exploit`'s own re-run (all 7 roster items + the
+  `decision_centroids` surface) reported separately, see its own
+  completion for full detail.
+
 - **2026-10-18** — **`backend-reviewer` sweep (dispatched as part of a
   `site-guardian` run), covering changes since the 2026-10-17T07:43:27Z
   cutoff** (PR #177's own retry fix, the `crawl_site` auth fix, the
