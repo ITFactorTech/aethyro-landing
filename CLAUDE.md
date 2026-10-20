@@ -791,9 +791,22 @@ that). Newest first.
   accounts, not a real customer's) but a genuine cleanup-discipline gap —
   worth noting that 24h error-log scans are a real way to catch this kind
   of lingering orphan, not just application bugs.
-  `site-guardian-exploit`'s own re-run (all 7 roster items + the
-  `decision_centroids` surface) reported separately, see its own
-  completion for full detail.
+  **`site-guardian-exploit`'s own re-run was never completed this sweep —
+  infrastructure disruption, not a security finding.** The session running
+  this sweep hit two separate container restarts (2026-10-19 and again
+  2026-10-20) before the dispatched specialist could report back; it was
+  resumed once via its saved agent id after the first restart but was
+  stopped again by the second before finishing. Per this skill's own
+  guidance ("never assume a stopped specialist's work was safe, re-dispatch
+  or explicitly flag as unverified"), this is logged as **not attempted**
+  for the 7-item roster + the `decision_centroids` surface this sweep —
+  the same honest treatment given to partial exploit coverage on
+  2026-10-16/17. `test-admin-setup`'s live source was confirmed and
+  restubbed to the clean inert 410 (v171) once the specialist's own
+  session-key-gated helper (left live by the interrupted run) was found —
+  no test account was left behind by it, confirmed via the stub's own
+  restore. **Next sweep should run the full exploit roster fresh**, not
+  assume anything changed since 2026-10-18's last completed pass.
 
 - **2026-10-18** — **`backend-reviewer` sweep (dispatched as part of a
   `site-guardian` run), covering changes since the 2026-10-17T07:43:27Z
