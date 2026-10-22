@@ -31,21 +31,32 @@
       else setTimeout(loadGA, 1500);
     })();
   </script>
-  <!-- First-touch attribution: capture document.referrer + any utm_* params once
-       per tab session, so signup.html can read it back later even after a few
-       in-site hops (index.html -> chat.html trial -> "Sign up free"). First
-       touch wins -- never overwritten if the visitor browses elsewhere first. -->
+  <!-- First-touch attribution: capture document.referrer + any utm_* params,
+       so signup.html can read it back later even after a few in-site hops
+       (index.html -> chat.html trial -> "Sign up free") AND after the visitor
+       closes the tab and comes back another day to actually sign up -- the
+       most common real path for this product. localStorage (not
+       sessionStorage) is what makes the second part possible; a 30-day TTL
+       keeps a months-old visit from getting credited for an unrelated later
+       signup. First touch within that window wins -- never overwritten if
+       the visitor browses elsewhere first. -->
   <script>
     (function(){
       try{
-        if(sessionStorage.getItem('aethyro_first_touch')) return;
+        var TTL_MS = 30*24*60*60*1000;
+        var raw = localStorage.getItem('aethyro_first_touch');
+        if(raw){
+          var existing = JSON.parse(raw);
+          if(existing && existing.at && (Date.now()-existing.at) < TTL_MS) return;
+        }
         var p=new URLSearchParams(location.search), utm={};
         ['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach(function(k){
           var v=p.get(k); if(v) utm[k]=v.slice(0,200);
         });
-        sessionStorage.setItem('aethyro_first_touch', JSON.stringify({
+        localStorage.setItem('aethyro_first_touch', JSON.stringify({
           referrer: (document.referrer||'').slice(0,500),
-          utm: Object.keys(utm).length ? utm : null
+          utm: Object.keys(utm).length ? utm : null,
+          at: Date.now()
         }));
       }catch(e){}
     })();

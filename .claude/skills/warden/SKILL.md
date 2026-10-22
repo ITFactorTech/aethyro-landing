@@ -44,9 +44,20 @@ across many accounts at once.
    email that happens to look unusual. No fixed list exists in this repo;
    go in knowing the specific domains already confirmed suspicious in past
    sweeps (`onldm.net`, `skidder.wtf`, `gonrr.net`, `*.xyz` throwaway-
-   registrar patterns, `vietnam2.mail10p.com`) as a starting point, and add
-   to this list in `CLAUDE.md`/here as new ones are confirmed — don't treat
-   it as exhaustive or stop at matching against just these.
+   registrar patterns, `vietnam2.mail10p.com`, `voidash.cyou` — confirmed
+   2026-10-22 via real request-cadence evidence, not just the domain name:
+   one account on it fired 100+ billed `chat` requests in 29 minutes, and
+   the domain produced 3 signups within 1.5 hours using test-harness-style
+   local parts like `probe.rl2`/`ft-domain_tunnel`) as a starting point,
+   and add to this list in `CLAUDE.md`/here as new ones are confirmed —
+   don't treat it as exhaustive or stop at matching against just these.
+   Also watch for a second, distinct signal found the same sweep: a
+   recurring auto-generated probe-message template with an incrementing
+   counter (`AETHYRO0NN_..._OK`-shaped, two confirmed instances 3 days
+   apart on unrelated accounts) — a signature of an external script
+   periodically checking that fresh signups still produce working free
+   API access. Only 2 instances so far, not enough to act on, but worth
+   checking for recurrence/growth every sweep.
 2. **Pull real conversation content**, `messages` joined through
    `conversations`, for the cohort in question. Specifically look for:
    - **Stated farming/automation intent** — a user asking the model to
