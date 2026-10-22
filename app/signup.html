@@ -82,15 +82,20 @@
 
   // Signup-source attribution: prefer the first-touch snapshot captured on
   // index.html/chat.html (survives the index->chat trial->"Sign up free" hop,
-  // where this page's own document.referrer would just read back as chat.html).
+  // where this page's own document.referrer would just read back as chat.html
+  // -- and, since that snapshot now lives in localStorage with a 30-day TTL
+  // rather than sessionStorage, also survives closing the tab and coming back
+  // another day to actually sign up, which is the common real path here).
   // Falls back to this page's own referrer/UTM for a direct-to-signup visit
   // (e.g. a shared link straight to /app/signup.html?utm_source=...).
   function getSignupAttribution(){
     try{
-      var stored = sessionStorage.getItem('aethyro_first_touch');
+      var TTL_MS = 30*24*60*60*1000;
+      var stored = localStorage.getItem('aethyro_first_touch');
       if(stored){
         var parsed = JSON.parse(stored);
-        if(parsed && (parsed.referrer || parsed.utm)) return parsed;
+        var fresh = parsed && parsed.at && (Date.now()-parsed.at) < TTL_MS;
+        if(fresh && (parsed.referrer || parsed.utm)) return parsed;
       }
     }catch(e){}
     var p=new URLSearchParams(location.search), utm={};

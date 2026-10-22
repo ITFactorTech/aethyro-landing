@@ -760,6 +760,119 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-22** — **Consolidated `site-guardian` sweep covering 3 sweep
+  firings (2026-10-20, 10-21, 10-22)**, closing out the exploit-roster saga
+  from the entry directly below plus a real fix that came out of a direct
+  retention/monetization strategy discussion with the user mid-sweep.
+  **Closed the `site-guardian-exploit` interruption saga**: the background
+  dispatch had now failed to complete 3 times in a row (2026-10-19, and
+  twice more on 2026-10-20) purely from container restarts, never a
+  security finding. Asked the user how to handle it; they picked running
+  the roster inline, in the foreground, instead of risking a 4th background
+  interruption. All **7/7 roster items confirmed blocked correctly**,
+  live, with a fresh throwaway account: forced-negative-balance billing
+  bypass (`chat` correctly 402'd a -9800-balance account, zero new ledger
+  rows), cross-user RPC read (`get_credit_balance(uuid)`/`get_monthly_spend(uuid)`
+  both correctly deny a non-owner caller), `anon` REST reads of all 13
+  locked-down tables (all 404, including the newer `decision_centroids`/
+  `provider_health`/`purchase_funnel_events`/`testimonials`/`teams`),
+  webhook token guess/replay (garbage token 404s, real token replayed
+  within seconds correctly 429-cooldowns with zero double-billing),
+  referral self/duplicate (covered in the same-day live smoke test, all 4
+  cases correct), and routine-chain self-chain/cycle rejection (both
+  correctly rejected while a real, non-cyclic A→B chain correctly
+  succeeded). Zero regressions found. Cleaned up both throwaway accounts
+  from this window, confirmed zero orphaned rows, `test-admin-setup`
+  restubbed to the inert 410 and confirmed via a live curl. The serialized
+  checks (advisors, 72h error-log scan, hard-security grep, static pages,
+  and a full live smoke test — haiku/sonnet/opus billing, real generation
+  receipts, `buy-credits` → real Stripe checkout URL, full referral matrix)
+  were all also re-run clean for this window.
+  **Specialist dispatch**: `backend-reviewer` (sweep mode) confirmed a
+  genuinely quiet backend window since the 2026-10-19 cutoff (zero
+  migration/function commits — the only 3 commits in the window were
+  PR #186's frontend copy fix + CLAUDE.md note) and correctly reported
+  "nothing to review" rather than manufacturing findings. `site-guardian-drift`
+  and `oracle` both hit this account's **weekly API rate limit** mid-run and
+  stopped before reporting — not a finding, an infra constraint (resets
+  11pm UTC); their partial work is saved and resumable via their saved
+  agent ids once the limit clears, not yet done as of this entry.
+  **The real finding, from a direct retention/monetization discussion**:
+  asked for a numbers update, pulled live and found the trend the
+  2026-10-19 sweep first flagged had gotten worse, not better — 110 total
+  users (+26 in 3 days), 74 activated (67%), but still only **8 accounts,
+  total, have ever returned on a 2nd day** — the exact same number as
+  2026-10-19, despite 26 more signups and 17 more activations since. As a
+  share of activated users that's dropped from 14% to 10.8%. Still $0
+  lifetime revenue, ever. Asked what to do about it; recommended a
+  `warden` pass on this week's cohort before building yet another
+  retention feature (6 already shipped since early October, none moved
+  the returner count), given early signal (disposable-looking domains in
+  the new cohort, zero of this week's 36 signups returning yet) could mean
+  either low-quality traffic or just too-early-to-tell. User approved; ran
+  `warden`'s full methodology inline (its own background-dispatch pattern
+  wasn't retried given the rate-limit hit above). **Confirmed, quantified,
+  logged to `agent_missions` (`division:'warden'`)**: one account
+  (`flare.9h_level@voidash.cyou`) fired 100+ real billed `chat` requests in
+  29 minutes, draining ~190 of its 200-credit grant — no human does that,
+  this is scripted. The same `voidash.cyou` domain produced 3 signups
+  within 1.5 hours with test-harness-style local parts
+  (`ft-domain_tunnel`/`flare.9h_level`/`probe.rl2`) — add `voidash.cyou` to
+  the known-suspicious-domain list alongside `onldm.net`/`skidder.wtf`/
+  `gonrr.net`/`vietnam2.mail10p.com` in `warden`'s own `SKILL.md`, done in
+  this PR. Separately, two unrelated accounts 3 days apart
+  (`345290810@qq.com`, `dejohnleyah135@gmail.com`) sent near-identical
+  auto-generated probe messages with incrementing counters
+  (`AETHYRO031_TRIAL006_OK`, `AETHYRO_032_FREE_OK_37`) — a signature of an
+  external script periodically verifying that fresh signups still produce
+  working free API access, the same shape as this skill's own founding
+  `daunshlyha` incident; added as a named pattern to watch for recurrence,
+  not yet enough occurrences to act on. Total drained by confirmed-
+  automated accounts: ~240 credits (~$5 equivalent) across the week — real,
+  but too small and too false-positive-risky (every candidate defense —
+  domain block, tighter rate limit, probe-template detection — could catch
+  a real user) to justify shipping a mechanical fix per `warden`'s own hard
+  boundary. Escalated with full evidence instead of built unilaterally,
+  matching the one other time this project found abuse (2026-10-12).
+  **The bigger finding, and the one actually worth fixing**: beyond the
+  ~3 confirmed-bot accounts, the remaining real-human cohort is
+  overwhelmingly one-shot/curiosity traffic (model-identity questions, a
+  single generative request, members of a Chinese SillyTavern/"类脑"
+  free-AI-tourism community explicitly asking about that community) —
+  structurally unlike the open-ended/ongoing-task pattern the 2026-10-17
+  finding already tied to real returners. And **75% of this week's 36
+  signups (27 of 36) carried zero attribution data at all** — no referrer,
+  no UTM — meaning there was no real visibility into where most current
+  growth is actually coming from. Root-caused: the first-touch snapshot
+  (`index.html`/`app/chat.html` write it, `app/signup.html` reads it back)
+  used `sessionStorage`, which doesn't survive a closed tab or a later
+  session — and the real, probably-dominant signup path for this product
+  (try it anonymously, come back another day to actually sign up) is
+  exactly the case that loses it. **Fixed**: switched all three sites to
+  `localStorage` with an explicit 30-day TTL (stored as a new `at`
+  timestamp field) — long enough to survive the realistic trial-then-
+  signup gap, short enough that a months-old visit can't get credited for
+  an unrelated later signup; a stale snapshot past the TTL is ignored and
+  falls through to the page's own direct referrer/UTM, same as before.
+  **Verified live**, not just by reading the code: served the repo
+  locally and drove it with Playwright across two separate tabs in the
+  same browser context (simulating the real close-tab-come-back-later
+  path) — confirmed a fresh tab correctly reads back the first-touch data
+  written by an earlier tab (with `sessionStorage` in that fresh tab
+  confirmed empty, proving it's the fix carrying the data, not a fluke),
+  and confirmed a synthetic 31-day-old snapshot is correctly ignored
+  rather than misattributed. `node --check` on all three files' inline
+  scripts, clean. Pure frontend, no migration/edge-function change.
+  **Scope note**: this closes the attribution-visibility gap going
+  forward only — it does nothing for the 27 already-null signups from
+  this past week, and whether the real traffic-shape problem (one-shot
+  curiosity visitors, not bots) needs a growth-channel change rather than
+  another in-app feature is still an open decision for the user, not
+  something this PR resolves.
+  Today's sweep logged to `agent_missions` (`division:'sentinel'`,
+  closing out the row opened 2026-10-20) alongside the separate `warden`
+  row above.
+
 - **2026-10-19** — **`site-guardian` daily sweep.** Window since the
   2026-10-18T07:42:50Z cutoff was quiet (only yesterday's own sweep PRs
   #184/#185, both already reviewed and independently re-verified live by

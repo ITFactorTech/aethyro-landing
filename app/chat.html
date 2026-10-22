@@ -26,19 +26,27 @@
 <script>document.addEventListener('DOMContentLoaded',function(){if(window.hljs)hljs.configure({ignoreUnescapedHTML:true});});</script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
-<!-- First-touch attribution, same as index.html -- chat.html is itself a
-     direct external entry point for anyone sharing/linking the live demo. -->
+<!-- First-touch attribution, same as index.html (localStorage + 30-day TTL,
+     not sessionStorage -- see index.html's comment for why) -- chat.html is
+     itself a direct external entry point for anyone sharing/linking the live
+     demo, and the try-it-anonymously-then-sign-up-later path lands here. -->
 <script>
 (function(){
   try{
-    if(sessionStorage.getItem('aethyro_first_touch')) return;
+    var TTL_MS = 30*24*60*60*1000;
+    var raw = localStorage.getItem('aethyro_first_touch');
+    if(raw){
+      var existing = JSON.parse(raw);
+      if(existing && existing.at && (Date.now()-existing.at) < TTL_MS) return;
+    }
     var p=new URLSearchParams(location.search), utm={};
     ['utm_source','utm_medium','utm_campaign','utm_term','utm_content'].forEach(function(k){
       var v=p.get(k); if(v) utm[k]=v.slice(0,200);
     });
-    sessionStorage.setItem('aethyro_first_touch', JSON.stringify({
+    localStorage.setItem('aethyro_first_touch', JSON.stringify({
       referrer: (document.referrer||'').slice(0,500),
-      utm: Object.keys(utm).length ? utm : null
+      utm: Object.keys(utm).length ? utm : null,
+      at: Date.now()
     }));
   }catch(e){}
 })();
