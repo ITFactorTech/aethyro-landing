@@ -760,6 +760,57 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-23** — **`site-guardian` daily sweep. Swept clean — all 4
+  specialists reported back, zero findings requiring action.** Grounded
+  against cutoff 2026-10-20T08:46:30Z (the last completed `sentinel` row,
+  since 2026-10-22's own sweep closed that one out). Two of the four
+  specialists (`site-guardian-drift`, `oracle`) had hit the account-level
+  weekly API rate limit mid-dispatch on 2026-10-22 and were re-dispatched
+  fresh this morning after the reset; both completed cleanly this time.
+  **`backend-reviewer`** (sweep mode): genuinely quiet window since the
+  cutoff — only PR #187 landed (the CLAUDE.md write-up, the `warden`
+  domain-list update, and the `localStorage` attribution fix), and none of
+  it touches `supabase/migrations/` or `supabase/functions/` — correctly
+  reported "nothing to review" rather than manufacturing findings.
+  **`oracle`**: zero pricing/content drift anywhere, every pack price and
+  worked example re-verified clean. Fresh numbers: the returner count that
+  had been stuck at exactly 8 for 4+ days (per the 2026-10-22 entry below)
+  finally moved to 9. One new, low-confidence signal: a single account on
+  `zenvixsmp.xyz` sent one probe-shaped message ("Return only the result of
+  17 multiplied by 19."). Deliberately **not** added to `warden`'s
+  known-domain list this sweep — one instance on one domain is below the
+  evidence bar `warden`'s own `SKILL.md` sets for itself (the `voidash.cyou`
+  addition on 2026-10-22 had concrete multi-signal evidence: 100+ requests
+  in 29 minutes, 3 signups in 1.5 hours with test-harness-shaped local
+  parts). Logged here for a future `warden` pass to pick up if it
+  recurs, rather than acted on directly — this sweep's own territory is
+  drift/exploit/correctness, not fraud adjudication.
+  **`site-guardian-drift`**: fully clean — 102/102 migrations exact 1:1,
+  all 26 committed edge functions byte-identical to live, all 26
+  `verify_jwt` settings matching `supabase/config.toml`. Zero drift in
+  either direction.
+  **`site-guardian-exploit`**: all 7 roster items re-attempted live with
+  fresh throwaway accounts, all 7 **blocked correctly** — forced-negative
+  -balance billing bypass (all four surfaces: `chat`/`api-chat`/
+  `run-agent-task`/`run-routines`, zero new charges from a -9800-balance
+  account), cross-user RPC read (`get_credit_balance`/`get_monthly_spend`
+  both correctly deny a non-owner), `anon` REST reads of all 14
+  locked-down tables (zero rows, zero schema leakage), webhook token
+  guess/replay (garbage token 404s, real token replayed within seconds
+  correctly cooldown-blocks with zero double-billing), referral
+  self/duplicate (self-referral 400s, duplicate redemption 409s), routine
+  -chain cycle bypass (self-chain and a real A→B→A cycle both correctly
+  rejected, a real non-cyclic chain correctly succeeds), and the raw
+  Stripe-link grep (zero matches). Zero regressions anywhere on the
+  roster. One process hiccup, not a finding: a permission prompt for one
+  of this specialist's tool calls was denied by accident mid-run; nudged
+  via `SendMessage` to retry, and it picked back up and finished cleanly
+  on the same dispatch rather than needing a full re-run.
+  **No PRs opened this sweep** — nothing found anywhere required a fix.
+  `checks/` corpus and the exploit roster both unchanged (no genuinely new
+  bug class surfaced). Logged to `agent_missions` (`division:'sentinel'`,
+  `outcome:'report_only'`).
+
 - **2026-10-22** — **Consolidated `site-guardian` sweep covering 3 sweep
   firings (2026-10-20, 10-21, 10-22)**, closing out the exploit-roster saga
   from the entry directly below plus a real fix that came out of a direct
