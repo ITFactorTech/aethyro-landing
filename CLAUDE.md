@@ -760,6 +760,24 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-24** — **Fixed: a second, dynamically-rendered copy of the
+  "world's most capable AI" overclaim was still live in `app/chat.html`,**
+  found by `oracle` during today's `site-guardian` sweep. The 2026-10-19
+  sweep fixed the static placeholder text at `id="onboardBody"` (line
+  ~903) to "Anthropic's most capable AI," but missed the second copy at
+  line ~2435 — the onboarding modal's JS `steps[0].body` string, which
+  `showStep()` writes into that same element's `textContent` at runtime
+  and therefore overwrites the already-fixed static text on every real
+  page load. The unverifiable overclaim had been live in production for
+  5 days despite the earlier fix. Corrected to match: "You're powered by
+  Claude Opus 5 — Anthropic's most capable AI." Re-grepped the whole repo
+  for `most capable AI`/`world's most`/`world's best` afterward — the
+  only 3 remaining matches (`app/chat.html` both instances now fixed,
+  `pricing.html`, `use-cases.html`) are all correctly phrased
+  "Anthropic's most capable AI." `node --check` on all 4 real inline
+  `<script>` blocks in `chat.html`, clean. Pure copy fix, no logic
+  change, no migration/edge-function involvement.
+
 - **2026-10-23** — **`site-guardian` daily sweep. Swept clean — all 4
   specialists reported back, zero findings requiring action.** Grounded
   against cutoff 2026-10-20T08:46:30Z (the last completed `sentinel` row,
