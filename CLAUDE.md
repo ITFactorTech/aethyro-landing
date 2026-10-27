@@ -102,7 +102,14 @@ it to the `?buy=` pattern instead.
   `send-welcome-email` for users 2/5 days old respectively who haven't had
   that drip stage yet (tracked in `email_drip_state`) — same hardcoded
   anon-key-literal pattern as `trigger_welcome_email()`, same rotation
-  caveat applies to these two job definitions as well.
+  caveat applies to these two job definitions as well. **`drip-reengagement`'s
+  own `WHERE` clause never actually excluded already-engaged users — fixed
+  2026-10-27, see recent-work-log** — it only skipped users whose
+  `reengagement_sent_at` was already set, which never happens for anyone
+  who's ever sent a message (`send-welcome-email`'s own runtime gate
+  correctly no-ops the send for them, but never writes back to
+  `email_drip_state`), so the cron re-selected every already-engaged user
+  again every single day, forever, growing with the user base.
 - **Edge function drift is a recurring failure mode in this project, not a
   one-off** — `redeem-referral` (BUG-04, fixed 2026-09-27) was the first
   case found; a `site-guardian` sweep the same day found four more live
@@ -759,6 +766,56 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-27** — **`site-guardian` daily sweep. Found and fixed one real
+  bug via the 24h error-log scan: `drip-reengagement`'s own cron query
+  never actually excluded already-engaged users, letting the eligible set
+  grow unbounded and finally large enough today to trip a platform
+  concurrency limit.** The 24h scan turned up a burst of 20 `429`s on
+  `send-welcome-email`, all at `09:15:00` — exactly `drip-reengagement`'s
+  schedule (`15 9 * * *`). Root-caused rather than dismissed as noise:
+  the job's own 2026-09-26 migration comment claims it targets users "who
+  have no messages," but the actual `WHERE` clause only ever checked
+  `d.reengagement_sent_at IS NULL` — and `send-welcome-email`'s own
+  runtime `hasMessages` gate correctly no-ops the send for an
+  already-engaged user, but never writes back to `email_drip_state` in
+  that branch, so `reengagement_sent_at` stays permanently `NULL` for
+  every user who's ever sent one message. The result: the cron's own
+  `SELECT` re-matched every already-engaged 5-day+ user again, every
+  single day, forever — confirmed live: of the 77 rows the live `WHERE`
+  clause matched, 73 already had real messages (i.e. 73 of today's
+  73-call burst were structurally guaranteed no-ops, re-dispatched for
+  the Nth consecutive day). Not a security or data-correctness bug — no
+  wrong email was ever actually sent, `send-welcome-email`'s own gate is
+  correct — but a real, growing-with-signups inefficiency that will keep
+  tripping this ceiling harder as the user base grows, and already did
+  today. Fixed by pushing the same `conversations`/`messages` exclusion
+  up into the cron dispatch's own `WHERE` clause
+  (`supabase/migrations/20261027094500_fix_drip_reengagement_unbounded_requery.sql`,
+  applied live via `cron.alter_job`). Verified live before committing:
+  the eligible-row count dropped from 77 (73 already-engaged no-ops) to
+  4 (the real, genuinely zero-message candidates) with the exact same
+  `WHERE` clause now live in `cron.job`.
+  **All 4 specialists otherwise clean, zero other findings**:
+  `backend-reviewer` (sweep mode) — quiet window, zero migration/function
+  changes since the 2026-10-26T07:42:17Z cutoff (last merge was PR #189,
+  two days prior). `site-guardian-drift` — fully clean, 102/102
+  migrations exact match, all 26 edge functions byte-identical to live
+  (including both shared modules), 26/26 `verify_jwt` matching
+  `config.toml` — unsurprising since nothing has touched `supabase/**`
+  since 2026-10-18 and every function's live `updated_at` carries that
+  same deploy timestamp. `oracle` — zero pricing/content drift, fresh
+  numbers (137 total users, 66% activation, still 10 returners, still $0
+  lifetime revenue), and the second straight day of **0/11 returns** on
+  the 2026-10-25 backfill re-engagement emails (now ~48h post-send —
+  flagged as approaching the point where "too early to tell" stops being
+  a fair read, without making the final call itself).
+  `site-guardian-exploit` was still running when this entry was written
+  (dispatched in parallel with the other three); its own roster-attempt
+  result for this date isn't captured here — check `agent_missions` or a
+  later entry if it surfaced anything.
+  My own serialized checks (advisors, Stripe-link grep, static pages)
+  all clean independent of the finding above.
 
 - **2026-10-24** — **Fixed: a second, dynamically-rendered copy of the
   "world's most capable AI" overclaim was still live in `app/chat.html`,**
