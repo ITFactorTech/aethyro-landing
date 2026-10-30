@@ -12,6 +12,8 @@ import { completeWithFailover } from "../_shared/llm.ts";
 // model) rather than erroring outright. No explicit model choice here
 // (this endpoint has never had a model picker) — pure availability
 // improvement, same preview behavior either way.
+// Note (2026-10-30): the OpenAI side of that fallback is now gpt-5.4, not
+// gpt-5.4-pro — see _shared/llm.ts's own header comment for why.
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY"); // optional -- undefined just means no fallback available

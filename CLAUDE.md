@@ -796,6 +796,94 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-10-30** — **`site-guardian` daily sweep. Found and fixed a real P0
+  discovered by the sweep's own live smoke test: the OpenAI fallback for
+  Opus-tier chat (both `chat` and `trial-chat`) has been hard-failing with a
+  404 since the 2026-10-15 failover build, not just degrading — and every
+  failure was incorrectly counted against OpenAI's own circuit-breaker
+  health, not Anthropic's.** Context: this sweep also found (see the
+  escalation below) that the live `ANTHROPIC_API_KEY` is failing again, so
+  every real chat completion right now routes through the OpenAI fallback —
+  which is exactly what surfaced this. The live smoke test's own
+  `model:"opus"` send got a real `Server error: 404 This is not a chat
+  model and thus not supported in the v1/chat/completions endpoint. Did you
+  mean to use v1/completions?` — traced directly to
+  `_shared/llm.ts`'s `OPENAI_MODEL_MAP.opus`, set to `"gpt-5.4-pro"` since
+  the failover module shipped. The 2026-10-15 header comment's own "verified
+  live against the real OpenAI /v1/models list" check only ever confirmed
+  the model **name** exists in the catalog — never that it actually answers
+  a Chat Completions request. Confirmed live via two direct probes against
+  the real OpenAI API (through a temporary diagnostic helper, not guessed):
+  `gpt-5.4-pro` 404s with that exact message, and so does `gpt-5.5-pro` —
+  this API's `-pro` tier is a completions/reasoning-only product line across
+  at least two generations, never actually usable from
+  `chat.completions.create()` despite being listed right next to the
+  chat-compatible mini/base tiers. **Real production impact while this was
+  live**: every Opus-tier request that failed over to OpenAI — which, given
+  Anthropic is down right now (see below), was *all* of them — got a hard
+  error instead of a reply, and `completeWithFailover`'s catch block called
+  `recordFailure(supaAdmin, "openai")` on each one, misattributing a model-
+  config bug to OpenAI itself; confirmed live via `provider_health` that a
+  run of opus-only traffic would have kept incrementing `openai`'s own
+  `consecutive_failures` counter (observed it reach 1 from a single test
+  call, reset to 0 the instant a haiku/sonnet success landed) — a few
+  opus-only requests in a row during the live outage could have tripped
+  OpenAI's circuit open too, taking the haiku/sonnet fallback down
+  alongside the already-broken opus path.
+  **Fix**: `OPENAI_MODEL_MAP.opus` now points at `gpt-5.4` (the same model
+  already used for sonnet, confirmed chat-completions-compatible live) —
+  shares the sonnet model rather than guessing at yet another `-pro` name
+  that's likely to have the same problem. No billing change: cost is keyed
+  to `modelKey`, never to which model/provider actually answered. Deployed
+  live for both `chat` (v57→ live redeploy of the unchanged file, v95 by
+  Supabase's own counter) and `trial-chat` (v17, live v53) — `chat` is the
+  one file in this repo CLAUDE.md has previously declined to manually
+  redeploy over transcription-drift risk (see the v56/v57 header comments
+  below), but this is a live, currently-active, user-facing P0 during an
+  ongoing outage, not a defense-in-depth gap — redeployed carefully and
+  byte-diff-verified clean against local disk (zero drift on either file)
+  before trusting it. **Re-verified live after the fix**: a real
+  `model:"opus"` chat send now correctly replies via
+  `provider:"openai", actualModel:"gpt-5.4"`, billed 1 credit at the opus
+  rate; `provider_health.openai` correctly reset to
+  `consecutive_failures:0` on that success.
+  **Also escalated, not fixed (needs a human)**: the live
+  `ANTHROPIC_API_KEY` is failing again — see the new "Pending" entry above
+  for the full writeup (23+ consecutive failures, circuit open, every real
+  chat completion for the last ~15+ hours served by the OpenAI fallback
+  instead, correctly billed at parity; `run-agent-task`/`run-routines` have
+  no failover of their own and fail outright). Draft PR #191 opened for
+  that, separately from this fix.
+  **Specialist dispatch** (all four ran against cutoff
+  2026-10-28T07:43:19Z, since the prior day's firing was interrupted by a
+  weekly rate limit before producing usable reports): `backend-reviewer`
+  (sweep mode) — quiet window, nothing to review. `site-guardian-drift` —
+  fully clean: 103/103 migrations exact match, all 26 committed edge
+  functions (including both shared modules) byte-diffed clean against live,
+  all 26 `verify_jwt` settings matching `config.toml`. `site-guardian-exploit`
+  — all 7 roster items re-attempted live, all 7 still correctly blocked;
+  independently hit the same Anthropic outage directly via a real
+  `run-agent-task` 400. `oracle` — 237 total users (+124 since the last full
+  count), 48.5% activation, 11 total users ever returned on a 2nd distinct
+  day, still $0 lifetime revenue; the 11-account re-engagement-email backfill
+  from 2026-10-25 now shows its first real return (`lee947204@gmail.com`,
+  4 days after send) — 1/11, up from 0/11, tracking continues toward the
+  full one-week mark before any pattern/non-pattern call is made.
+  Also investigated, concluded non-issue: a 48h error-log scan turned up
+  110×429s on `trial-chat` plus a cluster of near-simultaneous 401s across
+  nearly every function — read `trial-chat/index.ts` directly and confirmed
+  its per-IP daily-limit check runs before any Anthropic/OpenAI call, so
+  every one of those 429s was a zero-AI-cost rejection of what looks like an
+  automated endpoint-enumeration probe, not a bug or a billing exploit.
+  Live smoke test (two real throwaway accounts, `test-admin-setup`
+  redeployed and restubbed to 410 after, confirmed via live curl): signup
+  produced exactly one `profiles`/`referral_codes` row each; chat on haiku/
+  sonnet/opus all succeeded post-fix (all three currently served by OpenAI
+  given the live Anthropic outage); referral redemption (+100 credits)
+  correct; `buy-credits` resolved to a real `checkout.stripe.com` URL.
+  Zero orphaned rows after cleanup. Advisors (security+performance) clean —
+  only previously-documented accepted finding classes.
+
 - **2026-10-27** — **`site-guardian` daily sweep. Found and fixed one real
   bug via the 24h error-log scan: `drip-reengagement`'s own cron query
   never actually excluded already-engaged users, letting the eligible set
