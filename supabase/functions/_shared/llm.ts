@@ -28,15 +28,33 @@ import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32?target=deno";
 import OpenAI from "https://esm.sh/openai@4?target=deno";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 
-// Same generation (2026-03 release train) across all three tiers, chosen
-// deliberately for internal consistency -- verified live against the real
-// OpenAI /v1/models list for this project's key, 2026-10-15 (gpt-5.5 exists
-// but has no -mini tier yet; gpt-5.4 is the latest generation with a
-// complete mini/base/pro lineup matching Aethyro's haiku/sonnet/opus shape).
+// Same generation (2026-03 release train) across all three tiers --
+// verified live against the real OpenAI /v1/models list for this project's
+// key, 2026-10-15. That check only confirmed the model *names* existed in
+// the catalog, not that each one actually works on the Chat Completions
+// endpoint this module calls -- found live 2026-10-30 (site-guardian daily
+// sweep) that "gpt-5.4-pro" genuinely 404s there ("This is not a chat
+// model and thus not supported in the v1/chat/completions endpoint"), and
+// a second live probe of "gpt-5.5-pro" got the identical error -- this
+// API's "-pro" tier across at least two generations is a
+// completions/reasoning-only product line, not a Chat Completions model,
+// despite being listed alongside the chat-compatible mini/base tiers.
+// Real production impact while this was live: every opus-tier request
+// that failed over to OpenAI (all of them, during the concurrent
+// 2026-10-30 Anthropic outage -- see CLAUDE.md's "Pending" section) got a
+// hard error instead of a reply, and each one incorrectly counted against
+// the OpenAI circuit breaker's own failure count (a model-config bug
+// recorded as if OpenAI itself were failing) -- risked tripping OpenAI's
+// circuit open on a run of opus-only traffic and taking the haiku/sonnet
+// fallback down with it, on top of the direct opus failure. Opus now
+// shares gpt-5.4 with sonnet on the OpenAI path -- confirmed chat-
+// completions-compatible live -- rather than guessing at another "-pro"
+// name; billing is unaffected either way since it's keyed to modelKey,
+// never to which model/provider actually answered.
 export const OPENAI_MODEL_MAP: Record<"haiku" | "sonnet" | "opus", string> = {
   haiku:  "gpt-5.4-mini",
   sonnet: "gpt-5.4",
-  opus:   "gpt-5.4-pro",
+  opus:   "gpt-5.4",
 };
 
 const CIRCUIT_FAILURE_THRESHOLD = 3;
