@@ -260,6 +260,35 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **Found live 2026-10-30, `site-guardian` sweep — the live `ANTHROPIC_API_KEY`
+  is failing again, same recurring class as the 2026-10-15/16 incidents
+  (resolved 2026-10-17). Not a code bug and not currently user-facing — the
+  OpenAI failover shipped 2026-10-15 is correctly absorbing it — but worth a
+  human checking Anthropic Console billing again.** `provider_health` shows
+  `anthropic`: 23 consecutive failures, circuit currently open
+  (`opened_until` cycling forward every ~2 minutes as it keeps retrying and
+  re-failing). Cross-checked against real billing data, not just the
+  circuit-breaker counter: the last `credit_ledger` `chat_usage` row actually
+  served by `provider:'anthropic'` was at **2026-10-29 16:39:56 UTC**
+  (haiku) / 14:37:30 (opus) / 14:36:48 (sonnet) — every real chat completion
+  since then (22 rows across the following ~15 hours: 15 haiku + 7 sonnet,
+  through at least 2026-10-30 07:40:31) has `provider:'openai'` instead,
+  correctly billed at the same Anthropic-tier credit rate per the existing
+  billing-parity design. `site-guardian-exploit` independently hit the same
+  failure live and directly: a real `run-agent-task` call (which has no
+  OpenAI-failover path — only `chat`/`trial-chat` route through
+  `completeWithFailover`) got a genuine `400 "Your credit balance is too low
+  to access the Anthropic API"` straight from Anthropic. **Net effect so
+  far: zero users have been blocked** (the exact scenario the 2026-10-15
+  failover work was built for), but `run-agent-task`/`run-routines` have no
+  failover of their own and will fail outright for any real task that needs
+  them while this persists, and `openai`'s own circuit shows 1 consecutive
+  failure already (not open yet) — if OpenAI also degrades while Anthropic
+  is down, there is no third fallback. Needs the same manual remedy as every
+  prior occurrence: a human adds billing credits at the Anthropic Console
+  for this project's key. No code fix exists here — the failover is already
+  doing exactly what it was built to do.
+
 ~~- **Found 2026-10-17, NOT fixed — `run-agent-task`'s `synthesize` step
   will produce a confident, polished report even when every single
   research step it ran explicitly reported total failure.**~~ — **fixed
