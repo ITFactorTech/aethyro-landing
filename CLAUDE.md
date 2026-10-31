@@ -260,7 +260,7 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
-- **Found live 2026-10-30, `site-guardian` sweep — the live `ANTHROPIC_API_KEY`
+~~- **Found live 2026-10-30, `site-guardian` sweep — the live `ANTHROPIC_API_KEY`
   is failing again, same recurring class as the 2026-10-15/16 incidents
   (resolved 2026-10-17). Not a code bug and not currently user-facing — the
   OpenAI failover shipped 2026-10-15 is correctly absorbing it — but worth a
@@ -287,7 +287,62 @@ it to the `?buy=` pattern instead.
   is down, there is no third fallback. Needs the same manual remedy as every
   prior occurrence: a human adds billing credits at the Anthropic Console
   for this project's key. No code fix exists here — the failover is already
-  doing exactly what it was built to do.
+  doing exactly what it was built to do.~~ — **resolved, confirmed
+  2026-10-31.** `backend-reviewer`'s PR #192 review already noted real
+  `anthropic`-served traffic resuming by ~2026-10-31 00:10 UTC; this
+  sweep's own live smoke test re-confirms it directly — a real haiku,
+  sonnet, and opus send on a fresh throwaway account all three came back
+  `provider:"anthropic"` (not `"openai"`), billed correctly. Someone
+  (presumably the account owner, per the identical pattern every prior
+  occurrence of this recurring issue has followed) added billing credits
+  again; no code or migration involved. `provider_health.anthropic`
+  correctly shows `consecutive_failures:0, opened_until:null` as of this
+  sweep.
+
+- **Found 2026-10-31 (`site-guardian` daily sweep, `oracle`'s funnel/
+  content-accuracy pass) — a single domain, `maxxspace.com`, is running a
+  scripted signup-bonus-farming operation against the free 200-credit
+  grant, and it's now the majority of this product's raw signup volume.**
+  42 accounts on this domain, created roughly once per hour, nearly
+  continuously, from 2026-10-28T05:45Z through 2026-10-31T01:40Z (68
+  hours straight). All 42 have `msg_count = 0` — not one has ever sent a
+  single chat message — yet each collected a real ~200-credit
+  `signup_bonus` ledger row. Local parts are machine-generated,
+  lockstep-incrementing hex-like strings (`aemvr...`, `aemvt...`,
+  `aemvu...`, `aemvv...`) that march forward in the same order as signup
+  timestamp — not plausible human variation. This one domain accounts for
+  42 of 144 signups in the trailing 7 days (29%) and 18 of 23 in the
+  trailing 24h (78%) as of this sweep. Corrected read on the "activation
+  dropped" worry this also raised: excluding this domain, real signups
+  total 218 with 119 activated = ~54.6% activation — actually *higher*
+  than the raw 45.8% headline number the farming cohort was diluting;
+  this is a volume/signal problem, not a real conversion regression.
+  Zero credits have ever been spent by any of the 42 (no messages sent),
+  so the realized cost so far is the 200-credit grant itself per
+  account (~8,400 credits total, no further chat-usage cost since
+  nothing has been used) — real, but not yet a billing emergency.
+  **Deliberately not acted on by this sweep** — per this skill's own
+  hard boundary (no new features, no scope creep: a domain block or a
+  signup-velocity rate limit would be exactly that) and the same posture
+  this project took on every prior confirmed-farming finding
+  (`voidash.cyou`, 2026-10-22; the `daunshlyha@gmail.com` farming-script
+  request that originally motivated building `warden`) — escalating with
+  full evidence for a human/`warden` pass instead of shipping a
+  mechanical defense unilaterally, since every candidate fix (a domain
+  block, a signup-velocity cap, requiring real chat usage before the
+  bonus posts) risks catching a real user and this sweep's own territory
+  is drift/exploit/correctness, not fraud adjudication. Worth a `warden`
+  run specifically targeting `maxxspace.com` before the next sweep.
+
+- **Found 2026-10-31 (`oracle`) — `pricing.html` line ~387 says "Claude
+  Opus 5.5" while every other page on the site says "Claude Opus 5."**
+  Not clearly a bug either way: the real backend model id
+  (`MODEL_MAP.opus` in `supabase/functions/chat/index.ts`) is literally
+  `claude-opus-5-5`, so the ".5" line is arguably the more technically
+  precise one, not the error. Flagging the cross-page naming
+  inconsistency for a human to pick the canonical marketing name
+  (`Claude Opus 5` vs `Claude Opus 5.5`) rather than guessing which
+  should change — this is a brand-wording call, not a mechanical fix.
 
 ~~- **Found 2026-10-17, NOT fixed — `run-agent-task`'s `synthesize` step
   will produce a confident, polished report even when every single
@@ -795,6 +850,79 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-10-31** — **`site-guardian` daily sweep. Grounded at cutoff
+  2026-10-30T07:42:24Z (last `sentinel` row, PR #192). One small confident
+  content fix shipped; one real fraud/abuse pattern and one naming
+  inconsistency escalated to Pending above; everything else clean.**
+  **Fixed**: `ai-chat-for-developers.html`'s "Why Claude Opus 5, not GPT-4
+  or Gemini?" H2 named a specific, already-stale OpenAI generation
+  (`gpt-5.4` is this project's own current backend model, confirmed live
+  — GPT-4 is many generations behind it) — the same overclaim/staleness
+  class the 2026-10-09 "GPT-4o"→"Flagship OpenAI model*" fix closed on
+  `index.html`/`pricing.html`'s comparison tables, just on a different
+  page (an SEO landing-page headline) that fix never touched. Reworded to
+  "Why Claude Opus 5, not other AI models?" — avoids naming a specific
+  competitor version that will go stale again.
+  **Specialist dispatch** (all four grounded at the same cutoff):
+  `backend-reviewer` (sweep mode) — window had exactly one commit touching
+  `supabase/` (PR #192, the 2026-10-30 opus-tier OpenAI-model fix); ran the
+  full 12-item checklist against it, re-byte-diffed `chat`/`trial-chat`/
+  `_shared/llm.ts` live vs. disk (clean), re-confirmed both functions'
+  `verify_jwt` still match `config.toml`, and corroborated the fix with
+  live data (3 real `opus`/`openai` `chat_usage` rows at correct billing
+  rates immediately after the 2026-10-30 merge, `provider_health` back to
+  `consecutive_failures:0` for both providers). Zero findings.
+  `site-guardian-drift` — full reconciliation, fully clean: 103/103
+  migrations exact match, all 26 committed edge functions (including both
+  shared modules) byte-diffed clean against live, all 26 `verify_jwt`
+  settings matching `config.toml`. `oracle` — fresh numbers (260 total
+  users, +23 since 2026-10-30; 11 returners, unchanged; still $0 lifetime
+  revenue) plus the `maxxspace.com` bot-farming finding and the Opus-5-vs-
+  5.5 naming inconsistency, both written up in Pending above rather than
+  acted on directly. `site-guardian-exploit` — all 7 roster items
+  re-attempted live with fresh throwaway accounts, all 7 still correctly
+  blocked (forced-negative-balance billing bypass across all four
+  billed surfaces, cross-user RPC reads, `anon` reads of 12 locked-down
+  tables, webhook token guess/replay, referral self/duplicate
+  redemption, routine-chain self-chain/cycle rejection, the raw
+  Stripe-link grep) — zero regressions, zero new exploits.
+  **My own serialized checks**: `get_advisors` (security+performance) —
+  only the project's existing accepted finding classes, nothing new. 24h
+  edge-function error-log scan — every 4xx/5xx traced to an expected,
+  already-documented non-bug path (`send-welcome-email`'s 19×500s are the
+  same Resend-rejects-`@example.com`-test-addresses pattern from this
+  sweep's own throwaway-account traffic; the rest are single-digit
+  expected-error-path codes — 402 no-credits, 404/409/400 on
+  `redeem-referral`'s invalid/duplicate/self-referral paths, 404/429 on
+  `webhook-routine-trigger`'s invalid-token/cooldown paths, 410 on the
+  diagnostic stub, 405s on `api-chat` — no pattern, no new bug). Static/
+  live page checks (`/`, `robots.txt`, `sitemap.xml`, `terms.html`,
+  `privacy.html`, `trust.html`, `developers.html`, `routines.html`,
+  `pricing.html`) all live, a real unknown path still 404s. Hard
+  Stripe-link grep clean (zero real `buy.stripe.com` matches). The one
+  stale-subscription-model grep hit (`create-checkout/index.ts`'s own
+  dead "Subscription checkout" branch) is the same already-confirmed dead
+  code noted in multiple prior sweeps, not a new finding.
+  **My own live smoke test** (run after `test-admin-setup` was free):
+  two fresh throwaway accounts, exactly one `profiles`/`referral_codes`/
+  `signup_bonus` row each; a real chat send on all three `MODEL_MAP`
+  tiers all succeeded and billed correctly (`provider:"anthropic"` on
+  all three — confirms Anthropic's own outage, escalated in PR #191, has
+  since recovered); referral redemption (+100 credits) correct;
+  `buy-credits` resolved to a real `checkout.stripe.com` URL, never a
+  bare Stripe link. Zero orphaned rows after cleanup.
+  **Diagnostic helper**: `test-admin-setup` was mid-use by
+  `site-guardian-exploit` for its own attack-roster run for most of this
+  sweep (confirmed via `get_edge_function` before touching it — correctly
+  left alone per this skill's own serialization rule rather than
+  overwritten); restubbed to the inert 410 response once that specialist's
+  run concluded, then redeployed once more for my own smoke test above and
+  restubbed again afterward, confirmed via a live curl (`410`).
+  No PR beyond the one content fix was needed — the fraud finding and the
+  naming note are documentation-only additions to Pending, bundled into
+  the same PR as the content fix per this skill's own "prefer bundling"
+  guidance. Logged to `agent_missions` (`division:'sentinel'`).
 
 - **2026-10-30** — **`site-guardian` daily sweep. Found and fixed a real P0
   discovered by the sweep's own live smoke test: the OpenAI fallback for
