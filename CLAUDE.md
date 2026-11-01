@@ -334,6 +334,36 @@ it to the `?buy=` pattern instead.
   is drift/exploit/correctness, not fraud adjudication. Worth a `warden`
   run specifically targeting `maxxspace.com` before the next sweep.
 
+- **Found 2026-11-01, outside a scheduled sweep — while verifying an
+  externally-authored growth-plan document's own data-instrumentation
+  checklist against live numbers, a second, previously-undocumented
+  signup-farming cluster surfaced: `kuromee.com` and its subdomain
+  `nilufa.kuromee.com`, 26 accounts total (11 + 15), all with zero
+  messages ever sent, all created within a ~27-hour window
+  (2026-10-28T11:39Z through 2026-10-29T14:39Z) — the same batch-script
+  shape as the already-documented `maxxspace.com` cluster directly
+  above, just a different domain and a tighter window. Found by pulling
+  real 7-day signup numbers to answer the growth doc's own first
+  checklist item ("confirm activation and credit-burn are instrumented
+  before spending content budget") rather than trusting the doc's
+  "152 signups in 7 days" top-of-funnel figure at face value: of those
+  152, 68 are confirmed farming (42 `maxxspace.com` + 26 `kuromee.com`-
+  family) — real organic signups for the week are **84**, not 152.
+  Real chat-activation (sent a message within 48h of signup) on that
+  real cohort is 45/84 = **53.6%**, a healthy number — confirms the
+  farming cohorts are a volume/attribution problem for any growth
+  reporting, not a sign of a conversion regression, same conclusion as
+  the `maxxspace.com` finding reached independently. **Deliberately not
+  acted on** — identical reasoning to the `maxxspace.com` entry above:
+  this is a reporting/escalation finding, not a mechanical fix, and a
+  domain block or signup-velocity cap risks catching a real user. Worth
+  folding both `kuromee.com`/`nilufa.kuromee.com` into the same `warden`
+  pass recommended for `maxxspace.com`, and worth remembering generally:
+  **any raw "N signups this week" figure pulled for growth/content
+  reporting should be cross-checked against known farming domains
+  first** — this is now the second time in two days a headline
+  signup number needed a ~50% haircut once bot traffic was excluded.
+
 - **Found 2026-10-31 (`oracle`) — `pricing.html` line ~387 says "Claude
   Opus 5.5" while every other page on the site says "Claude Opus 5."**
   Not clearly a bug either way: the real backend model id
