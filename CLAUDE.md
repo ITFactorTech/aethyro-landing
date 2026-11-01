@@ -851,6 +851,92 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-11-01** — **`site-guardian` daily sweep. Grounded at cutoff
+  2026-10-31T07:42:16Z (last `sentinel` row, PR #193). One trivial cosmetic
+  fix shipped; everything else clean — including a real, previously-open
+  question finally resolved (the `maxxspace.com` signup-farming pattern
+  appears to have stopped).**
+  **Fixed**: `supabase/functions/run-agent-task/index.ts`'s header comment
+  (lines ~31) had drifted one phrase out of sync with the live deployed
+  source — local disk read "...marker in text on any failure;..." where
+  live reads "...marker in text on any failure/empty-result branch;...".
+  Found by `site-guardian-drift`'s full byte-diff (not a sample — this is
+  exactly the kind of thing only checking all 26 functions catches). Zero
+  functional difference — comment text only, nothing else in the ~17KB
+  file differs. Pre-dates this window (nothing has touched this function
+  since before the 2026-10-31 cutoff); fixed by syncing the committed
+  file's wording to match what's actually live, not a redeploy.
+  **Specialist dispatch** (all four, cutoff 2026-10-31T07:42:16Z — note:
+  the `Agent` tool in this environment doesn't register
+  `backend-reviewer`/`site-guardian-exploit`/`site-guardian-drift`/`oracle`
+  as `subagent_type` values; worked around, same as documented in the
+  2026-10-15 entry, by dispatching each as `general-purpose` instructed to
+  `Skill()`-load the real specialist first): `backend-reviewer` (sweep
+  mode) — genuinely quiet window, zero commits touching
+  `supabase/migrations/`/`supabase/functions/` since the cutoff (the only
+  commit in the window, PR #194, is 3 static HTML files + this file) —
+  correctly reported "nothing to review" rather than manufacturing
+  findings. `site-guardian-drift` — full reconciliation: 103/103
+  migrations exact 1:1, 25/26 committed edge functions + both shared
+  modules (`_shared/llm.ts`, `_shared/packs.ts`) byte-identical to live,
+  all 26 `verify_jwt` settings matching `config.toml` — the one function
+  with any difference is the comment-drift finding fixed above.
+  `site-guardian-exploit` — all 7 roster items re-attempted live with
+  fresh throwaway accounts, all 7 still correctly blocked (forced-
+  negative-balance billing bypass across all four billed surfaces,
+  cross-user RPC reads, `anon` reads of 9 locked-down tables, webhook
+  token guess/replay, referral self/duplicate redemption, routine-chain
+  self-chain/cycle rejection, the raw Stripe-link grep) — zero
+  regressions, zero new exploits. `oracle` — fresh numbers (273 total
+  users, +13 since 2026-10-31; still 11 returners; still $0 lifetime
+  revenue; 45.4% activation overall, 53.7% excluding the farming cohort)
+  plus the genuinely good news: **zero new `maxxspace.com` signups since
+  the 2026-10-31 cutoff** — the farming pattern escalated that day
+  (still 42 accounts total, same window as before, nothing added) looks
+  to have stopped on its own. The 11 real signups since the cutoff spread
+  across 5 distinct domains with no repeat/lockstep pattern — no new
+  farming signal. Still deliberately not acted on directly (this sweep's
+  territory is drift/exploit/correctness, not fraud adjudication) — worth
+  a `warden` pass to confirm and formally close out the escalation, but
+  the acute pattern is not currently active. The Opus-5-vs-5.5 naming
+  inconsistency on `pricing.html` is unchanged, still just a brand-wording
+  call for a human.
+  **My own serialized checks**: `get_advisors` (security+performance) —
+  only previously-accepted finding classes, nothing new. 24h edge-
+  function error-log scan — the one notable count (56× 500 on
+  `send-welcome-email`) traced to the same documented non-bug pattern as
+  every prior sweep (Resend correctly rejecting `@example.com` throwaway-
+  account addresses created by today's own specialists/smoke test — the
+  higher-than-usual count tracks with 4 parallel specialists plus my own
+  checks all creating test accounts the same morning); everything else is
+  single-digit expected-error-path codes (402 no-credits, 401 bad/missing
+  JWT, 404/409/400 on `redeem-referral`'s invalid/duplicate/self-referral
+  paths, 404/429 on `webhook-routine-trigger`'s invalid-token/cooldown
+  paths, 410 on the diagnostic stub, one singleton 500 on `team-manage`
+  not worth chasing on its own) — no new pattern. Static/live page checks
+  (`/`, `robots.txt`, `sitemap.xml`, `404.html`, and the 3 pages PR #194
+  added OG/Twitter tags to) all live and correct — spot-checked the new
+  tags directly on the live pages, all present and correct. `pg_cron` (7
+  jobs) matches the documented baseline exactly, all active. Hard
+  Stripe-link grep clean (zero real `buy.stripe.com` matches).
+  **My own live smoke test**: two fresh throwaway accounts, exactly one
+  `profiles`/`referral_codes`/`signup_bonus` row each; a real chat send on
+  all three `MODEL_MAP` tiers all succeeded, billed correctly, and were
+  all served by `provider:"anthropic"` (confirms no recurrence of the
+  Anthropic outage from the prior week); referral redemption (+100)
+  correct; `buy-credits` resolved to a real `checkout.stripe.com` URL.
+  Zero orphaned rows after cleanup.
+  **Diagnostic helper**: `test-admin-setup` was mid-use by
+  `site-guardian-exploit` for its own attack-roster run when I first
+  checked it (confirmed via `get_edge_function` before touching it —
+  correctly left alone per this skill's serialization rule); redeployed
+  for my own smoke test once that specialist restubbed it, then restubbed
+  again afterward, confirmed via a live curl (410).
+  No new entry needed in the `checks/` corpus or the exploit roster this
+  sweep — nothing found was a genuinely new bug class, just a cosmetic
+  drift already covered by `site-guardian-drift`'s existing full-byte-diff
+  methodology. Logged to `agent_missions` (`division:'sentinel'`).
+
 - **2026-10-31** — **`site-guardian` daily sweep. Grounded at cutoff
   2026-10-30T07:42:24Z (last `sentinel` row, PR #192). One small confident
   content fix shipped; one real fraud/abuse pattern and one naming
