@@ -137,6 +137,17 @@ survived multiple prior reviews before being caught.
     reading either function's one-attempt-at-a-time logic in isolation
     looks correct; the bug only exists in the *retry* path's interaction
     with state the first attempt already mutated.)
+14. **Does this change affect which provider/model actually serves a
+    reply, or the rate a reply is billed at?** (A new fallback model, a
+    new `CREDIT_RATES` entry, a change to which tier a request routes
+    to.) Flag it for a `ledger` pass before or shortly after it ships —
+    `ledger` is the division that checks whether the real per-token
+    provider cost still makes sense against the rate it's billed at; a
+    correctness review alone won't catch a change that's correct but
+    unprofitable (see CLAUDE.md's 2026-10-30 entry on the OpenAI-opus-tier
+    model mismatch, which was a correctness bug *and* a margin problem at
+    once — `ledger` exists to catch the margin half even when the code is
+    otherwise right).
 
 ## Fix vs. flag
 

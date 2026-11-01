@@ -43,6 +43,10 @@ subtask to exactly one of these:
   growth-marketing — drafts the weekly 5-day LinkedIn/X content cadence
   from real growth data, never posts anything without explicit human
   approval of the exact draft.
+- **`ledger`** → the `ledger` skill (sibling to this one). Unit economics
+  — real margin per pack/model/provider, read-only on money; every
+  pricing/billing-rate finding is an escalation to the user, never a
+  unilateral change.
 - **`forge`** → no fixed skill. Use the `Agent` tool directly
   (`subagent_type: general-purpose` or `claude`) with a tightly scoped
   prompt for net-new feature construction that doesn't fit any of the

@@ -50,6 +50,15 @@ already computed in a nearby entry.
    `avery`'s (atlas-web-design's) territory and that skill's own rule
    applies here too.
 
+## Division of labor
+
+Real margin/unit-economics questions ("does a pack actually turn a
+profit once you account for API cost") are `ledger`'s territory, not
+yours — you track growth/activation/revenue *counts*, `ledger` converts
+real API cost and real pack pricing into dollars. If a recommendation
+needs a margin number you don't have, hand off to `ledger` rather than
+estimating one.
+
 ## Output
 
 A short, numbered list: finding (with the real number) → recommendation →
