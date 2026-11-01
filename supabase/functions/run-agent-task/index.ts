@@ -28,7 +28,7 @@
 // specific-looking "report" instead of surfacing the failure -- nothing
 // about the output signaled it wasn't actually verified. webSearch() and
 // crawlSite() now return {ok, text} with a "TOOL_FAILED:" marker in text
-// on any failure; executeStep()'s prompt tells the model not to answer
+// on any failure/empty-result branch; executeStep()'s prompt tells the model not to answer
 // from general knowledge when it sees that marker, and both executeStep()
 // and the no-step-synthesized fallback below apply a deterministic
 // warning banner whenever every tool call attempted actually failed --
