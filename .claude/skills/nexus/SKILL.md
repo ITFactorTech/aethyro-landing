@@ -39,6 +39,10 @@ subtask to exactly one of these:
   abuse/fraud defense for the free-credit pool — reads real conversation
   content for farming/abuse signals a structured heuristic wouldn't catch,
   never bans or changes production unilaterally.
+- **`growth`** → the `growth` skill (sibling to this one). Content/
+  growth-marketing — drafts the weekly 5-day LinkedIn/X content cadence
+  from real growth data, never posts anything without explicit human
+  approval of the exact draft.
 - **`forge`** → no fixed skill. Use the `Agent` tool directly
   (`subagent_type: general-purpose` or `claude`) with a tightly scoped
   prompt for net-new feature construction that doesn't fit any of the
