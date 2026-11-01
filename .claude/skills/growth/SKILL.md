@@ -71,6 +71,14 @@ content the same as LinkedIn content, but hand it to the user as
 ready-to-paste text rather than ever claiming it was posted — re-check for
 a real X-posting connector each run in case one becomes available.
 
+## Never publish internal cost/margin data
+
+If a Monday cost-math post needs a cost figure, use only the *public*
+credit-rate table (`CREDIT_RATES` as published on `developers.html`/
+`pricing.html`), never `ledger`'s internal per-model COGS or margin
+numbers — those are sensitive internal figures, not marketing copy, and
+publishing them would hand a competitor Aethyro's real cost structure.
+
 ## Weekly process
 
 0. **Check for a prior run before pulling anything.** Query

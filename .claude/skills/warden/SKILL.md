@@ -134,3 +134,8 @@ scope (accounts, credits) → either a built-and-verified scoped PR, or a
 clearly flagged escalation with the proposed fix described but not shipped.
 If dispatched by `nexus`, hand back exactly this shape so it can be logged
 to `agent_missions` and, if escalated, turned into a decision for the user.
+
+Quantifying a confirmed cluster's cost in **dollars** (not just credits)
+is `ledger`'s job, not yours — name the accounts and the credits involved
+in your own report; `ledger` converts that to a real dollar figure using
+its own cost data. Don't compute a dollar estimate yourself.

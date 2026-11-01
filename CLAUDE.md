@@ -881,6 +881,70 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-11-01** — **Added `ledger` (unit economics/financial health),
+  wired it into the rest of the agent team, and added a shared
+  "sub-agent" convention** — from a direct ask about which existing
+  divisions needed updating and how to add an "assistant/intern/
+  secretary" tier beneath the main divisions, right after the `growth`
+  skill (entry directly below) was reviewed as a worked example of the
+  whole roster.
+  **`ledger`**: new `.claude/skills/ledger/SKILL.md` — the division that
+  answers "does Aethyro actually make money net of what it costs to
+  serve a message," a question nobody on this team had been assigned
+  directly. Read-only on money: never touches `credit_ledger`, a Stripe
+  price, or pricing copy — every finding is a report handed to the user
+  (pricing decisions) or `codex` (implementation). Computes real COGS by
+  provider/model from `chat_usage` ledger rows against *current* (looked
+  up fresh each run, never memorized) provider list pricing, real
+  revenue by pack, and specifically quantifies whether the OpenAI-
+  failover billing-parity design (2026-10-15 entry) is a real margin
+  leak or not — plus translates `warden`'s already-named farming
+  clusters into a real dollar exposure figure rather than re-running
+  fraud detection itself. Explicitly states its one real blind spot: no
+  Stripe MCP connector is authorized in this environment, so Stripe fees
+  can only ever be an explicitly-labeled assumption, never a verified
+  number. Added `'ledger'` to `agent_missions.division`'s CHECK
+  constraint (migration
+  `20261101234243_add_ledger_division_to_agent_missions.sql`, filename
+  matches its real assigned version per this file's own
+  `apply_migration`-timestamp gotcha) alongside the existing 9 divisions.
+  **Division-of-labor edits to avoid overlap**: `oracle` now explicitly
+  defers margin/unit-economics questions to `ledger` rather than
+  estimating them itself; `warden` now explicitly hands dollar
+  quantification of a confirmed cluster to `ledger` instead of computing
+  it; `growth` now explicitly may never publish `ledger`'s internal
+  COGS/margin numbers in public content (only the already-public
+  credit-rate table) — real cost structure is not marketing copy.
+  `backend-reviewer`'s checklist gained a 14th item: any change to which
+  provider/model serves a reply or what rate it's billed at gets a
+  `ledger` pass, not just a correctness review — a change can be
+  correct and still unprofitable (the exact shape of the 2026-10-30
+  OpenAI-opus-tier mismatch, which was both at once). `nexus`'s division
+  map and `app/admin.html`'s Team-panel division list both updated.
+  **The "sub-agent" tier**: rather than invent new named personas with
+  no concrete function, mapped the ask onto patterns this project
+  already has evidence for. New shared reference,
+  `.claude/skills/_shared/mission-logging.md` (not a division — no
+  CHECK-constraint entry, not `Skill`-invocable) — the standard
+  `agent_missions` insert/update SQL and the standard CLAUDE.md
+  entry format, written once so every division's own file can point to
+  it instead of re-deriving the boilerplate (and so a future schema
+  change or formatting fix touches one file, not nine). It also
+  documents two already-proven delegation shapes rather than building
+  anything new for them: a **research-intern pattern** (a division
+  being run interactively can `fork` its own pure data-gathering legwork
+  — the SQL-running, table-compiling steps with no judgment in them yet
+  — to keep its own context focused on the actual decisions), and the
+  **specialist-sub-team pattern** `site-guardian` already proves out
+  (dispatching 4 parallel sub-agents for independent lines of
+  investigation, then doing the aggregation/decision step itself single
+  -threaded) as the template any division should copy once it outgrows
+  a single pass, instead of inventing a new shape per division.
+  **Not yet exercised**: `ledger` hasn't run yet — no real margin numbers
+  exist from it in `agent_missions` beyond this build. First real run
+  will be the actual test of whether the OpenAI-failover-parity
+  quantification step produces something actionable.
+
 - **2026-11-01** — **Added `growth`, a new agent-team division for content/
   growth-marketing**, after a direct conversation about hiring: the user
   asked what roles a small team running Aethyro would need and which to
