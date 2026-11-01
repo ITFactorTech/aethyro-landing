@@ -881,6 +881,70 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-11-01** — **Added `growth`, a new agent-team division for content/
+  growth-marketing**, after a direct conversation about hiring: the user
+  asked what roles a small team running Aethyro would need and which to
+  fill first, then — unable to afford a hire right now — asked whether an
+  agent could do the growth/marketing role instead of a person. Answer was
+  yes for the research-and-drafting half of the job, no for anything
+  needing a human relationship or judgment call, so this skill is scoped
+  exactly to that split. Same session manually ran the first three days of
+  a growth-plan document's proposed 5-day content cadence as a proof of
+  concept before building the skill: Monday's cost-math post (derived
+  arithmetically from real published credit pricing), Tuesday's build-in-
+  public post (a real throwaway account driving a real "Daily Briefing"
+  routine to completion via Playwright, screenshotted), and Wednesday's
+  head-to-head comparison (a real `chat` API call with a real signed
+  generation receipt vs. a flat competitor price) — all posted to LinkedIn
+  via the connected Zapier action. That same verification pass also found
+  a genuinely new signup-farming cluster (`kuromee.com`/
+  `nilufa.kuromee.com`, 26 accounts, written up in Pending above via PR
+  #196) while fact-checking the growth-plan doc's own "152 signups this
+  week" headline number against real data — exactly the kind of incidental
+  find this new skill is designed to keep surfacing rather than miss.
+  Thursday's community-proof day never ran: a Discord connection kept
+  resolving to an unrelated server ("tatortot") no matter how many times it
+  was reconnected, because the authorizing Discord account has no admin
+  rights on the real aethyro.com server — a real external permissions
+  constraint, not something fixable from this session. User's explicit
+  call: drop Discord from scope entirely ("Skip Discord for now, LinkedIn
+  and X only"). Also confirmed no X/Twitter posting connector exists in
+  this environment (`discover_zapier_actions` for `app:"Twitter"` only
+  surfaces a tweet-screenshot utility) — X drafts are handed to the user as
+  copy-paste text, never claimed as posted.
+  **The one non-negotiable design constraint, set by the user before
+  agreeing to build this at all**: the skill drafts and holds every
+  week's content for explicit human approval — it never calls a posting
+  tool on its own judgment, no matter how confident or how similar to a
+  previously-approved draft. New skill: `.claude/skills/growth/SKILL.md` —
+  pulls real growth/funnel/activation/attribution data (reusing
+  `purchase_funnel_events`, `signup_referrer`/`signup_utm`,
+  `credit_ledger`, and the live farming-domain exclusion list this file and
+  `warden` already maintain), drafts the week's 5-day cadence grounded only
+  in real/verifiable facts (skipping a day honestly rather than fabricating
+  one — same discipline as the 2026-09-28 testimonials removal), and stops
+  for approval before anything goes out. Added `'growth'` to
+  `agent_missions.division`'s CHECK constraint alongside
+  `nexus`/`oracle`/`codex`/`avery`/`sentinel`/`support`/`forge`/`warden`
+  (migration `20261101195850_add_growth_division_to_agent_missions.sql`,
+  applied live and verified via `list_migrations` before committing with
+  its real assigned version as the filename, per this file's own
+  `apply_migration`-timestamp gotcha); `nexus`'s own division map and
+  `app/admin.html`'s Team-panel division list both updated to include it.
+  **Scheduled weekly**, self-bound to this session (same reasoning as
+  `site-guardian`'s own cron setup on 2026-10-12: this session already has
+  proven GitHub + Supabase + repo access, which a fresh-session trigger
+  would need to reprovision and can't fully for GitHub) — the weekly
+  report, including every draft, lands as a new turn in this conversation
+  rather than a push/email summary, which is exactly the "drafts land in
+  your queue" design the user agreed to.
+  **Not yet exercised end-to-end through the new skill itself** — the
+  Monday/Tuesday/Wednesday posts that motivated building this were done by
+  hand, before the skill existed, as the proof that the approach works;
+  the first real automated weekly run (and the first real test of the
+  draft-and-hold boundary under the schedule, not just as a one-off manual
+  conversation) happens on its first scheduled firing.
+
 - **2026-11-01** — **`site-guardian` daily sweep. Grounded at cutoff
   2026-10-31T07:42:16Z (last `sentinel` row, PR #193). One trivial cosmetic
   fix shipped; everything else clean — including a real, previously-open
