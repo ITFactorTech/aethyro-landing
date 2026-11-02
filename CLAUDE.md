@@ -260,6 +260,51 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **Found 2026-11-02, verifying the 2026-11-01 `ledger` run's own stated
+  caveat — the Anthropic/OpenAI pricing figures that run used are correct,
+  but the check surfaced a real model-freshness question about
+  `OPENAI_MODEL_MAP` worth a product decision.** The `ledger` division's
+  first run (2026-11-01) explicitly flagged that its provider pricing came
+  from third-party aggregators via `WebSearch`, not each provider's own
+  page, and recommended a human/follow-up check before trusting those
+  numbers for anything beyond a directional read. Fetched both official
+  pages directly this pass: **Anthropic** (`claude.com/pricing`, `/pricing`
+  redirects there) confirms the exact figures used —
+  Haiku 5.5 $0.10/$0.50, Sonnet 5.5 $2/$10, Opus 5.5 $4/$20 per MTok,
+  input/output — a clean, exact match, no correction needed. **OpenAI** is
+  more nuanced: `openai.com/api/pricing` and `platform.openai.com/docs/pricing`
+  (the actual current flagship pricing table) list a completely different,
+  newer model lineup than this project's live `OPENAI_MODEL_MAP` — GPT-6
+  Astra/GPT-6.1 Sol/GPT-6.1 Terra/GPT-6 Luna, plus an intermediate GPT-5.6
+  Sol/Cyber tier — with **no mention of `gpt-5.4`/`gpt-5.4-mini` anywhere on
+  either page at all.** The figures the `ledger` report actually used
+  ($2.50/$15.00 for `gpt-5.4`, $0.75/$4.50 for `gpt-5.4-mini`) are still
+  correct — confirmed via `gpt-5.4-mini`'s own still-live OpenAI model page
+  (`developers.openai.com/api/docs/models/gpt-5.4-mini`) and independently
+  corroborated by Azure OpenAI's pricing page, both showing the identical
+  $0.75/$4.50 and $2.50/$15.00 figures — so no COGS number in the
+  2026-11-01 `ledger` report needs correcting. But this project's
+  `_shared/llm.ts` `OPENAI_MODEL_MAP` (haiku→`gpt-5.4-mini`,
+  sonnet/opus→`gpt-5.4`, last touched by the 2026-10-30 opus-tier fix) is
+  now pointing at a model generation that no longer appears on OpenAI's own
+  flagship pricing/marketing pages — at least two newer generations
+  (5.5, 5.6, and now the GPT-6 Astra/Sol/Terra/Luna lineup) have shipped
+  since. Not the same failure class as the `gpt-5.4-pro` chat-completions
+  404 from 2026-10-15 (`gpt-5.4`/`gpt-5.4-mini` are still live, billable,
+  working model ids, not broken) — this is a currency/quality question,
+  not a bug: is `gpt-5.4` still the right OpenAI failover model, or should
+  the mapping move to a current-generation model now that one exists?
+  Deliberately not changed here — updating `OPENAI_MODEL_MAP` is a
+  model-routing change requiring the same `backend-reviewer` sign-off and
+  live verification this project requires for any such change (see
+  `CLAUDE.md`'s own 2026-10-30 entry on exactly this file), and which
+  model to pick is a product call, not `ledger`'s to make unilaterally —
+  `ledger` is read-only on money and routing alike. Worth a `codex`/product
+  pass: confirm whether a GPT-6-generation model (or the intermediate 5.5/
+  5.6 tier) answers Chat Completions correctly for this project's actual
+  call shape before switching anything, same live-verification discipline
+  as the original 2026-10-15 OpenAI-failover build and the 2026-10-30 fix.
+
 ~~- **Found live 2026-10-30, `site-guardian` sweep — the live `ANTHROPIC_API_KEY`
   is failing again, same recurring class as the 2026-10-15/16 incidents
   (resolved 2026-10-17). Not a code bug and not currently user-facing — the
