@@ -13,6 +13,41 @@ This is not a division of its own — it has no entry in
 `Skill` tool. It's a shared convention any division (or a sub-agent
 dispatched by one) follows directly.
 
+## Division persona names (display only — never a rename)
+
+Each standing division also has a human first name, used only as a
+cosmetic label in conversation and in `app/admin.html`'s Team panel.
+It is **not** a rename: the technical codename stays the only thing
+that's actually load-bearing — `agent_missions.division`'s CHECK
+constraint, every `SKILL.md` folder name, `nexus`'s own division map,
+and every existing CLAUDE.md reference all keep using the codename
+exactly as before. Decided 2026-11-02 ("thin persona layer", picked
+over a full rename) after the user asked for each division to have a
+human-type name to call it by.
+
+| Codename   | Persona | Role                            |
+|------------|---------|----------------------------------|
+| `nexus`    | Dana    | orchestrator                    |
+| `oracle`   | Iris    | growth & data strategy          |
+| `codex`    | Cole    | backend-reviewer                |
+| `avery`    | Avery   | visual design (already a name)  |
+| `sentinel` | Sasha   | site-guardian                   |
+| `support`  | Robin   | support-triage                  |
+| `forge`    | Remy    | ad-hoc build, no fixed skill     |
+| `warden`   | Casey   | fraud/abuse defense              |
+| `growth`   | Taylor  | content & growth-marketing       |
+| `ledger`   | Priya   | unit economics                  |
+| `probe`    | Quinn   | live functional verification     |
+
+A division may refer to itself by its persona name in conversation
+("Quinn here, running the probe sweep...") — that's the whole point —
+but still writes its own `agent_missions` row, PR text, commit
+messages, and every file path using the codename, same as always.
+Ephemeral sub-agents/specialists dispatched for one task
+(`site-guardian-exploit`, a research-intern fork, any `general-purpose`
+dispatch) do **not** get a persona name — they're spun up and discarded
+per-task by design, unlike the 11 standing divisions above.
+
 ## Logging a mission
 
 ```sql

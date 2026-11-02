@@ -692,7 +692,7 @@ svg.sparkline { width: 100%; height: 100%; overflow: visible; }
           <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
           <div class="kpi-value" id="team-divisions">—</div>
           <div class="kpi-label">Divisions active</div>
-          <div class="kpi-sub">nexus · oracle · codex · avery · sentinel · support · warden · forge · growth · ledger · probe</div>
+          <div class="kpi-sub">Dana (nexus) · Iris (oracle) · Cole (codex) · Avery · Sasha (sentinel) · Robin (support) · Casey (warden) · Remy (forge) · Taylor (growth) · Priya (ledger) · Quinn (probe)</div>
         </div>
       </div>
       <div class="section">
@@ -845,6 +845,20 @@ const OUTCOME_BADGE = {
   closed:       '<span class="badge" style="background:var(--bg-3);color:var(--text-muted)">closed</span>'
 };
 
+// Display-only persona names — cosmetic label alongside each division's real
+// codename. Never used for logic/filtering: agent_missions.division stays the
+// codename everywhere else. See .claude/skills/_shared/mission-logging.md.
+const DIVISION_PERSONA = {
+  nexus: 'Dana', oracle: 'Iris', codex: 'Cole', avery: 'Avery', sentinel: 'Sasha',
+  support: 'Robin', forge: 'Remy', warden: 'Casey', growth: 'Taylor', ledger: 'Priya', probe: 'Quinn'
+};
+function divisionLabel(d) {
+  const name = DIVISION_PERSONA[d];
+  return name
+    ? `${escapeHtml(name)} <span style="color:var(--text-muted);font-weight:400">· ${escapeHtml(d)}</span>`
+    : escapeHtml(d);
+}
+
 async function loadTeam() {
   const divTbody = document.getElementById('team-division-tbody');
   const misTbody = document.getElementById('team-missions-tbody');
@@ -869,7 +883,7 @@ async function loadTeam() {
     ? '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted)">No missions recorded yet — the agent team hasn\'t run anything yet.</td></tr>'
     : byDivision.map(d => `
         <tr>
-          <td style="font-weight:600">${escapeHtml(d.division)}</td>
+          <td style="font-weight:600">${divisionLabel(d.division)}</td>
           <td class="num">${fmt(d.total)}</td>
           <td class="num"><span class="badge badge-green">${fmt(d.merged)}</span></td>
           <td class="num">${fmt(d.rejected)}</td>
@@ -880,7 +894,7 @@ async function loadTeam() {
     : missions.map(m => `
         <tr>
           <td class="num" style="color:var(--text-muted)">${escapeHtml(m.created_at)}</td>
-          <td style="font-weight:600">${escapeHtml(m.division)}</td>
+          <td style="font-weight:600">${divisionLabel(m.division)}</td>
           <td>${escapeHtml(m.goal)}${m.notes ? `<div style="color:var(--text-muted);font-size:12px;margin-top:2px">${escapeHtml(m.notes)}</div>` : ''}</td>
           <td>${OUTCOME_BADGE[m.outcome] || escapeHtml(m.outcome)}</td>
           <td>${m.pr_url ? `<a href="${escapeHtml(m.pr_url)}" target="_blank" rel="noopener" style="color:var(--accent)">PR →</a>` : '—'}</td>
