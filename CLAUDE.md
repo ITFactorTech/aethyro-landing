@@ -260,6 +260,75 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **Found 2026-11-02, `ledger`'s second real run — a real pricing-model
+  mismatch in the 2026-11-01 run's COGS calc, a correction to a `warden`-
+  documented farming cluster's "zero usage" claim, and a corrected (but
+  still trivial) read on the OpenAI-failover-parity math. Report-only,
+  nothing shipped, nothing in `credit_ledger`/pricing touched.**
+  **(1) The 2026-11-02 00:02 verification pass checked Anthropic pricing
+  by *name* ("Haiku 5.5") without checking that name against the actual
+  deployed model string.** `chat/index.ts`'s real `MODEL_MAP.haiku` is
+  `"claude-haiku-4-5-20251001"` — Haiku **4.5**, listed under
+  claude.com/pricing's "Legacy models" section at **$1.00/$5.00 per
+  MTok** — not Haiku 5.5's $0.10/$0.50. That's a 10x price difference.
+  Re-pulled claude.com/pricing fresh this run and confirmed: Sonnet tier
+  (`claude-sonnet-5`) and Opus tier (`claude-opus-5-5`) were already
+  priced correctly in the prior run ($2/$10 and $4/$20 respectively,
+  both correct for the real deployed model) — only Haiku was wrong.
+  Recomputed real total COGS across all 793 `chat_usage` rows + 91
+  `api_usage` rows (2026-09-21 through 2026-11-01) with the corrected
+  Haiku price: **~$22.66** (was reported as ~$20.83), still well under
+  revenue at every pack tier (haiku-tier real margin 74-83% depending on
+  pack, not the 95%+ the wrong price would imply, but still clearly
+  profitable per credit). **Revenue is still confirmed $0** — zero
+  `credit_ledger` rows with `reason='purchase'`, ever.
+  **(2) Dollar translation of the `maxxspace.com`/`kuromee.com` clusters
+  `warden` independently closed the same day, in a separate pass (PR
+  #204 — see that PR, or the entries above once it merges, for the full
+  closure writeup)** — this run's own SQL against the same 68
+  accounts landed within rounding of `warden`'s figures (304 rows/
+  -1,295cr here vs. `warden`'s -1,057cr + -239cr = -1,296cr), corroborating
+  rather than contradicting that pass. The one thing `warden`'s entries
+  don't state in dollars: nominal retail value of the 13,600 signup-bonus
+  credits granted to this cohort is **$174.86-$272.00** depending on pack
+  rate; the cohort's current remaining balance (~13,504 credits, net of
+  what's already been drained) represents a worst-case future-COGS
+  exposure of roughly **$43-$60** if fully spent (estimated from this
+  cohort's own opus-heavy usage mix, not the nominal retail figure —
+  deliberately a different, smaller number, since COGS is what this
+  product actually loses, not what it would have charged). Both numbers
+  are small; nothing here changes `warden`'s "closed, nothing to build"
+  verdict. Separately, the 2026-11-01 run's own cited counts ("76
+  accounts, 15,200 credits") don't match this file's documented 68/13,600
+  for these two named clusters — unresolved minor discrepancy, not chased
+  further; this run's 68/13,600 figures are directly SQL-verified against
+  the exact domains `warden` named, and match `warden`'s own count too.
+  **(3) OpenAI-failover-parity gap, recomputed with corrected Anthropic
+  pricing**: the 2026-11-01 run attributed the parity leak to "Haiku +
+  Sonnet" with Opus as the one gain. With Haiku's price corrected, that
+  attribution flips for Haiku specifically — OpenAI's `gpt-5.4-mini`
+  ($0.75/$4.50) is now *cheaper* than the real Haiku 4.5 price
+  ($1.00/$5.00) it stands in for, a small **gain**, not a leak. Sonnet
+  remains the one real leak (`gpt-5.4` at $2.50/$15.00 vs. the real
+  `claude-sonnet-5` at $2/$10). Opus remains a gain (opus-tier failover
+  reuses the cheaper `gpt-5.4` rather than a pricier Anthropic-equivalent
+  rate). Net across all 39 OpenAI-served chat messages ever: **+$0.0506
+  total** (a nickel, over 6 weeks, 4.4% of all billed traffic) — the
+  magnitude the prior run reported was coincidentally close to this
+  figure, but for a different per-tier mechanism than this run found.
+  Confirms the billing-parity design is not a real margin leak at any
+  practical scale, same bottom-line conclusion as 2026-11-01, just with
+  the right reasoning underneath it now.
+  **Escalated, not acted on** (this division never touches
+  `OPENAI_MODEL_MAP`, `CREDIT_RATES`, or pricing copy): worth a
+  `codex`-reviewed follow-up if `CREDIT_RATES.haiku` is ever revisited —
+  it was presumably calibrated against *some* real Haiku price at some
+  point, and this run didn't check whether $0.08/$0.40 credits-per-1k-
+  tokens was set assuming the now-superseded Haiku 5.5 number or the
+  real Haiku 4.5 number; either way the current rate is still
+  profitable per the margin figures above, so this is a precision/
+  documentation correction, not an urgent pricing problem.
+
 - **Found 2026-11-02, verifying the 2026-11-01 `ledger` run's own stated
   caveat — the Anthropic/OpenAI pricing figures that run used are correct,
   but the check surfaced a real model-freshness question about
