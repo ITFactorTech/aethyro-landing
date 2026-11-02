@@ -964,6 +964,30 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-11-02** — **Added a "thin persona layer": a human first name for
+  each of the 11 standing agent-team divisions, display-only.** User asked
+  what's next for the team, including a plan to "give each agent on the
+  team personalized human type names to call them" — resolved via
+  `AskUserQuestion` into an explicit choice between a thin display layer
+  and a full structural rename; user picked the thin layer. Nothing
+  technical changed: `agent_missions.division`'s CHECK constraint, every
+  `SKILL.md` folder name, `nexus`'s own division map, and every existing
+  CLAUDE.md cross-reference all keep using the real codename exactly as
+  before. The mapping (`nexus`→Dana, `oracle`→Iris, `codex`→Cole,
+  `avery`→Avery, `sentinel`→Sasha, `support`→Robin, `forge`→Remy,
+  `warden`→Casey, `growth`→Taylor, `ledger`→Priya, `probe`→Quinn) now
+  lives in `.claude/skills/_shared/mission-logging.md`, with an explicit
+  note that ephemeral sub-agents/specialists (`site-guardian-exploit`, a
+  research-intern fork, etc.) deliberately do **not** get a persona name —
+  they're spun up and discarded per-task, unlike the 11 standing
+  divisions. `app/admin.html`'s Team panel now shows the persona name
+  alongside the codename (e.g. "Dana · nexus") in both the by-division
+  table and the recent-missions table, plus the KPI-sub caption line; a
+  division may now refer to itself by its persona name in conversation,
+  but still writes every `agent_missions` row, PR, and file path using
+  the codename. Pure display/markdown change — no migration, no
+  edge-function change, no CHECK-constraint touch.
+
 - **2026-11-02** — **`probe`'s first real test sweep since being built —
   found and fixed a real live bug, not a theoretical one.** User asked to
   "run it for a test." Scope: flow 01 (close the in-browser gap that
