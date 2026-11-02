@@ -304,6 +304,44 @@ it to the `?buy=` pattern instead.
   5.6 tier) answers Chat Completions correctly for this project's actual
   call shape before switching anything, same live-verification discipline
   as the original 2026-10-15 OpenAI-failover build and the 2026-10-30 fix.
+  **Update 2026-11-02 (`codex`/`backend-reviewer`, standalone verification,
+  not yet acted on)**: all 4 GPT-6-generation model names
+  (`gpt-6-astra`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`) do answer
+  real `/v1/chat/completions` requests against this project's own
+  `OPENAI_API_KEY` — confirmed live via a temporary diagnostic probe (same
+  methodology as the 2026-10-30 `gpt-5.4-pro`/`gpt-5.5-pro` 404
+  verification), not assumed from the catalog listing. None of the four
+  is a repeat of that `-pro`-tier chat-completions-incompatibility bug.
+  **One real wrinkle found on `gpt-6-luna` specifically, worth remembering
+  if it's ever picked for the haiku-tier mapping**: it's a reasoning model
+  under the hood — a first probe with `max_completion_tokens: 10` came
+  back with **empty** `content` and `finish_reason: "length"`, looking
+  exactly like a dead/broken model at first glance. Root-caused, not
+  assumed: a re-probe with a larger budget showed the real cause in the
+  response's own `usage.completion_tokens_details.reasoning_tokens`
+  field — 7 of the first attempt's 10 tokens were consumed by hidden
+  reasoning before any visible text could be emitted, the same
+  thinking-budget-exhaustion failure shape this file's own "(no response)"
+  chat bug (2026-10-08) already documents for Claude's extended thinking,
+  just on OpenAI's side this time. With `max_completion_tokens: 64` or
+  `300` it correctly returned `content: "OK"`, `finish_reason: "stop"`.
+  `gpt-6-astra`/`gpt-6.1-sol`/`gpt-6.1-terra` all returned visible content
+  cleanly even at the original 10-token budget — this reasoning-token
+  behavior is specific to `gpt-6-luna` among the four, at least at this
+  budget size. **Not acted on**: `OPENAI_MODEL_MAP` has deliberately not
+  been changed — this was scoped as verification only, per the explicit
+  ask. If `gpt-6-luna` is ever chosen for the haiku tier (the cheapest/
+  highest-volume tier, where `trial-chat`'s existing 400-token cap and
+  any similarly tight ceiling elsewhere are real, already-live constraints
+  to check against), its real completion-token budget needs to account for
+  hidden reasoning tokens on top of visible output, not just visible
+  output alone — otherwise it risks reproducing the same silent-truncation
+  class of bug a tight cap already causes for Claude's own extended
+  thinking. The two non-`-luna`, non-`-pro`-tier flagship names
+  (`gpt-6.1-sol`, `gpt-6.1-terra`) look like the lower-risk picks on this
+  evidence alone, since they didn't show the same reasoning-token
+  consumption at a small budget — still a product/`codex` decision to
+  actually make the switch, not done here.
 
 ~~- **Found live 2026-10-30, `site-guardian` sweep — the live `ANTHROPIC_API_KEY`
   is failing again, same recurring class as the 2026-10-15/16 incidents
