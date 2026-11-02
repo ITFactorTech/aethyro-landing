@@ -69,15 +69,15 @@ re-auditing everything from scratch every time. If no prior `sentinel` row
 exists (first-ever logged sweep), scope to "everything" and say so in the
 report — this is itself worth noting, since it's new infrastructure.
 
-## The specialist team — dispatch these four in parallel via the `Agent` tool
+## The specialist team — dispatch these five in parallel via the `Agent` tool
 
 They're independent and read mostly disjoint surfaces (migrations/functions,
 live exploit attempts, migration-history/deploy state, public-facing
-content/numbers), so there's no coordination needed between them and no
-reason to run them serially. Brief each one like the `Agent` tool's own
-"Writing the prompt" guidance requires — the cutoff timestamp from Step 0,
-the hard boundaries above, and that this is a sweep dispatch (not reviewing
-one specific PR).
+content/numbers, live in-browser functional behavior), so there's no
+coordination needed between them and no reason to run them serially. Brief
+each one like the `Agent` tool's own "Writing the prompt" guidance requires
+— the cutoff timestamp from Step 0, the hard boundaries above, and that
+this is a sweep dispatch (not reviewing one specific PR).
 
 - **`codex`** → the `backend-reviewer` skill, in its **sweep mode** (see
   that skill's own "Sweep mode" section) — reviews every migration and
@@ -97,6 +97,13 @@ one specific PR).
   Pro/Power naming swap and the Starter-pack Opus-count drift are exactly
   this class of bug, both found by someone eventually checking this by
   hand).
+- **`probe`** → sweep mode: run every flow in `.claude/skills/probe/flows/`
+  live against production, with a fresh throwaway account, and report
+  pass/fail/blocked per flow with real evidence (a screenshot, a DOM read,
+  a real API response). This is the one specialist testing the *rendered
+  experience* rather than code/data/security — a migration can pass every
+  other specialist's checks and still ship a broken button or a modal
+  that never opens.
 
 ## What stays serialized — you run these yourself, not a dispatched specialist
 
@@ -108,8 +115,11 @@ one specific PR).
   immediately after) — keep this to one account lifecycle you control
   directly, since two dispatches sharing or racing on the same diagnostic
   helper is exactly the kind of bug this skill exists to prevent, not
-  cause. If `site-guardian-exploit` also needs a throwaway account, have
-  it use its own separate one rather than sharing yours.
+  cause. If `site-guardian-exploit` or `probe` also needs a throwaway
+  account, have each use its own separate one rather than sharing yours —
+  `probe`'s sweep mode makes this a three-way contention point now, so
+  the "check live source first" rule right below matters more with each
+  specialist added, not less.
   **This has actually collided twice now** (2026-10-15, then again
   2026-10-17 — `oracle` and `site-guardian-exploit` both redeploying
   `test-admin-setup` mid-sweep) — self-corrected both times with no real

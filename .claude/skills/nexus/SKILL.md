@@ -47,6 +47,11 @@ subtask to exactly one of these:
   — real margin per pack/model/provider, read-only on money; every
   pricing/billing-rate finding is an escalation to the user, never a
   unilateral change.
+- **`probe`** → the `probe` skill (sibling to this one). Live, in-browser
+  end-to-end functional verification — does a shipped feature actually
+  work for a real user, not just does the code look right (`codex`'s
+  job) or is it secure (`sentinel`'s job). Always uses a fresh throwaway
+  account, never a real customer's.
 - **`forge`** → no fixed skill. Use the `Agent` tool directly
   (`subagent_type: general-purpose` or `claude`) with a tightly scoped
   prompt for net-new feature construction that doesn't fit any of the

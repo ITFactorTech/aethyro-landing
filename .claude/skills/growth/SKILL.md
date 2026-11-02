@@ -39,6 +39,11 @@ a weekly content cadence across 5 days, each with a different job:
   `app/chat.html` with Playwright, and screenshotting a real routine run
   (`#tryDailyBriefing` → the scoped "Run now" button → the real result) —
   that's the bar: a real screenshot of a real result, not an illustration.
+  Use `probe`'s "Sandbox/Playwright playbook"
+  (`.claude/skills/probe/SKILL.md`) for the actual Chromium/proxy
+  workarounds instead of rediscovering them each week — same sandbox,
+  same `test-admin-setup` throwaway-account pattern, same recurring
+  friction `probe` already documents a fix for.
 - **Wednesday — head-to-head**: a specific real task run through Aethyro
   (a real `chat` API call, a real signed receipt with real token counts and
   real cost) shown next to a named competitor's flat price. Only ever show

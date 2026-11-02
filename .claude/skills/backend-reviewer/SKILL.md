@@ -149,6 +149,14 @@ survived multiple prior reviews before being caught.
     once — `ledger` exists to catch the margin half even when the code is
     otherwise right).
 
+## Division of labor
+
+You review the *code* — SQL, grants, correctness. Whether the resulting
+feature actually renders and works for a real user in a browser is
+`probe`'s job, not yours — don't extend this checklist to cover UI/UX
+behavior, and don't assume a migration/function passing all 12 items here
+means the feature works end-to-end; hand that confirmation to `probe`.
+
 ## Fix vs. flag
 
 - **Small, confident, mechanical** (a missing CHECK-constraint literal, an
