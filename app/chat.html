@@ -1030,6 +1030,17 @@ I often need help with: client quotes, contract review, business Instagram posts
   }
 
   (async function init(){
+    /* Captured before any await, not after -- init()'s own setup below is a
+       long sequential chain of real network round-trips. Reading the URL
+       late let a user who sends their first message fast enough win the
+       race: send()'s own ensureConversation()/setActiveConv() pushes the
+       brand-new conversation's id into the URL via pushState, and this line
+       would then "see" that as if it were a page-load deep link and reload
+       the conversation from the DB -- wiping the live-streaming bubble out
+       from under the user, even though the message had already billed and
+       saved correctly server-side. Capturing it immediately means this only
+       ever reflects a real page-load deep link, never a race with send(). */
+    var urlConvId=new URLSearchParams(location.search).get('c');
     var s=await supabase.auth.getSession();
     session=s.data && s.data.session;
     if(!session){ enterAnonymousMode(); return; }
@@ -1044,8 +1055,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     await loadWorkspaceContext();
     await tryRedeemReferral();
     loadReferralCode();
-    var urlConvId=new URLSearchParams(location.search).get('c');
-    if(urlConvId) await loadConversation(urlConvId);
+    if(urlConvId && urlConvId!==currentConvId) await loadConversation(urlConvId);
     await handlePurchaseReturn();
   })();
 

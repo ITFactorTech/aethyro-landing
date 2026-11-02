@@ -47,3 +47,26 @@ shape (`{model, message, history}`), not through `app/chat.html`'s UI in
 an actual browser — the cost badge rendering, balance-pill update, and
 receipt-modal click-through (the UI-layer half of this flow) still need a
 real Playwright pass. Zero orphaned rows confirmed after cleanup.
+
+**Second run, 2026-11-02, closing the exact gap the first run flagged —
+found and fixed a real bug.** A real in-browser Playwright pass (session
+injected into `localStorage`, per the Sandbox/Playwright playbook)
+sending a message immediately after `#balancePill` became visible
+consistently lost the assistant's reply from the DOM — exactly 1
+`.msg-row` instead of 2, despite the message billing and saving correctly
+server-side the whole time. Root-caused as a real race: `init()` reads
+the URL's `?c=` param *after* several sequential `await`ed setup calls;
+if the user sends fast enough, `send()`'s own
+`ensureConversation()`/`setActiveConv()` pushes the brand-new
+conversation's id into the URL first, and `init()` then treats that as a
+page-load deep link and reloads the conversation from the DB — wiping the
+live bubble. Confirmed via a control run (waiting ~4s before sending
+never lost the reply) and fixed by capturing `urlConvId` as `init()`'s
+very first statement, before any `await` (PR #202). Re-verified the fix
+against a real deployed branch preview URL (needed for a genuine
+CORS-allowlisted origin — `localhost` isn't on `chat`'s CORS allowlist, so
+a `localhost`-served copy can only prove the DOM no longer gets wiped, not
+a full success path): immediate-send now correctly shows 2 rows, a real
+rendered cost badge (`"1 credit· 1,055 in / 5 out tokens · haikuReceipt"`),
+and the balance pill updating correctly. This flow's own expected
+outcome now holds end-to-end, not just at the API level.

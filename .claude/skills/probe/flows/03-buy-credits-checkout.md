@@ -31,4 +31,11 @@ CLAUDE.md's auto-topup entries for why this project treats real-money
 success paths as a distinct, deliberate verification step).
 
 ## History
-First run: see this skill's build PR (2026-11-02).
+**First run, 2026-11-02 — PASSED.** Live in-browser Playwright pass
+against production, a real throwaway account, all 4 packs: every pack
+button correctly navigated to a real `checkout.stripe.com` session URL.
+Confirmed Aethyro's own rendered page (checked *before* navigating away,
+not after — checking page content once already on Stripe's hosted
+checkout page would false-positive-match benign Stripe-domain mentions
+that have nothing to do with this constraint) contains zero
+`buy.stripe.com` matches. Hard security constraint holds.
