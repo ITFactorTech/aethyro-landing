@@ -382,7 +382,7 @@ it to the `?buy=` pattern instead.
   correctly shows `consecutive_failures:0, opened_until:null` as of this
   sweep.
 
-- **Found 2026-10-31 (`site-guardian` daily sweep, `oracle`'s funnel/
+~~- **Found 2026-10-31 (`site-guardian` daily sweep, `oracle`'s funnel/
   content-accuracy pass) — a single domain, `maxxspace.com`, is running a
   scripted signup-bonus-farming operation against the free 200-credit
   grant, and it's now the majority of this product's raw signup volume.**
@@ -415,7 +415,46 @@ it to the `?buy=` pattern instead.
   block, a signup-velocity cap, requiring real chat usage before the
   bonus posts) risks catching a real user and this sweep's own territory
   is drift/exploit/correctness, not fraud adjudication. Worth a `warden`
-  run specifically targeting `maxxspace.com` before the next sweep.
+  run specifically targeting `maxxspace.com` before the next sweep.~~ —
+  **closed, confirmed 2026-11-02 (`warden`).** The dedicated pass this
+  entry itself called for ran and found zero new `maxxspace.com` signups
+  since the last one at 2026-10-31T01:40:03Z — confirmed independently
+  twice now (once by the 2026-11-01 `site-guardian` sweep, again here
+  ~24.5 hours later) — and zero new activity of **any** kind (messages,
+  `credit_ledger` rows) on any of the 42 accounts since that same
+  timestamp. The pattern has genuinely stopped, not just gone quiet
+  between two checks.
+  **Correction to this entry's own "zero credits ever spent" claim,
+  found while verifying the realized cost**: that was wrong even at the
+  time it was written, not something that changed since. A direct
+  `credit_ledger` query (not just the `messages` table this entry's own
+  `msg_count` check relied on) shows 188 real `chat_usage` rows
+  (-1,056 credits) and 1 `api_usage` row (-1 credit) against this
+  cohort, all dated 2026-10-28 through 2026-10-30 — already there,
+  simply never checked via the ledger. All 42 accounts still show
+  **zero** rows in `conversations`/`messages` despite those 188 billed
+  completions — confirming these are scripted calls straight against
+  the `chat` edge function's API, bypassing `chat.html`'s UI entirely
+  (the same signature already confirmed for `voidash.cyou`, 2026-10-22),
+  not real human messages a `messages`-table check would ever catch.
+  **Also found, not previously documented**: the same cohort gamed the
+  referral system too, in a closed loop — one hub account
+  (`aemvroy4o8e2a2a65b@maxxspace.com`) referred 5 sibling `maxxspace.com`
+  accounts within ~7 hours on 2026-10-28, plus one of those referred it
+  back once; 6 real `referral_events` rows, 12 `credit_ledger`
+  `referral_bonus` rows, +1,200 credits total. Confirmed entirely
+  contained within the farmed cohort — every referrer and referee across
+  all 6 events is a `maxxspace.com` account; zero leakage to a real user
+  on either side.
+  **Real total realized cost, corrected**: 8,400 signup-bonus credits +
+  1,200 referral-bonus credits = 9,600 credits issued to this cohort;
+  1,057 of those were actually drained via real (scripted) API usage,
+  leaving ~8,543 sitting dormant and unused since 2026-10-31. All of
+  this is historical and bounded, not growing — nothing left to build.
+  No mechanical defense shipped or needed: the pattern already stopped
+  on its own before this check ran, so there was nothing live to defend
+  against, and `backend-reviewer` sign-off was never triggered since no
+  code/grant change was proposed. Closed.
 
 - **Found 2026-11-01, outside a scheduled sweep — while verifying an
   externally-authored growth-plan document's own data-instrumentation
@@ -446,6 +485,40 @@ it to the `?buy=` pattern instead.
   reporting should be cross-checked against known farming domains
   first** — this is now the second time in two days a headline
   signup number needed a ~50% haircut once bot traffic was excluded.
+  Closed alongside `maxxspace.com`, confirmed 2026-11-02 (`warden`) —
+  see immediately below.
+
+- **`kuromee.com`/`nilufa.kuromee.com` farming cluster — closed, confirmed
+  2026-11-02 (`warden`).** This was this cluster's first independent
+  recheck ever (the entry above only ever proposed one, never ran it).
+  Zero new signups on either `kuromee.com` or `nilufa.kuromee.com` since
+  the last one at 2026-10-29T14:39:35Z, and zero new activity of any kind
+  (messages, `credit_ledger` rows) on any of the 26 accounts since
+  2026-10-29T14:54:22Z — ~59 hours of total silence as of this check,
+  across both the base domain and the subdomain.
+  **Same correction as the `maxxspace.com` entry above applies here
+  too**: "all with zero messages ever sent" undercounted the real
+  activity — it checked `messages`, not `credit_ledger`. The ledger
+  shows 61 `chat_usage` rows (-125 credits) on `kuromee.com` and 55
+  `chat_usage` rows (-114 credits) on `nilufa.kuromee.com` — 116 rows /
+  -239 credits total, all dated 2026-10-28/29 (already there, not new
+  since this check) — again with **zero** corresponding rows in
+  `conversations`/`messages`, the same scripted-direct-API-call
+  signature as `maxxspace.com` and `voidash.cyou`. No referral-system
+  exploit found on this cluster, unlike `maxxspace.com`.
+  **Real total realized cost, corrected**: 5,200 signup-bonus credits
+  issued (2,200 + 3,000); 239 of those actually drained via scripted API
+  usage; ~4,961 sitting dormant since 2026-10-29.
+  Also checked for lookalike/successor domains for both clusters while
+  here — none found: no new `kuromee`/`maxxspace`/`maxspace` variant
+  anywhere, and the 7 other disposable-mail-looking domains that
+  produced a signup since 2026-10-29 (`37xiao.com`, `flowmail.site`,
+  `inbox.uron.de5.net`, `mats.edu.pl`, `nb.syh.cnkmmk.win`,
+  `nxdbxdl.cc.cd`, `temporarmail.edu.pl`) show no repeat/lockstep
+  pattern — one signup each, no cluster, consistent with the
+  2026-11-01 sweep's own "5 distinct domains, no repeat pattern" read.
+  Everything here is historical and bounded, nothing growing, nothing
+  to build. Closed.
 
 - **Found 2026-10-31 (`oracle`) — `pricing.html` line ~387 says "Claude
   Opus 5.5" while every other page on the site says "Claude Opus 5."**
