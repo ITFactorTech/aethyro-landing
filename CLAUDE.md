@@ -964,6 +964,77 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-11-02** — **Added `probe` — the division dedicated to live,
+  in-browser end-to-end functional verification — and wired it into the
+  rest of the team.** Came from a direct "what's next to make the team
+  #1" question: the clearest standing gap across the whole roster is that
+  nobody owns *confirming a shipped feature actually works for a real
+  user*, as opposed to reviewing its code (`codex`) or attempting to
+  exploit it (`sentinel`'s `site-guardian-exploit`). This project's own
+  recent-work-log has rediscovered the same Playwright/sandbox-proxy
+  workarounds from scratch in multiple separate feature-build sessions
+  (2026-10-02, 2026-10-03) because no division owned keeping that
+  knowledge in one place.
+  New `.claude/skills/probe/SKILL.md`: two modes (standalone, reviewing
+  one PR/change's feature surface the way `backend-reviewer` reviews a
+  migration; sweep mode, dispatched by `site-guardian` as a fifth
+  parallel specialist to regression-test the whole app on a schedule), a
+  "Division of labor" section drawing the boundary against `codex`/
+  `sentinel`/`avery`/`growth` explicitly, a "Fix vs. escalate" split
+  matching every other division's (small confident frontend bugs → fix
+  directly; anything touching billing/grants/RLS → `codex` sign-off
+  first, never probe's own call), and a **Sandbox/Playwright playbook**
+  section that writes down, for the first time in one place, the
+  hard-won workarounds this project has had to re-derive repeatedly:
+  test against production `aethyro.com` not the preview subdomain (CSP
+  differs between them), block non-essential third-party requests before
+  navigating (Chromium's natural request parallelism has previously
+  exhausted this sandbox's proxy's concurrent-connection ceiling), inject
+  a real session into `localStorage` instead of fighting the
+  `ERR_CERT_AUTHORITY_INVALID` TLS-interception artifact a direct
+  Supabase REST call hits from this sandbox's headless Chromium, and
+  retry once or twice on an infra-level failure before concluding a real
+  regression.
+  **New `.claude/skills/probe/flows/` corpus** (8 seed files, mirroring
+  `site-guardian`'s own `checks/` corpus pattern exactly rather than
+  inventing a new structure): signup+first-chat-across-tiers, referral
+  redemption, buy-credits→real-Stripe-URL (ties directly to this file's
+  hard security constraint), model auto-routing + its safety nets,
+  deletion/generation receipts, routine create/run/chain, document
+  upload+knowledge search, and the four low-credit/depleted/cap gates —
+  each naming the real feature, the exact steps, and the real expected
+  outcome already established by this file's own build-and-verify
+  history, not a guess. Growing this corpus on every run (standalone or
+  sweep) is the explicit, built-in self-improving step, same justification
+  as `site-guardian`'s own `checks/` corpus.
+  **Wired into the team**: `nexus`'s division map; `site-guardian`'s
+  specialist-dispatch list (now five in parallel, plus an explicit note
+  that `test-admin-setup` contention is now a three-way concern between
+  `oracle`/`site-guardian-exploit`/`probe`, not two); `backend-reviewer`
+  gained a short "Division of labor" section drawing the code-vs-rendered
+  -experience line explicit; `growth` now points at `probe`'s Playwright
+  playbook for its own Tuesday build-in-public demos instead of
+  rediscovering the same workarounds weekly; `app/admin.html`'s Team
+  panel division list. Added `'probe'` to `agent_missions.division`'s
+  CHECK constraint (migration
+  `20261102002413_add_probe_division_to_agent_missions.sql`, filename
+  matches its real assigned version per this file's own
+  `apply_migration`-timestamp gotcha).
+  **Proved the methodology with a real first run, not just documentation**:
+  ran flow 01 (signup → exactly one 200-credit bonus → a real `chat` send
+  on `haiku`/`sonnet`/`opus` each) against a real throwaway account —
+  confirmed live via `credit_ledger` SQL after each send: exactly one
+  `signup_bonus` row, then three correctly-billed `chat_usage` rows
+  (`-1`/`-1`/`-2`, matching `CREDIT_RATES`) each with a real signed
+  generation receipt. **Scope note, stated plainly in the flow file
+  itself**: this first run was API-level (direct `chat` calls + SQL
+  checks), not yet a full in-browser Playwright click-through of
+  `app/chat.html`'s UI — the cost-badge/balance-pill rendering and
+  receipt-modal interaction are the natural next real run, not assumed to
+  already be covered by this one. Zero orphaned rows confirmed after
+  cleanup; `test-admin-setup` restubbed to 410 and confirmed via a live
+  curl.
+
 - **2026-11-01** — **Added `ledger` (unit economics/financial health),
   wired it into the rest of the agent team, and added a shared
   "sub-agent" convention** — from a direct ask about which existing
