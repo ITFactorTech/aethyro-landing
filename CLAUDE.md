@@ -964,6 +964,49 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-11-02** — **`probe`'s first real test sweep since being built —
+  found and fixed a real live bug, not a theoretical one.** User asked to
+  "run it for a test." Scope: flow 01 (close the in-browser gap that
+  flow's own History section had flagged — its first run was API-level
+  only) and flow 03 (buy-credits checkout, never run at all). Flow 01's
+  real Playwright pass (session injected via `localStorage`, immediate
+  send right after the balance pill became visible — the exact timing a
+  fast human could hit) consistently lost the assistant's reply from the
+  DOM: 1 `.msg-row` instead of 2, though billing/saving had already
+  happened correctly server-side. Root-caused as a real race in
+  `app/chat.html`'s `init()`: it reads the URL's `?c=` conversation id
+  only after several sequential `await`ed setup calls
+  (`refreshBalance`/`loadConversationList`/`loadWorkspaceContext`/
+  `tryRedeemReferral`/`loadReferralCode`) — if the user sends a message
+  fast enough, `send()`'s own `ensureConversation()`/`setActiveConv()`
+  pushes the brand-new conversation's id into the URL via `pushState`
+  *first*, and `init()` then treats that as if it were a real page-load
+  deep link and calls `loadConversation()`, which wipes `#msgs` and
+  re-renders from the DB — clobbering the live-streaming bubble out from
+  under the user. Confirmed via a control run (waiting ~4s before sending
+  never reproduced it) before touching anything. Fixed by capturing
+  `urlConvId` as `init()`'s very first statement, before any `await`, plus
+  a defensive `urlConvId!==currentConvId` guard (PR #202). Verified the
+  fix against a real deployed branch preview URL, not just a locally
+  -served copy — `localhost` isn't on `chat`'s CORS allowlist (see the
+  2026-10-06 CORS-hardening entry), so a local copy can only prove the DOM
+  no longer gets wiped, not a true success path; the preview URL
+  (`<branch>-aethyro-landing.<account>.workers.dev`, already allowlisted
+  by `chat`'s own regex) gave a real end-to-end confirmation: 2 rows, a
+  real rendered cost badge, correct balance update. Flow 03 passed clean
+  on the first run: all 4 packs resolve to real `checkout.stripe.com`
+  session URLs, zero `buy.stripe.com` matches on Aethyro's own page
+  (checked *before* navigating away — checking it after lands on Stripe's
+  hosted page instead and false-positives on Stripe's own unrelated
+  domain mentions, a mistake caught and corrected mid-run, not shipped).
+  Both flow files' History sections updated with the real results. Zero
+  orphaned rows after cleanup across two throwaway accounts;
+  `test-admin-setup` restubbed to 410 and confirmed via a live curl.
+  **This is exactly the kind of bug `probe` exists to catch** — every
+  other division's own checklist (grants, SQL, exploit attempts, pricing
+  accuracy) would have passed this code clean; only actually driving the
+  UI with real timing surfaced it.
+
 - **2026-11-02** — **Added `probe` — the division dedicated to live,
   in-browser end-to-end functional verification — and wired it into the
   rest of the team.** Came from a direct "what's next to make the team
