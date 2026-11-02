@@ -902,6 +902,37 @@ it to the `?buy=` pattern instead.
   upgrades to Pro — at which point `check-leaked-password` is already
   written and ready to wire in as the Auth Hook.
 
+- **Found 2026-11-02 (`growth`, incidental — while sourcing a real routine
+  run as content for a growth draft) — the "Daily Briefing" quick-start
+  routine template (added 2026-10-06, `#tryDailyBriefing`) reliably
+  produces stale/recycled "news" presented as current, because
+  `run-routines` has no `web_search` tool access at all (confirmed
+  directly in its source: no `TOOLS` array, unlike `chat`'s tool loop).**
+  Checked all 3 real "Daily Briefing"/"Daily AI News"-shaped routines that
+  exist in production (23 real runs total across them): the admin's own,
+  differently-worded "Daily AI News" routine ("the single most interesting
+  AI/tech development from the last 24 hours") correctly and honestly
+  declines every single run ("I don't have access to real-time
+  information..."), but the quick-start button's own prompt wording
+  elicits the opposite behavior from the same no-tool-access model — both
+  real customers' "Daily Briefing" routines (`usaretwert@gmail.com`,
+  `xiaojun45544@gmail.com`) repeatedly present already-stale events
+  (GPT-4o mini, o1, GPT-4 Turbo's 128K context window — all real, but
+  months/years old) as a fresh "🔥 Top Development," reworded slightly
+  differently run to run in a way that reads as pattern-completion, not a
+  genuine attempt to say "I don't know." Neither real customer has any way
+  to know this isn't live news — nothing in the UI or the routine's own
+  output discloses the limitation the way the admin's own prompt's honest
+  decline happens to. **Not acted on** — this is a prompt-wording/product
+  call (reword the quick-start template's prompt to ask for something that
+  doesn't need live data, the way the admin's own phrasing accidentally
+  already does; or give `run-routines` real `web_search` access the way
+  `chat` already has) rather than something for `growth` to fix
+  unilaterally. Also worth remembering generally: this is why the real
+  demo captured for this week's Tuesday build-in-public draft (see
+  `recent-work-log`) deliberately used a different, non-news-dependent
+  routine prompt instead of this one.
+
 ## Decommissioned: pre-Cloud "AI Operating Platform" pages (2026-09-28)
 
 A `site-guardian` sweep on 2026-09-28 found four live, `sitemap.xml`-indexed
@@ -1105,6 +1136,66 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-11-02** — **`growth`'s first full end-to-end run through its own
+  skill's weekly process** (the 2026-11-01 run only ever produced a single
+  sample Friday draft; this is the first time all five cadence days were
+  actually attempted in one pass). Pulled fresh numbers since the prior
+  run (2026-11-01T20:02:53Z): only 2 new signups in that window (a
+  Gmail dot-variant pair, `gi.o.v.a.n.n.ib.a.rre.tt.hd.f@gmail.com` /
+  `g.io.vannib.ar.r.et.t.hdf@gmail.com`, 17 seconds apart — Gmail ignores
+  dots, so these two "different" addresses deliver to the same inbox;
+  worth a `warden` look if this shape recurs, not escalated on its own
+  given n=2 is below this project's own evidence bar for a real finding),
+  so the real week-over-week numbers below are the standard trailing-7-day
+  window, not since-last-run: 153 raw signups in 7 days, **84 real** once
+  `maxxspace.com`/`kuromee.com`/`nilufa.kuromee.com`/`voidash.cyou`/
+  `onldm.net`/`skidder.wtf`/`gonrr.net`/`vietnam2.mail10p.com` are
+  excluded (re-pulled the farming-domain breakdown fresh rather than
+  trusting the exclusion list was exhaustive — no new cluster found; the
+  non-farmed domains in the window are all 1-2 signups each with no
+  lockstep pattern). 52.4% of that real cohort (44/84) sent a message
+  within 48h of signing up. Attribution: 82% direct/no-referrer, 15%
+  `aethyro.com` (internal nav), 2 signups referred from `chatgpt.com`.
+  `purchase_funnel_events`: 7 real checkout-session-creation successes,
+  still $0 actual `credit_ledger` `reason='purchase'` revenue — consistent
+  with every prior pull, not reported as a new finding.
+  **Drafted the full 5-day cadence, grounding Tuesday/Wednesday in two
+  fresh real demos run this session** (throwaway accounts via
+  `test-admin-setup`, redeployed/restubbed exactly as every prior session
+  documents, zero orphaned rows after cleanup, confirmed via SQL both
+  times): Monday reused the already-published, already-labeled-as-example
+  cost-math line from `index.html` ("15 quick + 5 longer + 1 deep review a
+  week ≈ 43 credits ≈ $3/month on Standard" vs. ChatGPT Plus/Claude Pro's
+  flat $20/month — both re-confirmed still accurate via live search, not
+  assumed). Tuesday ran a real "Weekly code-review checklist" routine
+  (Sonnet, real schedule, real `run-routines` invocation) and captured its
+  genuine output + exact billing (1 credit, `reason:'routine'`). Wednesday
+  ran a real Opus security review of a deliberately-vulnerable snippet and
+  captured the real signed generation receipt (1,096 in / 1,755 out
+  tokens, 15 credits, `receipt_id:74f8d2dd-a18d-466e-bd6b-6265225b6b1e`,
+  independently re-verified `valid:true` via `verify_generation_receipt`)
+  for a real head-to-head against the same flat $20/month subscriptions.
+  Thursday was **skipped explicitly** — same reason as the 2026-11-01 run:
+  no verified Discord connector reaches the real aethyro.com server, and
+  Zapier's own Discord catalog listing doesn't change that; still no
+  X-posting connector either (`discover_zapier_actions` for "Twitter"
+  again returns only a tweet-screenshot utility), so the X draft stays
+  copy-paste text, never claimed as posted. Friday is a long-form
+  walkthrough of the document/RAG Knowledge-tab feature (chunking →
+  embedding → pgvector cosine-similarity retrieval), grounded directly in
+  `embed-content`'s real `CHUNK_SIZE`/`chunkText()`/`match_document_chunks`
+  mechanics rather than generic copy, using a clearly-labeled hypothetical
+  example rather than a real customer's document.
+  **One incidental finding, written up in Pending above rather than fixed
+  here** (per this skill's own hard boundary): the "Daily Briefing"
+  quick-start routine template reliably produces stale "news" dressed up
+  as current, because `run-routines` has no `web_search` tool access —
+  found while sourcing Tuesday's demo and deliberately routed around by
+  picking a non-news-dependent routine prompt instead.
+  **All drafts held for explicit approval — nothing posted to LinkedIn, X,
+  or anywhere else.** Logged to `agent_missions` (`division:'growth'`,
+  `outcome:'report_only'`).
 
 - **2026-11-02** — **Added a "thin persona layer": a human first name for
   each of the 11 standing agent-team divisions, display-only.** User asked
