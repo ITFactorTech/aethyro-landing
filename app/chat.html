@@ -1062,6 +1062,20 @@ I often need help with: client quotes, contract review, business Instagram posts
   /* Stripe sends the buyer back here after checkout, and signup.html/login.html
      forward a pending ?buy=<pack> once the user has an account. NB: `history`
      is shadowed by the message array above, so use window.history here. */
+  /* Homepage try-box hands off the visitor's last question (index.html) so
+     their first chat after signup starts where they left off. Prefill only —
+     never auto-send, since that would spend credits without consent. */
+  (function(){
+    var pending; try{ pending=localStorage.getItem('aethyro_pending_prompt'); localStorage.removeItem('aethyro_pending_prompt'); }catch(e){ return; }
+    if(!pending) return;
+    window.aethyroCarriedPrompt=true; /* skip the intro tour: they already know what they want to ask */
+    setTimeout(function(){
+      var inp=$('input'); if(!inp||inp.disabled||inp.value) return;
+      inp.value=pending.slice(0,2000); inp.dispatchEvent(new Event('input')); inp.focus();
+      track('trial_prompt_carried_over',{});
+    },800);
+  })();
+
   var VALID_PACKS=['starter','value','power','pro_7k'];
   async function handlePurchaseReturn(){
     var params=new URLSearchParams(location.search);
@@ -2466,7 +2480,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     });
     $('onboardSkip').addEventListener('click',dismissOnboarding);
     try{
-      if(!localStorage.getItem(ONBOARD_KEY)){
+      if(!localStorage.getItem(ONBOARD_KEY) && !window.aethyroCarriedPrompt){
         setTimeout(function(){ $('onboardBackdrop').classList.add('show'); },600);
       }
     }catch(e){}
