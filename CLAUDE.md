@@ -1137,6 +1137,8 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-11-03** — **Homepage conversion pass (user: "fix this site in its entirety" after an audit).** Explicit go-ahead to replace the 2026-10-06 H1: now "Claude Opus 5. Without the $20/month." with a pay-per-use sub-line. All primary "Start free" CTAs (hero, nav, drawer, sticky, footer, post-trial-limit button) now point to `/app/signup.html` (matches the "200 credits" promise; first-touch attribution already handled there). Accuracy fixes: removed "client data never leaves the office"; FAQ "Many users…" removed (contradicts the "early, small" section); FAQ credit math aligned to the site-wide ~1/~2/~15 Haiku/Sonnet/Opus figures; compare-table Claude.ai Pro training cell "Guaranteed" → "Opt-out setting" (consumer training became a user setting in Aug 2025); voyage-3-lite/512 → voyage-4-lite/1024 to match `embed-content`; mockup user "Alex M." → "You"; "Private AI" taglines replaced. Added per-credit price under each pack. Removed the scripted "Ask it anything" demo (undercut the real live box) and the duplicate Community/Discord section. Verified locally: HTML/JSON-LD/JS parse clean, zero overflow at 1440/390, zero page errors.
+
 - **2026-11-02** — **`growth`'s first full end-to-end run through its own
   skill's weekly process** (the 2026-11-01 run only ever produced a single
   sample Friday draft; this is the first time all five cadence days were
