@@ -10,6 +10,13 @@
 // usable title, falling back to the original generic copy otherwise. See
 // `engagementHtml()`. Prompted by a real data finding: of 46 users, only 3
 // ever returned on a second day.
+// v4 — 2026-11-03: added a day-6 "winback" type for users who DID send
+// messages on signup day but never came back on a later day (the real
+// retention leak: ~50% activation, 11 users ever returned). Unlike the other
+// types it ignores the caller's `email` and re-derives everything from
+// `user_id` server-side, and re-checks eligibility before sending, so a
+// direct call (verify_jwt=false) can at most trigger the one legitimate,
+// one-time email for a genuinely eligible user. See winbackHtml().
 // Called by a Postgres trigger (via pg_net) when a new row appears in auth.users.
 // Sends a 3-step drip:
 //   day 0 — welcome + starter prompts
@@ -205,6 +212,44 @@ function reengagementHtml(): string {
 </html>`;
 }
 
+function winbackHtml(ctx: { title?: string | null; conversationId?: string | null; balance?: number | null }): string {
+  const ctaUrl = ctx.title && ctx.conversationId
+    ? `${BASE_URL}/app/chat.html?c=${encodeURIComponent(ctx.conversationId)}`
+    : `${BASE_URL}/app/chat.html`;
+  const opener = ctx.title
+    ? `A few days ago you asked Aethyro about <strong style="color:#f0f0f0">${escapeHtml(ctx.title)}</strong>. That conversation is saved and ready to continue.`
+    : `Your earlier conversations are saved and ready to continue.`;
+  const balanceLine = typeof ctx.balance === "number" && ctx.balance >= 20
+    ? `<p style="color:#a0a0a0;line-height:1.65;margin:0 0 24px">You still have <strong style="color:#f0f0f0">${ctx.balance} credits</strong>. They never expire.</p>`
+    : "";
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',sans-serif;color:#f0f0f0">
+<div style="max-width:560px;margin:0 auto;padding:40px 24px">
+  <div style="font-size:1.1rem;font-weight:700;margin-bottom:32px">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff4d00;margin-right:6px;vertical-align:middle"></span>
+    Aethyro
+  </div>
+  <h1 style="font-size:1.5rem;font-weight:800;margin:0 0 12px">Want to take it one step further?</h1>
+  <p style="color:#a0a0a0;line-height:1.65;margin:0 0 16px">${opener}</p>
+  ${balanceLine}
+  <a href="${ctaUrl}" style="display:inline-block;padding:12px 28px;background:#ff4d00;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;font-size:.9rem;margin-bottom:28px">
+    Continue where you left off →
+  </a>
+  <p style="color:#a0a0a0;line-height:1.65;margin:0 0 8px"><strong style="color:#f0f0f0">Or let Aethyro come to you.</strong> Set up a Routine and it runs a prompt on a schedule and emails you the result, for example:</p>
+  <ul style="color:#a0a0a0;line-height:1.8;padding-left:1.4rem;margin:0 0 24px">
+    <li>"Every Monday, give me a prioritized plan for the week"</li>
+    <li>"Each morning, summarize the top news in my industry"</li>
+  </ul>
+  <a href="${BASE_URL}/app/chat.html" style="color:#ff4d00;font-weight:700;text-decoration:none;font-size:.9rem">Set up a Routine (Intelligence → Routines) →</a>
+  <hr style="border:none;border-top:1px solid #222;margin:28px 0"/>
+  <p style="font-size:.78rem;color:#555">This is the last check-in email we'll send. Reply any time and tell us what would make Aethyro more useful.</p>
+</div>
+</body>
+</html>`;
+}
+
 serve(async (req) => {
   const CORS = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -226,7 +271,7 @@ serve(async (req) => {
       emailType = body.type || "welcome";
     }
 
-    if (!email) return new Response(JSON.stringify({ error: "no email" }), { status: 400, headers: { ...CORS, "Content-Type": "application/json" } });
+    if (!email && emailType !== "winback") return new Response(JSON.stringify({ error: "no email" }), { status: 400, headers: { ...CORS, "Content-Type": "application/json" } });
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -312,6 +357,66 @@ serve(async (req) => {
           reengagement_sent_at: new Date().toISOString(),
         }, { onConflict: "user_id" });
       }
+    } else if (emailType === "winback") {
+      // Never trust the caller's email for this type: derive it from user_id.
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(userId || ""))) {
+        return new Response(JSON.stringify({ error: "invalid user_id" }), { status: 400, headers: { ...CORS, "Content-Type": "application/json" } });
+      }
+      const { data: userRes, error: userErr } = await supabase.auth.admin.getUserById(userId);
+      if (userErr || !userRes?.user?.email) {
+        return new Response(JSON.stringify({ ok: false, skipped: "unknown user" }), { headers: { ...CORS, "Content-Type": "application/json" } });
+      }
+      const user = userRes.user;
+      const signupMs = new Date(user.created_at).getTime();
+      const ageDays = (Date.now() - signupMs) / 86400000;
+
+      const { data: drip } = await supabase.from("email_drip_state")
+        .select("winback_sent_at").eq("user_id", userId).maybeSingle();
+
+      // Eligibility, fail closed on any lookup error: 6-30 days old, not yet
+      // won back, sent >=1 message, and no message on any later day.
+      let eligible = !drip?.winback_sent_at && ageDays >= 6 && ageDays <= 30;
+      let ctx: { title?: string | null; conversationId?: string | null; balance?: number | null } = {};
+      if (eligible) {
+        const { data: convos, error: convErr } = await supabase
+          .from("conversations").select("id,title,updated_at")
+          .eq("user_id", userId).order("updated_at", { ascending: false });
+        const ids = (convos || []).map((c: { id: string }) => c.id);
+        if (convErr || ids.length === 0) {
+          eligible = false;
+        } else {
+          const returnedCutoff = new Date(signupMs + 86400000).toISOString();
+          const { count: later, error: laterErr } = await supabase.from("messages")
+            .select("id", { count: "exact", head: true })
+            .in("conversation_id", ids).eq("role", "user").gte("created_at", returnedCutoff);
+          if (laterErr || (later || 0) > 0) eligible = false;
+          const titled = (convos || []).find((c: { title: string | null }) => c.title);
+          if (titled) ctx = { title: titled.title, conversationId: titled.id };
+        }
+      }
+      if (eligible) {
+        // Personal balance only; team members draw from a pooled balance this
+        // sum doesn't reflect, so omit the line for them rather than misstate it.
+        try {
+          const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", userId).maybeSingle();
+          if (!prof?.team_id) {
+            const { data: rows, error: balErr } = await supabase.from("credit_ledger").select("delta").eq("user_id", userId);
+            if (!balErr) ctx.balance = (rows || []).reduce((t: number, r: { delta: number }) => t + r.delta, 0);
+          }
+        } catch (_) { /* balance line is optional */ }
+        await sendEmail(user.email!, "Pick up where you left off on Aethyro", winbackHtml(ctx));
+      }
+      // Stamp either way so the daily cron never re-selects this user (the
+      // drip-reengagement requery bug fixed 2026-10-27).
+      if (!drip?.winback_sent_at) {
+        await supabase.from("email_drip_state").upsert({
+          user_id: userId,
+          winback_sent_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+      }
+      return new Response(JSON.stringify({ ok: true, type: emailType, sent: eligible }), {
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ ok: true, type: emailType }), {
