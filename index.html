@@ -717,7 +717,9 @@
     }
     .viz-leg-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
 
-  </style>
+  .try-chip{background:rgba(255,255,255,.04);border:1px solid var(--b2);border-radius:20px;color:var(--t2);cursor:pointer;font-family:var(--font);font-size:.72rem;padding:.3rem .75rem;transition:border-color .15s,color .15s}
+.try-chip:hover,.try-chip:focus-visible{border-color:var(--orange);color:var(--text)}
+</style>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -898,15 +900,14 @@
           style="flex:1;min-width:0;background:rgba(0,0,0,.35);border:1px solid var(--b2);border-radius:8px;padding:.6rem .8rem;color:var(--text);font-family:var(--font);font-size:.85rem;outline:none"/>
         <button type="submit" id="trySend" class="btn btn-sm btn-orange" style="flex-shrink:0">Send →</button>
       </form>
+      <div id="tryChips" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.55rem">
+        <button type="button" class="try-chip" data-prompt="Rewrite this email to sound more confident: I just wanted to check in and see if you maybe had time to look at my proposal?">Rewrite an email</button>
+        <button type="button" class="try-chip" data-prompt="Explain the difference between a Roth IRA and a traditional IRA in plain language.">Explain something simply</button>
+        <button type="button" class="try-chip" data-prompt="Write a JavaScript function that debounces another function, with a short explanation.">Write some code</button>
+      </div>
       <div style="margin-top:.5rem;font-size:.66rem;color:var(--t3);font-family:var(--mono)">3 free messages/day · runs in Aethyro Cloud on our servers, not on your device</div>
     </div>
 
-    <div class="hero-meta" style="margin-top:1.5rem">
-      <div class="meta-stat"><strong style="font-size:1.1rem">Opus<span style="color:var(--orange)">5</span></strong><span>Model tier</span></div>
-      <div class="meta-stat"><strong data-count="200">200</strong><span>Free credits</span></div>
-      <div class="meta-stat"><strong style="font-size:1rem">Pay</strong><span>As you go</span></div>
-      <div class="meta-stat"><strong data-count="0">0</strong><span>Data sold</span></div>
-    </div>
   </div>
 
   <!-- HERO CHAT PREVIEW -->
@@ -1917,18 +1918,31 @@ patterns are well established.</div>
 
     function track(name, params){ if (typeof gtag !== 'undefined') gtag('event', name, params || {}); }
 
+    var lastMessage = '';
     function showCta(label) {
+      // Carry the visitor's question into their first real chat after signup.
+      try { if (lastMessage) localStorage.setItem('aethyro_pending_prompt', lastMessage); } catch(e) {}
       cta.style.display = 'block';
       cta.innerHTML = '<a href="/app/signup.html" class="btn btn-sm btn-orange" style="width:100%;justify-content:center" id="tryCtaLink">' + label + '</a>';
       var link = document.getElementById('tryCtaLink');
       if (link) link.addEventListener('click', function(){ track('trial_signup_cta_click', { surface: 'homepage' }); });
     }
 
+    document.querySelectorAll('#tryChips .try-chip').forEach(function(chip){
+      chip.addEventListener('click', function(){
+        if (input.disabled) return;
+        input.value = chip.dataset.prompt;
+        track('trial_chip_click', { surface: 'homepage' });
+        form.requestSubmit ? form.requestSubmit() : sendBtn.click();
+      });
+    });
+
     form.addEventListener('submit', function(e){
       e.preventDefault();
       var message = input.value.trim();
       if (!message) return;
 
+      lastMessage = message;
       track('trial_message_sent', { surface: 'homepage' });
       sendBtn.disabled = true; sendBtn.textContent = '…';
       input.disabled = true;
