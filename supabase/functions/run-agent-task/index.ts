@@ -381,7 +381,7 @@ serve(async (req) => {
 
   // ── Credit gate ───────────────────────────────────────────────────────────────
   const { data: taskProfile } = await supaAdmin
-    .from("profiles").select("team_id").eq("id", user.id).single();
+    .from("profiles").select("team_id, monthly_spend_cap_credits").eq("id", user.id).single();
   const { data: balance } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
   // balance is null for brand-new users with no ledger rows — treat as 0
   const currentBalance = typeof balance === "number" ? balance : 0;
@@ -389,6 +389,17 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       error: `Insufficient credits — need at least ${MIN_CREDITS}, have ${currentBalance}`,
     }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
+
+  // Monthly spend cap (opt-in, NULL = off; same get_monthly_spend RPC chat uses).
+  if (typeof taskProfile?.monthly_spend_cap_credits === "number") {
+    const { data: spentSoFar } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: user.id });
+    const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+    if (spent >= taskProfile.monthly_spend_cap_credits) {
+      return new Response(JSON.stringify({
+        error: "Monthly cap reached", monthly_spend: spent, monthly_cap: taskProfile.monthly_spend_cap_credits,
+      }), { status: 402, headers: { ...CORS, "Content-Type": "application/json" } });
+    }
+  }
 
   // ── Create task record ─────────────────────────────────────────────────────────
   const { data: task, error: taskErr } = await supaAdmin

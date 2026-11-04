@@ -111,7 +111,7 @@
   </div>
 
   <h2><span class="ic" style="color:var(--orange)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span> Verifiable deletion</h2>
-  <p class="lead">Delete a conversation and Aethyro doesn't just remove it from your screen — the database deletes the rows, then builds a receipt describing exactly what was removed and signs it server-side (HMAC-SHA256) with a key that never leaves the database. You get the payload, the signature, and a "Verify" button that independently recomputes the signature to confirm the receipt is genuine and hasn't been altered.</p>
+  <p class="lead">Delete a conversation and Aethyro doesn't just remove it from your screen — the database deletes the rows, then builds a receipt describing exactly what was removed and signs it server-side (HMAC-SHA256) with a key that never leaves the database. You get the payload, the signature, and a "Verify" button that asks the server to re-check the signature against the stored receipt — the signing key itself never leaves the server, so verification is server-side, not computed in your browser.</p>
   <div class="card">
     <strong>Why this matters:</strong> most apps' "delete" is a promise you can't check. This one gives you an artifact — a signed record — instead of just a toast notification that disappears. You can download it as JSON and keep it.
   </div>

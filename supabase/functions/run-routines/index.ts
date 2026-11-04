@@ -178,8 +178,29 @@ serve(async (req) => {
         p_user_id: routine.user_id,
       });
       const { data: routineProfile } = await supaAdmin
-        .from("profiles").select("team_id").eq("id", routine.user_id).single();
+        .from("profiles").select("team_id, monthly_spend_cap_credits").eq("id", routine.user_id).single();
       const balance = typeof rawBalance === "number" ? rawBalance : 0;
+      // Monthly spend cap (opt-in, NULL = off): skip like a no-credits run,
+      // with its own status so it is distinguishable in routine_run_log.
+      if (typeof routineProfile?.monthly_spend_cap_credits === "number") {
+        const { data: spentSoFar } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: routine.user_id });
+        const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+        if (spent >= routineProfile.monthly_spend_cap_credits) {
+          await supaAdmin.from("user_routines").update({
+            last_run_at:  new Date().toISOString(),
+            next_run_at:  nextCronDate(routine.schedule).toISOString(),
+            last_result:  `⚠️ Skipped — monthly spend cap reached (${spent} of ${routineProfile.monthly_spend_cap_credits} credits this month).`,
+          }).eq("id", routine.id);
+          await supaAdmin.from("routine_run_log").insert({
+            routine_id: routine.id,
+            user_id:    routine.user_id,
+            status:     "skipped_monthly_cap",
+            detail:     "Monthly spend cap reached",
+          });
+          results.push({ id: routine.id, name: routine.name, status: "skipped_monthly_cap" });
+          continue;
+        }
+      }
       if (balance <= 0) {
         await supaAdmin.from("user_routines").update({
           last_run_at:  new Date().toISOString(),

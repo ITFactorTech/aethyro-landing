@@ -503,7 +503,7 @@
       <button class="top-link" id="buyBtn" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">Buy more</button>
       <a href="./signup.html?next=chat" class="top-link signup-link" id="signupLink" style="display:none">Sign up free →</a>
     </div>
-    <div class="cloud-note" id="cloudNote">// Aethyro Cloud — Claude Opus 5 · credits billed per token</div>
+    <div class="cloud-note" id="cloudNote">// Aethyro Cloud — Claude Opus 5.5 · credits billed per token</div>
 
     <div class="msgs" id="msgs">
       <div class="empty-state" id="emptyState">
@@ -636,7 +636,7 @@ I often need help with: client quotes, contract review, business Instagram posts
 <div class="workspace-modal-backdrop" id="receiptModal">
   <div class="workspace-modal">
     <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg> Deletion Receipt</h3>
-    <p class="wm-sub">This conversation and its associated memory were permanently deleted. The receipt below is signed server-side (HMAC-SHA256) — it proves what was deleted and when, and can be independently re-verified at any time.</p>
+    <p class="wm-sub">This conversation and its associated memory were permanently deleted. The receipt below is signed server-side (HMAC-SHA256) — it proves what was deleted and when, and can be re-checked at any time via the server (the signing key never leaves the server).</p>
     <pre id="receiptPayload" class="receipt-payload"></pre>
     <div class="receipt-sig-row">
       <span class="receipt-sig-label">Signature</span>
@@ -655,7 +655,7 @@ I often need help with: client quotes, contract review, business Instagram posts
 <div class="workspace-modal-backdrop" id="genReceiptModal">
   <div class="workspace-modal">
     <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h2"/></svg> Generation Receipt</h3>
-    <p class="wm-sub">This reply's generation was recorded and signed server-side (HMAC-SHA256) the moment it was produced — model, token counts, cost, and what context fed into it. The receipt below can be independently re-verified at any time.</p>
+    <p class="wm-sub">This reply's generation was recorded and signed server-side (HMAC-SHA256) the moment it was produced — model, token counts, cost, and what context fed into it. The receipt below can be re-checked at any time via the server (the signing key never leaves the server).</p>
     <pre id="genReceiptPayload" class="receipt-payload"></pre>
     <div class="receipt-sig-row">
       <span class="receipt-sig-label">Signature</span>
@@ -735,6 +735,7 @@ I often need help with: client quotes, contract review, business Instagram posts
             <option value="opus">Opus — most capable</option>
           </select>
         </div>
+        <p id="taskEstimate" class="muted" style="font-size:.72rem;margin-top:.4rem;font-family:var(--mono)"></p>
         <div class="intel-btn-row">
           <button class="intel-btn" type="submit" id="taskRunBtn">Run Task</button>
         </div>
@@ -798,6 +799,8 @@ I often need help with: client quotes, contract review, business Instagram posts
           <input type="checkbox" id="routineEmailOnResult" style="width:auto;margin:0"/>
           <label class="intel-label" for="routineEmailOnResult" style="margin:0;display:inline-flex;align-items:center;gap:.35rem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg> Email me when this runs</label>
         </div>
+        <p id="routineEstimate" class="muted" style="font-size:.72rem;margin-top:.4rem;font-family:var(--mono)"></p>
+        <p class="muted" style="font-size:.72rem;line-height:1.5">If a run fires with no credits, it is skipped for that run — no charge, recorded as “Skipped — no credits”, and rescheduled. If “Email me when this runs” is on, a skipped run emails you too.</p>
         <div class="intel-btn-row">
           <button class="intel-btn" type="submit" id="routineSaveBtn">Save Routine</button>
         </div>
@@ -900,7 +903,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     </div>
     <div class="onboard-icon" id="onboardIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 13.5 9 20 10.5 13.5 12 12 18 10.5 12 4 10.5 10.5 9 12 3Z"/></svg></div>
     <h3 id="onboardTitle">Welcome to Aethyro</h3>
-    <p id="onboardBody">You're powered by Claude Opus 5 — Anthropic's most capable AI. Start by typing any question below.</p>
+    <p id="onboardBody">You're powered by Claude Opus 5.5 — Anthropic's most capable AI. Start by typing any question below.</p>
     <button class="onboard-btn" id="onboardNext">Next →</button>
     <button class="onboard-skip" id="onboardSkip">Skip intro</button>
   </div>
@@ -2456,7 +2459,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     var ONBOARD_KEY='aethyro_onboarded_v1';
     var ICON_SVG='<svg viewBox="0 0 24 24" aria-hidden="true">';
     var steps=[
-      {icon:ICON_SVG+'<path fill="currentColor" d="M12 3 13.5 9 20 10.5 13.5 12 12 18 10.5 12 4 10.5 10.5 9 12 3Z"/></svg>',title:'Welcome to Aethyro',body:'You\'re powered by Claude Opus 5 — Anthropic\'s most capable AI. Start by typing any question below.'},
+      {icon:ICON_SVG+'<path fill="currentColor" d="M12 3 13.5 9 20 10.5 13.5 12 12 18 10.5 12 4 10.5 10.5 9 12 3Z"/></svg>',title:'Welcome to Aethyro',body:'You\'re powered by Claude Opus 5.5 — Anthropic\'s most capable AI. Start by typing any question below.'},
       {icon:ICON_SVG+'<path fill="currentColor" d="M13 2 4.5 13.5H11L10 22l9-12h-6.5L13 2z"/></svg>',title:'Intelligence Panel',body:'Tap "Intelligence" in the sidebar to run agentic tasks, upload documents to your knowledge base, set up scheduled routines, and connect GitHub or Notion.'},
       {icon:ICON_SVG+'<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8A3.5 3.5 0 0 0 7 19a3 3 0 0 0 5-2V6a3 3 0 0 0-3-2Z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5.8A3.5 3.5 0 0 1 17 19a3 3 0 0 1-5-2"/></svg>',title:'Semantic Memory',body:'Aethyro remembers context across conversations using vector embeddings — no need to re-explain yourself each time you open a chat.'},
     ];
@@ -2511,6 +2514,25 @@ I often need help with: client quotes, contract review, business Instagram posts
         $('routineSchedule').focus();
       });
     });
+    /* Pre-run cost estimates — ranges, never a fake exact quote.
+       Tasks bill once on actual tokens (planning + up to 6 steps + synthesis),
+       so the per-step range is the honest unit. Routines are a single call
+       capped at 1500 output tokens, so their range is tighter. */
+    var EST_PER_STEP = { haiku: '1–3', sonnet: '4–15', opus: '15–50' };
+    var EST_PER_RUN = { haiku: '1–2', sonnet: '1–4', opus: '2–13' };
+    function updateTaskEstimate(){
+      var el=$('taskEstimate'); if(!el) return;
+      var m=$('taskModel') ? $('taskModel').value : 'sonnet';
+      el.textContent='Estimate: ~'+EST_PER_STEP[m]+' credits per step (up to 6 steps + planning/synthesis). Billed on actual tokens — a short task costs far less.';
+    }
+    function updateRoutineEstimate(){
+      var el=$('routineEstimate'); if(!el) return;
+      var m=$('routineModel') ? $('routineModel').value : 'haiku';
+      el.textContent='Estimate per run: ~'+EST_PER_RUN[m]+' credits (single call, up to 1500 output tokens). Billed on actual tokens.';
+    }
+    if($('taskModel')) $('taskModel').addEventListener('change', updateTaskEstimate);
+    if($('routineModel')) $('routineModel').addEventListener('change', updateRoutineEstimate);
+    updateTaskEstimate(); updateRoutineEstimate();
     /* Tasks form */
     $('taskForm').addEventListener('submit',async function(e){
       e.preventDefault();
