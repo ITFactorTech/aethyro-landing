@@ -13,16 +13,12 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css"/>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/core.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/javascript.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/python.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/typescript.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/bash.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/sql.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/rust.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/css.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/xml.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/languages/json.min.js"></script>
+<!-- highlight.js: the browser bundle from the official cdn-assets package. The previous lib/core.min.js +
+     lib/languages/*.min.js files are CommonJS (module.exports), so loading them as plain script tags never
+     defined window.hljs -- code blocks silently got no syntax highlighting and every load logged
+     "module is not defined" errors. This bundle defines the global and includes javascript, typescript, python,
+     bash, sql, rust, css, xml and json among its common languages. -->
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
 <script>document.addEventListener('DOMContentLoaded',function(){if(window.hljs)hljs.configure({ignoreUnescapedHTML:true});});</script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BE319Z71PD"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-BE319Z71PD');</script>
@@ -195,7 +191,10 @@
   .msg-row.assistant{position:relative}
   .msg-copy-btn{display:none;position:absolute;bottom:-.1rem;right:.4rem;background:rgba(0,0,0,.55);border:1px solid var(--b2);border-radius:6px;color:var(--t3);cursor:pointer;padding:.28rem .45rem;line-height:1;transition:all .15s;backdrop-filter:blur(4px)}
   .msg-row.assistant:hover .msg-copy-btn{display:flex;align-items:center}
-  .msg-cost{margin-top:.3rem;padding:0 .2rem;display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.66rem;color:var(--t3);opacity:0;transform:translateY(-2px);transition:opacity .25s,transform .25s}
+  /* Right padding reserves the gutter the hover-revealed .msg-copy-btn (absolutely positioned at the row's
+     bottom-right) occupies. On a short reply the cost line is the widest thing in the row, so without this
+     the copy button sat on top of the "Receipt" link and swallowed clicks aimed at it. */
+  .msg-cost{margin-top:.3rem;padding:0 2.6rem 0 .2rem;display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.66rem;color:var(--t3);opacity:0;transform:translateY(-2px);transition:opacity .25s,transform .25s}
   .msg-cost.show{opacity:1;transform:none}
   .msg-cost .mc-credits{color:var(--orange,#ff4d00);font-weight:700}
   .msg-cost .mc-detail{color:var(--t3)}
@@ -2802,7 +2801,11 @@ I often need help with: client quotes, contract review, business Instagram posts
   async function loadRoutines(){
     var list=$('routineList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
-    var r=await supabase.from('user_routines').select('*').order('created_at',{ascending:false}).limit(20);
+    /* Own routines only: routines_public_read also lets every signed-in user SELECT other users' public routines,
+       so an unfiltered select('*') listed the seeded community templates here as if they were this user's own
+       (with owner-only controls that silently no-op under RLS, and a "Routine complete" toast on a run that
+       run-routines ignores). Community routines are rendered separately by loadCommunityRoutines(). */
+    var r=await supabase.from('user_routines').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(20);
     populateChainSelect(r.data||[]);
     if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="font-size:1.8rem;margin-bottom:.5rem">⏰</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No routines yet</div><div>Schedule a recurring AI task above — daily briefings, weekly reports, hourly data checks, and more.</div></div>'; return; }
     list.innerHTML='';
@@ -3018,7 +3021,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     var results=await Promise.all([
       supabase.from('agent_tasks').select('id',{count:'exact',head:true}),
       supabase.from('user_documents').select('id',{count:'exact',head:true}),
-      supabase.from('user_routines').select('id',{count:'exact',head:true}).eq('enabled',true),
+      supabase.from('user_routines').select('id',{count:'exact',head:true}).eq('user_id',session.user.id).eq('enabled',true),
       supabase.from('memory_embeddings').select('id',{count:'exact',head:true})
     ]);
     var t=results[0],d=results[1],r=results[2],m=results[3];
