@@ -260,6 +260,37 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **Found 2026-11-02, `site-guardian` daily sweep (`oracle`) — a new signup-
+  bonus-farming bug class, distinct from every prior domain-based cluster:
+  Gmail's own dot-insensitivity used to re-claim the 200-credit grant
+  against a single real inbox.** `g.i.ov.ann.ibarret.th.d.f@gmail.com`,
+  `gi.o.v.a.n.n.ib.a.rre.tt.hd.f@gmail.com`,
+  `g.io.vannib.ar.r.et.t.hdf@gmail.com`,
+  `gio.v.ann.i.ba.r.r.e.t.t.h.d.f@gmail.com`,
+  `g.i.ov.a.n.n.ibarr.e.t.t.hd.f@gmail.com`, and
+  `g.iovan.ni.bar.r.etthd.f@gmail.com` are 6 distinct `auth.users` rows,
+  each collecting its own 200-credit signup bonus, but Gmail ignores dots
+  in local-parts so all 6 deliver to the exact same real inbox
+  (`giovannibarretthdf@gmail.com`). Created within an ~18-hour window
+  (2026-11-01 10:43 UTC → 2026-11-02 04:34 UTC). 5 of the 6 are dormant,
+  near-full-balance (198-200cr) farm accounts; the first-created one has
+  31 real conversations/52 messages and is drawn down to 80cr — presumably
+  the same real person's actual working account, with the other 5 claimed
+  purely for the free grant. Zero `referral_events` rows on any of the 6 —
+  this isn't a referral exploit, just repeat per-account signup-bonus
+  claiming. This exact shape was flagged as a possible-but-below-threshold
+  signal in the 2026-11-02 `growth` entry below (n=2 that day); it has now
+  recurred and grown to n=6, crossing this project's own evidence bar.
+  **Not acted on** — unlike every prior cluster (a disposable-domain
+  blocklist), the correct mechanical fix here would be a dot-normalization
+  check on Gmail addresses at signup, which is a real design/policy
+  decision (whether it's worth the false-positive risk, whether it should
+  block or just flag) for `warden`/the user, not `oracle`'s to make
+  unilaterally per this sweep's own fraud-adjudication boundary. Real
+  exposure so far is small (~1,000 credits across the 5 dormant accounts).
+  Worth a dedicated `warden` pass to confirm this isn't a one-off and
+  decide whether to build the dot-normalization check.
+
 - **Found 2026-11-02, `ledger`'s second real run — a real pricing-model
   mismatch in the 2026-11-01 run's COGS calc, a correction to a `warden`-
   documented farming cluster's "zero usage" claim, and a corrected (but
@@ -1136,6 +1167,65 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-11-02** — **`site-guardian` daily sweep (cutoff 2026-11-01T07:42:14Z).
+  Found and fixed a real, previously-undocumented bug via the serialized
+  24h error-log scan: `drip-engagement`'s cron fires one `net.http_post`
+  per eligible user in a single SQL statement, and pg_net dispatches them
+  near-simultaneously — far faster than Resend's real 10 req/sec
+  account-wide limit.** Confirmed live: 71 of ~85 `send-welcome-email`
+  calls in a single 10-second window (2026-11-01T09:05:02-09:05:12, exactly
+  `drip-engagement`'s `5 9 * * *` schedule) failed with a genuine Resend
+  429 (`"Too many requests. You can only make 10 requests per second."`).
+  Not a permanent loss on its own — `email_drip_state.engagement_sent_at`
+  is only written on a successful send, so a failed one is retried the
+  next day's run — but a compounding backlog as signups grow: 93 users
+  were stuck with `engagement_sent_at` still null at the time this was
+  found, this project's day-2 "pick up where you left off" email (the one
+  the 2026-10-08 entry below built specifically to improve return-visit
+  rate) silently failing to reach the majority of a growing daily cohort.
+  Fixed in `send-welcome-email`'s `sendEmail()` (now v4): retries up to 5
+  times on a 429 specifically (any other error still fails immediately,
+  unchanged), honoring Resend's own `Retry-After` header when present,
+  otherwise backing off 500ms·2^attempt capped at 3s — worst case ~10.5s
+  total, comfortably enough to drain a burst against the real 10 req/sec
+  cap. Deliberately doesn't touch the cron dispatch itself — making each
+  edge-function invocation resilient to the burst is a smaller, safer
+  change than redesigning how `drip-engagement`/`drip-reengagement` queue
+  work. Deployed live (v42, `verify_jwt:false` passed explicit, matching
+  the live setting — confirmed via `get_edge_function` before deploying),
+  byte-diff-verified clean against local disk. **Verified live with real
+  concurrent traffic against the admin's own inbox** (12 concurrent
+  `type:"welcome"` calls to `leer4030@gmail.com`, the same "admin account,
+  synthetic data" pattern this file already uses for exactly this kind of
+  test): all 12 returned `200` with zero regression, two of them visibly
+  slower (1.2s/2.8s vs. the ~0.7-1.0s baseline) — consistent with the
+  retry/backoff path engaging, though this specific burst (12 concurrent
+  curl processes, which stagger more than pg_net's internal dispatch)
+  didn't itself reproduce a real Resend 429 to directly observe the retry
+  firing — confirmed via `function_logs` that no error was logged for any
+  of the 12. Confidence instead rests on the real production evidence (71
+  genuine 429s) plus the fix being a small, deterministic, bounded retry
+  loop reviewed directly, not an inference from a forced reproduction.
+  New check added: `.claude/skills/site-guardian/checks/07-cron-dispatched-
+  email-burst-rate-limit.md` — this is a repeatable pattern (any future
+  cron that fires one `net.http_post` per matching row has the same
+  burst-vs-provider-rate-limit risk), worth checking again if a similar
+  job is ever added.
+  **Specialist dispatch** (all 5, cutoff 2026-11-01T07:42:14Z):
+  `backend-reviewer` (sweep mode) — quiet window, only 3 agent_missions-
+  CHECK-constraint migrations + a comment-only `run-agent-task` sync since
+  the cutoff, all re-verified clean live. `site-guardian-drift` — fully
+  clean: 106/106 migrations exact match, all 26 committed functions
+  (including both shared modules) byte-identical to live, all `verify_jwt`
+  settings matching `config.toml`. `oracle` — fresh numbers (287 total
+  users, 87 real 7-day signups excluding known farming domains, 51.7%
+  7-day activation, 60.0% all-time activation excluding farming, still 11
+  all-time returners, still $0 lifetime revenue), zero pricing/content
+  drift anywhere, and the new Gmail dot-variant farming signal written up
+  in Pending above. See `agent_missions`/this sweep's PR for
+  `site-guardian-exploit` and `probe`'s own reports.
+  Logged to `agent_missions` (`division:'sentinel'`).
 
 - **2026-11-02** — **`growth`'s first full end-to-end run through its own
   skill's weekly process** (the 2026-11-01 run only ever produced a single

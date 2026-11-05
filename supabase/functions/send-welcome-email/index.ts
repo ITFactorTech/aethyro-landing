@@ -10,6 +10,19 @@
 // usable title, falling back to the original generic copy otherwise. See
 // `engagementHtml()`. Prompted by a real data finding: of 46 users, only 3
 // ever returned on a second day.
+// v4 — 2026-11-02 (site-guardian sweep): `drip-engagement`'s cron job fires
+// one `net.http_post` per eligible user in one SQL statement, which pg_net
+// dispatches near-simultaneously (confirmed live: 71 of ~85 calls in a
+// single 10-second window all failed with a real Resend 429 at
+// 2026-11-02's sweep). Resend's account-wide limit is 10 req/sec; this
+// project's growing daily cohort routinely exceeds it. Not a permanent
+// loss on its own (email_drip_state is only written on success, so a
+// failed send retries the next day) but a compounding backlog as signups
+// grow -- 93 users were stuck with engagement_sent_at still null at the
+// time this was found. Fixed with a bounded retry+backoff in sendEmail()
+// for the 429 case specifically, honoring Resend's own Retry-After header
+// when present. This doesn't touch the cron dispatch itself -- it makes
+// each individual edge-function invocation resilient to the burst instead.
 // Called by a Postgres trigger (via pg_net) when a new row appears in auth.users.
 // Sends a 3-step drip:
 //   day 0 — welcome + starter prompts
@@ -40,20 +53,38 @@ const RESEND_KEY = Deno.env.get("RESEND_API_KEY")!;
 const FROM = "Aethyro <hello@aethyro.com>";
 const BASE_URL = "https://aethyro.com";
 
+// Retries only on 429 (rate limit) -- any other error fails immediately,
+// unchanged from before. Honors Resend's own Retry-After header (seconds)
+// when present; otherwise backs off 500ms * 2^attempt, capped at 3s. Worst
+// case across all retries is ~10.5s, comfortably enough to drain a burst
+// against Resend's real 10 req/sec account limit.
+const MAX_RESEND_RETRIES = 5;
 async function sendEmail(to: string, subject: string, html: string) {
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${RESEND_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from: FROM, to, subject, html }),
-  });
-  if (!res.ok) {
+  for (let attempt = 0; attempt <= MAX_RESEND_RETRIES; attempt++) {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${RESEND_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from: FROM, to, subject, html }),
+    });
+    if (res.ok) return res.json();
+    if (res.status === 429 && attempt < MAX_RESEND_RETRIES) {
+      await res.text(); // drain body before retrying
+      const retryAfterHeader = res.headers.get("Retry-After");
+      const retryAfterMs = retryAfterHeader ? parseFloat(retryAfterHeader) * 1000 : NaN;
+      const backoffMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0
+        ? retryAfterMs
+        : Math.min(3000, 500 * 2 ** attempt);
+      await new Promise((r) => setTimeout(r, backoffMs));
+      continue;
+    }
     const err = await res.text();
     throw new Error(`Resend error ${res.status}: ${err}`);
   }
-  return res.json();
+  // Unreachable (the loop above always returns or throws), but keeps TS happy.
+  throw new Error("sendEmail: exhausted retries");
 }
 
 function welcomeHtml(email: string): string {
