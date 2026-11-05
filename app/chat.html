@@ -2829,8 +2829,8 @@ I often need help with: client quotes, contract review, business Instagram posts
       var lastRun=rt.last_run_at?timeAgo(new Date(rt.last_run_at)):'Never run';
       var runLog=runLogByRoutine[rt.id]||[];
       var lastAttempt=runLog[0];
-      var skipBadge=(lastAttempt&&lastAttempt.status==='skipped_no_credits')
-        ?'<div style="display:flex;align-items:center;gap:.35rem;margin-top:.3rem;font-size:.72rem;color:#f5a524"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>Last run skipped — out of credits</div>'
+      var skipBadge=(lastAttempt&&(lastAttempt.status==='skipped_no_credits'||lastAttempt.status==='skipped_monthly_cap'))
+        ?'<div style="display:flex;align-items:center;gap:.35rem;margin-top:.3rem;font-size:.72rem;color:#f5a524"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>Last run skipped — '+(lastAttempt.status==='skipped_monthly_cap'?'monthly spend cap reached':'out of credits')+'</div>'
         :'';
       var nextRunStr='';
       if(rt.next_run_at){
@@ -2856,7 +2856,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       if(runLog.length){
         historyList.innerHTML=runLog.map(function(row){
           var icon=row.status==='completed'?'<span style="color:var(--green)">✓</span>':row.status==='error'?'<span style="color:#f87171">✗</span>':'<span style="color:#f5a524">⚠</span>';
-          var label=row.status==='completed'?'Ran':row.status==='error'?'Error':'Skipped — no credits';
+          var label=row.status==='completed'?'Ran':row.status==='error'?'Error':row.status==='skipped_monthly_cap'?'Skipped — monthly cap reached':'Skipped — no credits';
           return '<div style="display:flex;gap:.4rem;align-items:baseline;font-size:.72rem;color:var(--t3);padding:.2rem 0;border-bottom:1px solid var(--b2)">'+icon+'<span style="color:var(--text)">'+label+'</span><span style="margin-left:auto">'+timeAgo(new Date(row.ran_at))+'</span></div>';
         }).join('');
       } else {

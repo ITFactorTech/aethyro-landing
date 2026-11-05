@@ -191,12 +191,13 @@ serve(async (req) => {
             next_run_at:  nextCronDate(routine.schedule).toISOString(),
             last_result:  `⚠️ Skipped — monthly spend cap reached (${spent} of ${routineProfile.monthly_spend_cap_credits} credits this month).`,
           }).eq("id", routine.id);
-          await supaAdmin.from("routine_run_log").insert({
+          const { error: capLogErr } = await supaAdmin.from("routine_run_log").insert({
             routine_id: routine.id,
             user_id:    routine.user_id,
             status:     "skipped_monthly_cap",
             detail:     "Monthly spend cap reached",
           });
+          if (capLogErr) console.error("run-routines: routine_run_log insert failed", capLogErr.message);
           results.push({ id: routine.id, name: routine.name, status: "skipped_monthly_cap" });
           continue;
         }
