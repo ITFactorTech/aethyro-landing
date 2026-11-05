@@ -36,3 +36,27 @@ the `run-routines` call attempted the send.
 
 ## History
 First run: see this skill's build PR (2026-11-02).
+
+**2026-11-05 sweep — steps 1-5 PASSED (production, UI-driven), plus the
+monthly-cap skip path (new in PR #211) and two bugs found.** Created "Probe B"
+then "Probe A" chained to B via the form's "Then run" select; "Run now" on A →
+`run-routines` 200 `ran:1`, A's reply `ALPHA`, B ran automatically with B's reply
+"The previous step produced the word ALPHA" (chain context reached the model);
+`credit_ledger` shows two `-1 reason='routine'` rows, `routine_run_log` two
+`completed` rows, History shows "✓ Ran". Self-chain → `A routine cannot chain to
+itself`; B→A cycle → `Chaining this routine here would create a cycle`; both
+rejected with the real A→B link untouched. Forced balance 0 with `Email: on`:
+"Run now" → `skipped_no_credits`, card shows "Last run skipped — out of credits"
+(the notification email itself was not verified — `@example.com` recipient).
+Restored balance and set `profiles.monthly_spend_cap_credits = 1`: "Run now" →
+`skipped_monthly_cap`, card shows "Last run skipped — monthly spend cap reached",
+`routine_run_log` row with that status (the status CHECK constraint now allows
+it, migration `20261105150000`). **Bugs found:** (1) "Your routines" listed the
+12 community templates owned by another user for an account with zero routines
+(unfiltered `select('*')` + `routines_public_read`); "Run now" on one toasted
+"Routine complete" while the server returned `{"ran":0}` — fix in draft PR
+#216. (2) The "Run now" toast says "Routine complete" even when the run was
+skipped (no credits / cap) — reported, not fixed (copy/UX call).
+New pre-run text asserted: `#routineEstimate` ("~1–2 / 1–4 / 2–13 credits per run"
+for haiku/sonnet/opus) and the "If a run fires with no credits, it is skipped…"
+note; Tasks tab `#taskEstimate` ("~1–3 / 4–15 / 15–50 credits per step").

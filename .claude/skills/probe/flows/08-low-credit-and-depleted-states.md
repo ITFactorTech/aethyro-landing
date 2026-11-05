@@ -32,3 +32,26 @@ None flow-specific.
 
 ## History
 First run: see this skill's build PR (2026-11-02).
+
+**2026-11-05 sweep — all four gates PASSED (production, Playwright).**
+(1) Balance 25: the low-balance banner shows for `opus`/`auto` ("Low balance
+( 25 credits) — an Opus reply can cost up to ~80 credits and may not complete")
+but not for `haiku` (threshold 10) or `sonnet` (threshold 15) — expected.
+(2) Fresh account, 200 credits, 0 messages, explicit Opus: the one-time modal
+fired (not the banner), "Cancel" kept the typed text, sent nothing and set the
+flag; "Switch to Sonnet & send" flipped the model button and billed 1 cr
+(`sonnet`); "Send with Opus anyway" billed 2 cr (`opus`) and a second Opus send in
+the same browser did **not** re-show the modal. (3) Two tabs, last 2 credits
+drained in tab 2 → its depleted bar showed, input disabled, depleted modal with
+"You've used 2 credits across 2 messages this session — the Starter pack is the
+smallest way to keep going right now." and Starter highlighted; tab 1 (still
+thinking it had credit) sent → server 402 `{"error":"No credits","balance":0}` →
+inline "You're out of credits. Buy credits" → depleted modal with its own
+session-usage line, Starter highlighted. (4) Cap set to 1 with 175 spent: next
+send → 402 `{"error":"Monthly cap reached","monthly_spend":175,"monthly_cap":1}`,
+inline "You've hit your monthly spend cap (175/1 credits this month). Raise or
+remove your cap →" linking `./dashboard.html#spendCapPanel`, no depleted
+bar/modal, `credit_ledger` row count unchanged (14 → 14). Tip for forcing a real
+402 on the pre-send gate: use a second tab/context to drain the balance after
+the first page has loaded (a page loaded at balance 0 locks the input and never
+sends).

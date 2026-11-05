@@ -70,3 +70,19 @@ a full success path): immediate-send now correctly shows 2 rows, a real
 rendered cost badge (`"1 credit· 1,055 in / 5 out tokens · haikuReceipt"`),
 and the balance pill updating correctly. This flow's own expected
 outcome now holds end-to-end, not just at the API level.
+
+**2026-11-05 sweep — PASSED (in-browser, production; account provisioned by
+the sweep orchestrator, not created via the UI — a brand-new-signup-through-
+the-UI step was therefore not exercised).** Checked the pre-provisioned
+account's rows: exactly one `profiles`, one `referral_codes`, one
+`signup_bonus` (+200). Session injected into `localStorage`, `chat.html`
+driven: explicit Haiku / Sonnet / Opus sends each rendered a real reply and a
+cost badge (`1 credit · 1,025 in / 8 out tokens · haiku`, `1 credit · … ·
+sonnet`, `2 credits · … · opus`), the balance pill went 200 → 199 → 198 → 196,
+and `credit_ledger` matched row-for-row (`-1/-1/-2`, `metadata.provider:
+anthropic`, `metadata.model` = tier) with a signed receipt on each (5
+`generation_receipts` for 5 sends). Also verified the new homepage → chat
+carry-over (see flow 09) and the composer's pre-send estimate ("up to ~N
+credits": 2 / 13 / 62 / 62 (auto) / 13 (gpt) for a 59-char message on
+haiku / sonnet / opus / auto / gpt — matches `estimateWorstCaseCost()`; empty
+input clears it).
