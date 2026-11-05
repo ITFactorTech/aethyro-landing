@@ -260,6 +260,65 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **Found 2026-11-05, `site-guardian` sweep — `send-welcome-email` is an
+  unauthenticated email relay for its `welcome`/`engagement`/`reengagement`
+  types.** `verify_jwt` is `false` (it must be: pg_net and the auth trigger
+  call it), and the function does no caller authentication of its own. For
+  those three types it sends to whatever `email` the request body contains
+  and upserts `email_drip_state` for whatever `user_id` it contains.
+  Demonstrated live during the 11-02 sweep: a bare unauthenticated `curl -X
+  POST .../functions/v1/send-welcome-email -d '{"type":"welcome",
+  "user_id":"<admin id>","email":"leer4030@gmail.com"}'` returns `200` and
+  delivers (12 concurrent calls = 12 real emails to the admin's own inbox —
+  used deliberately as the safe test target). Anyone can therefore make
+  `hello@aethyro.com` send Aethyro-branded "Welcome / 200 free credits"
+  copy to any address, bounded only by Resend's rate limit — a
+  domain-reputation/spam-abuse risk. The body is fixed copy (not
+  attacker-controlled HTML) and the `winback` type added 2026-11-03 is
+  already safe by design (it derives the email from `user_id` and
+  re-checks eligibility), so this is the older types only, and a
+  `verify_jwt:true` flip would not help — the public anon key (which the
+  crons and trigger send as their bearer) would still pass the gateway.
+  **Proposed fix, not built** (behavior change to every drip type, wants
+  real-signup verification and a human OK): derive the recipient from
+  `user_id` via `auth.admin.getUserById` for all types exactly like
+  `winback` already does, validate the UUID, and re-check each type's
+  eligibility server-side so a forged call can at most send the one
+  legitimate email a real user was due. Worth adding to
+  `site-guardian-exploit`'s roster once fixed (probe with the admin's own
+  address only).
+
+- **Found 2026-11-02, `site-guardian` daily sweep (`oracle`) — a new signup-
+  bonus-farming bug class, distinct from every prior domain-based cluster:
+  Gmail's own dot-insensitivity used to re-claim the 200-credit grant
+  against a single real inbox.** `g.i.ov.ann.ibarret.th.d.f@gmail.com`,
+  `gi.o.v.a.n.n.ib.a.rre.tt.hd.f@gmail.com`,
+  `g.io.vannib.ar.r.et.t.hdf@gmail.com`,
+  `gio.v.ann.i.ba.r.r.e.t.t.h.d.f@gmail.com`,
+  `g.i.ov.a.n.n.ibarr.e.t.t.hd.f@gmail.com`, and
+  `g.iovan.ni.bar.r.etthd.f@gmail.com` are 6 distinct `auth.users` rows,
+  each collecting its own 200-credit signup bonus, but Gmail ignores dots
+  in local-parts so all 6 deliver to the exact same real inbox
+  (`giovannibarretthdf@gmail.com`). Created within an ~18-hour window
+  (2026-11-01 10:43 UTC → 2026-11-02 04:34 UTC). 5 of the 6 are dormant,
+  near-full-balance (198-200cr) farm accounts; the first-created one has
+  31 real conversations/52 messages and is drawn down to 80cr — presumably
+  the same real person's actual working account, with the other 5 claimed
+  purely for the free grant. Zero `referral_events` rows on any of the 6 —
+  this isn't a referral exploit, just repeat per-account signup-bonus
+  claiming. This exact shape was flagged as a possible-but-below-threshold
+  signal in the 2026-11-02 `growth` entry below (n=2 that day); it has now
+  recurred and grown to n=6, crossing this project's own evidence bar.
+  **Not acted on** — unlike every prior cluster (a disposable-domain
+  blocklist), the correct mechanical fix here would be a dot-normalization
+  check on Gmail addresses at signup, which is a real design/policy
+  decision (whether it's worth the false-positive risk, whether it should
+  block or just flag) for `warden`/the user, not `oracle`'s to make
+  unilaterally per this sweep's own fraud-adjudication boundary. Real
+  exposure so far is small (~1,000 credits across the 5 dormant accounts).
+  Worth a dedicated `warden` pass to confirm this isn't a one-off and
+  decide whether to build the dot-normalization check.
+
 - **Found 2026-11-02, `ledger`'s second real run — a real pricing-model
   mismatch in the 2026-11-01 run's COGS calc, a correction to a `warden`-
   documented farming cluster's "zero usage" claim, and a corrected (but
@@ -1136,6 +1195,73 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-11-05** — **`site-guardian` sweep (first fired 2026-11-02; three
+  more daily firings queued behind it while this session was restarted
+  repeatedly, so this is the consolidated 11-02 → 11-05 sweep).** One real
+  bug found and fixed; one real exposure and one new abuse signal
+  escalated; one process failure cleaned up.
+  **Fixed — `send-welcome-email` loses most of a drip batch to Resend's
+  rate limit.** The serialized 24h error-log scan on 11-02 found 71 of ~85
+  `send-welcome-email` calls failing in one 10-second window at
+  2026-11-01T09:05:02Z — exactly `drip-engagement`'s `5 9 * * *` fire time.
+  Root cause: the cron is one SQL statement doing
+  `SELECT net.http_post(...) FROM <eligible users>`, and pg_net dispatches
+  every row near-simultaneously, far past Resend's real 10 req/sec
+  account-wide limit (confirmed from the function's own logs: `Resend error
+  429 ... rate_limit_exceeded`). Not a permanent loss on its own —
+  `email_drip_state.engagement_sent_at` is only written after a successful
+  send, so a failed one re-queues for the next day — but a compounding
+  backlog: 93 users were stuck with `engagement_sent_at` still null when
+  found (the day-2 "pick up where you left off" email the 2026-10-08 entry
+  built to lift return rate was silently not reaching most of a growing
+  daily cohort). The same shape applies to `drip-reengagement` and, since
+  2026-11-03, the new `drip-winback` cron (one-time first run covers up to
+  30 days of users at once). Fix in `sendEmail()` (now v5): up to 5 retries
+  on a 429 only (every other error still fails immediately), honoring
+  Resend's `Retry-After` when present, else 500ms·2^attempt capped at 3s
+  (~10.5s worst case — enough to drain a burst at the real cap). The cron
+  dispatch is deliberately untouched. Verified live with 12 concurrent calls
+  to the admin's own inbox (all `200`, none regressed) — that burst
+  (curl-process-staggered) did **not** itself reproduce a real 429, so the
+  retry branch is verified by the production evidence plus direct code
+  review rather than a forced reproduction; say so plainly if it's ever
+  questioned. New check: `.claude/skills/site-guardian/checks/07-cron-
+  dispatched-email-burst-rate-limit.md`.
+  **Process lesson, confirmed the hard way**: the first v42 deploy of this
+  fix went live out-of-band on 11-02 and was **silently erased** when CI
+  (`deploy-supabase.yml`, now live and redeploying every function from
+  `main` on any `supabase/**` push — entrypoints now read
+  `file:///home/runner/work/...`) redeployed `send-welcome-email` v46 from
+  `main` after PR #210's winback merge. Same casualty pattern the
+  2026-10-15 canary entry documents: with CI live, **a live-only deploy is
+  now a temporary demo, not a fix — land it via PR first.** The fix is
+  re-applied here on top of PR #210's version.
+  **Process failure, cleaned up**: `test-admin-setup` was left live and
+  non-inert (working `create`/`delete`/`set_balance`, gated only by a
+  hardcoded `X-Internal-Key`) from 2026-11-02 until 2026-11-05 — two
+  specialists (`site-guardian-exploit`, `probe`) redeployed over each other
+  mid-sweep, `probe` then died on an account-level weekly rate limit before
+  its cleanup, and nothing restubbed it. Found on resume, restubbed to the
+  inert 410 stub (v234, `verify_jwt:true`, confirmed via live curl), and 6
+  orphaned `probe-*@example.com` throwaway accounts deleted (zero orphaned
+  rows across profiles/credit_ledger/referral_codes/conversations/
+  user_routines/scheduled_emails/user_documents). **For future sweeps: the
+  orchestrator now creates every specialist's throwaway accounts itself in
+  one short helper deployment, restubs immediately, and hands out
+  credentials — specialists never redeploy `test-admin-setup`** (cleanup is
+  a plain SQL `delete from auth.users`, which cascades correctly).
+  **Specialists (11-02 pass)**: `backend-reviewer` — quiet window (3
+  `agent_missions` CHECK migrations + a comment sync), clean. `drift` —
+  106/106 migrations, 26/26 functions byte-identical, 26/26 `verify_jwt`,
+  clean. `exploit` — all 7 roster items still correctly blocked (negative
+  balance across all four billed surfaces, cross-user RPCs, 9 locked tables,
+  webhook replay, referral self/duplicate, chain cycles, raw Stripe grep).
+  `oracle` — zero pricing drift; 287 users, 87 real 7-day signups, 51.7%
+  7-day activation, 11 all-time returners, $0 revenue; new Gmail
+  dot-variant farming signal (see Pending). `probe` — did not complete
+  (rate limit); re-run in the consolidated pass below.
+  Logged to `agent_missions` (`division:'sentinel'`).
 
 - **2026-11-03** — **Day-6 winback email (5th `pg_cron` job, `drip-winback`, `25 9 * * *`).** Targets the real retention leak: users who sent >=1 message but no user message on any later day, 6-30 days after signup. New `winback` type in `send-welcome-email` (v4): ignores body `email` and derives it from `user_id` via `auth.admin.getUserById` (UUID-validated), re-checks eligibility server-side and fails closed, deep-links their latest titled conversation (`?c=`), shows personal credit balance only for non-team users with >=20 credits, pitches Routines as the habit loop. Stamps `email_drip_state.winback_sent_at` (new column) whether or not it sends, so the cron never re-selects a user. Tested locally against a mocked Supabase/Resend (eligible → sent to the real address, not the body's; returned → not sent, stamped; already stamped → no-op). Measure: 2nd-day returners in `oracle`'s counts, conversation `?c=` reopenings.
 
