@@ -1,3 +1,29 @@
+// run-routines v5 — real web_search tool access, closing a real customer
+// -impact bug `growth` found 2026-11-02 (CLAUDE.md Pending, PR #206): this
+// function had zero tool access at all, unlike chat/index.ts's proven
+// Tavily-backed web_search -- a "Daily Briefing"-shaped routine prompt
+// reliably produced stale/recycled "news" dressed up as current, because
+// the model had no live data source and just pattern-completed from
+// training. Mirrors chat's tool shape deliberately closely (same Tavily
+// /search endpoint, same api_key-in-body auth -- NOT a Bearer header,
+// which this project's Tavily key rejects for /search specifically -- see
+// CLAUDE.md's TAVILY_API_KEY history), gated on TAVILY_API_KEY same as
+// chat. Scoped to web_search only -- no fetch_url/crawl_site/GitHub/
+// Notion: this function has no per-user integration-token plumbing the
+// way chat does, and the one real bug this closes only ever needed
+// current web results, not page-reading or crawling. The tool is offered
+// unconditionally on every routine (same as chat always offering
+// web_search when TAVILY_API_KEY is set) rather than only on prompts that
+// look news-dependent -- simpler, and the model itself decides whether to
+// actually call it via tool_choice:"auto", so a routine that doesn't need
+// search just never calls it (verified live, see CLAUDE.md). Billing is
+// unaffected structurally: cost was already computed from real
+// msg.usage.input_tokens/output_tokens (never a hardcoded flat rate,
+// despite landing on the 1-credit floor for every real routine run so
+// far) -- a tool round's extra tokens are now summed across every
+// Anthropic call in the loop before the cost formula runs, so a
+// search-using routine is billed for the real extra tokens it consumes,
+// not silently undercharged.
 // run-routines v4 — visible missed-run history + a real notification on
 // skip, closing the trust gap real pre-launch feedback flagged: an
 // empty-balance skip previously only overwrote last_result with a
@@ -48,6 +74,7 @@ const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const TAVILY_API_KEY    = Deno.env.get("TAVILY_API_KEY");
 
 const MODEL_MAP: Record<string, string> = {
   haiku:  "claude-haiku-4-5-20251001",
@@ -59,6 +86,131 @@ const CREDIT_RATES: Record<string, { input: number; output: number }> = {
   sonnet: { input: 0.30,  output: 1.50 },
   opus:   { input: 1.50,  output: 7.50 },
 };
+
+// ── Web search (mirrors chat/index.ts's executeWebSearch exactly) ──────────
+// Tavily's /search endpoint, api_key in the JSON body -- NOT a Bearer
+// header, which this project's Tavily key rejects for /search specifically
+// (confirmed live, see CLAUDE.md's TAVILY_API_KEY history). Copied
+// deliberately close to verbatim from the proven chat implementation
+// rather than re-derived from Tavily's docs.
+async function executeWebSearch(query: string): Promise<string> {
+  if (!TAVILY_API_KEY) return "Search unavailable.";
+  try {
+    const resp = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query,
+        max_results: 5,
+        include_answer: true,
+        search_depth: "basic",
+      }),
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!resp.ok) return `Search failed (${resp.status}).`;
+    const data = await resp.json();
+    let out = "";
+    if (data.answer) out += `Summary: ${data.answer}\n\n`;
+    if (data.results?.length) {
+      out += "Sources:\n" + data.results.slice(0, 5).map(
+        (r: any, i: number) =>
+          `${i + 1}. ${r.title}\n   URL: ${r.url}\n   ${(r.content || "").slice(0, 400)}`
+      ).join("\n\n");
+    }
+    return out.slice(0, 8000) || "No results found.";
+  } catch {
+    return "Search timed out or failed.";
+  }
+}
+
+// Offered on every routine when TAVILY_API_KEY is set, same as chat always
+// offering web_search regardless of message content -- the model decides
+// whether to actually call it via tool_choice:"auto", so a routine whose
+// prompt doesn't need current info just never invokes it (verified live,
+// see CLAUDE.md). Scoped to web_search only -- see this file's v5 header
+// comment for why fetch_url/crawl_site/GitHub/Notion aren't included here.
+const TOOLS: Anthropic.Tool[] = TAVILY_API_KEY
+  ? [{
+      name: "web_search",
+      description: "Search the web for current, up-to-date information. Use proactively for questions about recent news, events, prices, scores, weather, release dates, or anything else where real documented data beats general reasoning. Answer from knowledge for timeless facts.",
+      input_schema: {
+        type: "object" as const,
+        properties: { query: { type: "string", description: "Concise, specific search query" } },
+        required: ["query"],
+      },
+    }]
+  : [];
+const MAX_TOOL_ROUNDS = 4;
+
+// Runs one routine's completion, looping through tool-use rounds (if
+// TOOLS is non-empty) exactly like chat's generateCompletion: the model
+// requests web_search, this calls Tavily, feeds the result back, and the
+// loop continues until the model produces a final text reply or
+// MAX_TOOL_ROUNDS is exhausted (in which case one last call, with no
+// tools, forces a text answer). Token usage is accumulated across every
+// call in the loop so the caller's cost computation reflects the real
+// total, including any tool round(s).
+async function runRoutineCompletion(
+  anthropic: Anthropic,
+  model: string,
+  promptText: string,
+): Promise<{ resultText: string; inputTokens: number; outputTokens: number }> {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let messages: any[] = [{ role: "user", content: promptText }];
+  const system = "You are Aethyro, a scheduled AI assistant. Produce a concise, useful result for the user's routine task. Use markdown. Be direct and actionable.";
+
+  if (TOOLS.length > 0) {
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const r = await anthropic.messages.create({
+        model,
+        max_tokens: 1500,
+        system,
+        messages,
+        tools: TOOLS,
+        tool_choice: { type: "auto" },
+      });
+      inputTokens += r.usage.input_tokens;
+      outputTokens += r.usage.output_tokens;
+
+      if (r.stop_reason !== "tool_use") {
+        const resultBlock = r.content.find((b) => b.type === "text") as any;
+        return { resultText: resultBlock?.text || "Routine completed.", inputTokens, outputTokens };
+      }
+
+      const toolResults: any[] = [];
+      for (const blk of r.content) {
+        if (blk.type !== "tool_use") continue;
+        let result = "Tool execution failed or not supported.";
+        try {
+          if (blk.name === "web_search") {
+            result = await executeWebSearch((blk.input as any).query || "");
+          }
+        } catch (e) {
+          result = `Tool error: ${(e as Error).message}`;
+        }
+        toolResults.push({ type: "tool_result", tool_use_id: blk.id, content: result });
+      }
+
+      messages = [...messages, { role: "assistant", content: r.content }, { role: "user", content: toolResults }];
+    }
+  }
+
+  // No tools configured, or MAX_TOOL_ROUNDS exhausted still requesting a
+  // tool: one final call with no tools forces a text reply, same fallback
+  // shape as chat's own tool loop.
+  const final = await anthropic.messages.create({
+    model,
+    max_tokens: 1500,
+    system,
+    messages,
+  });
+  inputTokens += final.usage.input_tokens;
+  outputTokens += final.usage.output_tokens;
+  const resultBlock = final.content.find((b) => b.type === "text") as any;
+  return { resultText: resultBlock?.text || "Routine completed.", inputTokens, outputTokens };
+}
 
 // Chained routines re-invoke this function internally after each successful
 // step (same Authorization: Bearer <service-role-key> pattern webhook-routine-
@@ -239,22 +391,17 @@ serve(async (req) => {
         ? `Context from the previous step in this routine chain:\n${chainContext}\n\n---\n\nYour task:\n${routine.prompt}`
         : routine.prompt;
 
-      const msg = await anthropic.messages.create({
-        model,
-        max_tokens: 1500,
-        system: "You are Aethyro, a scheduled AI assistant. Produce a concise, useful result for the user's routine task. Use markdown. Be direct and actionable.",
-        messages: [{ role: "user", content: promptText }],
-      });
+      const { resultText, inputTokens, outputTokens } = await runRoutineCompletion(anthropic, model, promptText);
 
-      const resultBlock = msg.content.find(b => b.type === "text") as any;
-      const resultText = resultBlock?.text || "Routine completed.";
-
-      // Bill credits
+      // Bill credits -- summed across every Anthropic call this run made
+      // (including any tool round), not just a single call's usage, so a
+      // search-using routine is billed for the real extra tokens it
+      // consumed.
       const cost = Math.max(
         1,
         Math.ceil(
-          (msg.usage.input_tokens  / 1000) * rates.input +
-          (msg.usage.output_tokens / 1000) * rates.output,
+          (inputTokens  / 1000) * rates.input +
+          (outputTokens / 1000) * rates.output,
         ),
       );
       const { error: ledgerErr } = await supaAdmin.from("credit_ledger").insert({

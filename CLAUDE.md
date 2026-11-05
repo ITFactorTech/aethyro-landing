@@ -961,7 +961,7 @@ it to the `?buy=` pattern instead.
   upgrades to Pro — at which point `check-leaked-password` is already
   written and ready to wire in as the Auth Hook.
 
-- **Found 2026-11-02 (`growth`, incidental — while sourcing a real routine
+~~- **Found 2026-11-02 (`growth`, incidental — while sourcing a real routine
   run as content for a growth draft) — the "Daily Briefing" quick-start
   routine template (added 2026-10-06, `#tryDailyBriefing`) reliably
   produces stale/recycled "news" presented as current, because
@@ -990,7 +990,7 @@ it to the `?buy=` pattern instead.
   unilaterally. Also worth remembering generally: this is why the real
   demo captured for this week's Tuesday build-in-public draft (see
   `recent-work-log`) deliberately used a different, non-news-dependent
-  routine prompt instead of this one.
+  routine prompt instead of this one.~~ — **fixed 2026-11-05**, see the recent-work-log entry "`run-routines` web_search" below.
 
 ## Decommissioned: pre-Cloud "AI Operating Platform" pages (2026-09-28)
 
@@ -1195,6 +1195,11 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-11-05** — **`run-routines` web_search (`codex`/Cole): closes the "Daily Briefing serves stale news" bug `growth` found 2026-11-02.**
+  `run-routines` (now v5) had no tool access at all, so a news-shaped routine prompt just pattern-completed from training data and presented months-old events as current. It now offers the same Tavily-backed `web_search` tool `chat` uses (same `/search` endpoint, `api_key` in the JSON body, gated on `TAVILY_API_KEY`), looped up to `MAX_TOOL_ROUNDS = 4` with `tool_choice:"auto"` so a routine that doesn't need current info never calls it. Billing now sums `input_tokens`/`output_tokens` across every Anthropic call in the loop before the unchanged credit formula runs, so a search-using routine is charged for the real extra tokens. Scoped to `web_search` only — no `fetch_url`/`crawl_site`/GitHub/Notion (no per-user token plumbing in this function). `app/chat.html` gained a one-line hint under the routine Prompt field.
+  **Verified live against real Anthropic + Tavily, not just by code review** — through a short-lived canary on the diagnostic helper that ran the new block verbatim (live `run-routines` was never touched; the helper was restubbed to the inert 410 and confirmed 401 at the gateway, v238): (1) a news-dependent briefing prompt made 2 real Tavily calls and returned a story that an independent search confirms is real and current (Xen's two grant-copy VM-escape CVEs credited to Claude, disclosed 2026-11-03; source "AI Weekly" matches aiweekly.co) — 3,441 in / 239 out tokens on Haiku; (2) a control prompt with no need for search ("haiku about autumn") made 0 Tavily calls and 1 Anthropic call (664 in / 36 out), so unneeded routines pay no search overhead; (3) the post-`MAX_TOOL_ROUNDS` fallback shape (messages containing `tool_use`/`tool_result` blocks sent with **no** `tools` param — the same shape `chat`'s own fallback has always used) is accepted by the live Anthropic API, so that edge case is not a latent 400. Billing arithmetic on the real run: 3.441×0.08 + 0.239×0.40 ≈ 0.37 credits → the existing 1-credit floor, i.e. no visible price change for typical Haiku routines.
+  **Not verified end to end**: the full `serve()` handler path (routine row → cap check → completion → ledger insert) with the candidate live — that runs for the first time when CI deploys this on merge (`deploy-supabase.yml` redeploys every function from `main`). The handler change is a drop-in replacement of one `anthropic.messages.create` call plus the two usage reads, so risk is low, but the first post-merge `routine_run_log`/`credit_ledger` rows for a real routine are the true confirmation. **Known residual, not addressed**: routines still run serially inside one `run-routines` invocation; a tool-using routine can take several round trips (observed ~8s for 2 searches), so many simultaneously-due tool-using routines could press the function's wall-clock limit — fine at today's handful of routines, worth revisiting if routine volume grows. The pre-run monthly-cap estimate from PR #211 still assumes a single call, so a capped user's worst-case overrun is now bounded by up to 5 calls instead of 1 (the cap itself only checks `spent >= cap`, so this is a small overshoot, not a bypass).
 
 - **2026-11-05** — **`site-guardian` sweep (first fired 2026-11-02; three
   more daily firings queued behind it while this session was restarted
