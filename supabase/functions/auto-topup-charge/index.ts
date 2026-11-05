@@ -39,13 +39,21 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "user_id required" }), { status: 400 });
 
   const { data: profile, error: profErr } = await supabase.from("profiles")
-    .select("stripe_customer_id, stripe_payment_method_id, auto_topup_enabled, auto_topup_pack, auto_topup_last_attempt_at, team_id")
+    .select("stripe_customer_id, stripe_payment_method_id, auto_topup_enabled, auto_topup_pack, auto_topup_last_attempt_at, team_id, monthly_spend_cap_credits")
     .eq("id", userId).single();
   if (profErr || !profile)
     return new Response(JSON.stringify({ skipped: "profile lookup failed" }));
 
   if (!profile.auto_topup_enabled || !profile.stripe_customer_id || !profile.stripe_payment_method_id)
     return new Response(JSON.stringify({ skipped: "not configured" }));
+
+  // Monthly spend cap: do not auto-charge a user who has already hit it.
+  if (typeof profile.monthly_spend_cap_credits === "number") {
+    const { data: spentSoFar } = await supabase.rpc("get_monthly_spend", { p_user_id: userId });
+    const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+    if (spent >= profile.monthly_spend_cap_credits)
+      return new Response(JSON.stringify({ skipped: "monthly spend cap reached" }));
+  }
 
   const pack = CREDIT_PACKS[profile.auto_topup_pack ?? ""];
   if (!pack)

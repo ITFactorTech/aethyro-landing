@@ -316,7 +316,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr><td>Monthly fee</td><td class="yes">None (pay-as-you-go)</td><td>$20 / month</td><td>$20 / month</td><td>$20 / month</td></tr>
+        <tr><td>Monthly fee</td><td class="yes">None (pay-as-you-go)</td><td>$20 / month</td><td>$20 / month ($17 / month annual)</td><td>$20 / month</td></tr>
         <tr><td>Rate limits</td><td class="yes">None — credit-based</td><td class="no">Hit frequently</td><td class="no">Hit frequently</td><td class="no">Hit frequently</td></tr>
         <tr><td>Document RAG</td><td class="yes">✓ full knowledge base</td><td>Limited uploads</td><td class="no">✗</td><td class="no">✗</td></tr>
         <tr><td>Agentic tasks</td><td class="yes">✓ multi-step agent</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
@@ -326,7 +326,7 @@
         <tr><td>Credits expire</td><td class="yes">✗ never</td><td>— N/A</td><td>— N/A</td><td>— N/A</td></tr>
       </tbody>
     </table>
-    <p style="text-align:center;margin-top:1rem;color:var(--t3);font-size:.75rem">*Model lineups change — checked Oct 2026.</p>
+    <p style="text-align:center;margin-top:1rem;color:var(--t3);font-size:.75rem">*Model lineups change — competitor prices checked Oct 2026; Claude Pro annual pricing verified Nov 4, 2026.</p>
     </div>
   </div>
 
@@ -366,9 +366,13 @@
 
     <div class="faq-item">
       <div class="faq-q">Is there a usage cap or rate limit?</div>
-      <div class="faq-a">No caps. Send as many messages as your credits allow, as fast as you want. The only limit is your credit balance.</div>
+      <div class="faq-a">Your credit balance is always the hard limit — you can never spend credits you do not have. On top of that, you can set an optional monthly spend cap in your dashboard (off by default): once this calendar month's spend reaches your cap, new chats are blocked until next month (or until you raise or remove the cap). The cap never charges you — it only stops new paid work.</div>
     </div>
 
+    <div class="faq-item">
+      <div class="faq-q">What happens if a scheduled routine fires with no credits?</div>
+      <div class="faq-a">It is skipped for that run — nothing is charged, the routine's next run stays scheduled, and its last result is recorded as “Skipped — no credits.” If you opted into email on result, you get that skip notice by email too. Top up and the routine runs normally at its next scheduled time; nothing queues up in the meantime.</div>
+    </div>
     <div class="faq-item">
       <div class="faq-q">Can I get a refund?</div>
       <div class="faq-a">If you've bought credits and haven't used them, reach out within 7 days and we'll make it right. Email <a href="mailto:leer4030@gmail.com" style="color:var(--cyan)">leer4030@gmail.com</a>.</div>

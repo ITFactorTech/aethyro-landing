@@ -253,7 +253,17 @@ serve(async (req) => {
   }
 
   const { data: profile } = await supaAdmin
-    .from("profiles").select("team_id").eq("id", keyRow.user_id).single();
+    .from("profiles").select("team_id, monthly_spend_cap_credits").eq("id", keyRow.user_id).single();
+
+  // Monthly spend cap (opt-in, NULL = off; chat already gates this way).
+  // Uses the existing get_monthly_spend RPC — no new migration.
+  if (typeof profile?.monthly_spend_cap_credits === "number") {
+    const { data: spentSoFar } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: keyRow.user_id });
+    const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+    if (spent >= profile.monthly_spend_cap_credits) {
+      return json({ error: "Monthly cap reached", monthly_spend: spent, monthly_cap: profile.monthly_spend_cap_credits }, 402);
+    }
+  }
 
   const streamRequested = body?.stream === true;
 
