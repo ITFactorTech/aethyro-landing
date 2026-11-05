@@ -130,6 +130,31 @@ this is a sweep dispatch (not reviewing one specific PR).
   rather than overwriting it, and if you must proceed anyway, restore
   whatever source you actually found (not blindly the inert stub) if your
   own use turns out to be the thing that got interrupted.
+  **It collided a third time on 2026-11-02, and that one did real damage**:
+  `site-guardian-exploit` and `probe` redeployed over each other, `probe`
+  then died on an account-level rate limit before cleaning up, and nobody
+  restubbed — `test-admin-setup` sat live with working admin
+  create/delete/set_balance actions (gated only by a hardcoded key) for
+  three days, plus 6 orphaned `probe-*@example.com` accounts. "Check live
+  source first, then wait" is not enough once there are three specialists.
+  **New rule, from that incident: the orchestrator provisions ALL
+  throwaway accounts.** Before dispatching, deploy the helper once,
+  create every account the specialists will need (e.g. 2 for exploit,
+  ~6 for probe, 2 for your own smoke test) in one short window, restub to
+  the inert 410 immediately, and hand each specialist its own
+  credentials/user ids in its brief. Specialists must **never** redeploy
+  `test-admin-setup` (tell them so explicitly, in the brief — this
+  overrides any older instruction in their own SKILL.md). Balance changes
+  are a plain `insert into credit_ledger` via `execute_sql`; cleanup is a
+  plain `delete from auth.users where id in (...)` (cascades correctly) —
+  neither needs the helper. After every sweep, confirm
+  `get_edge_function test-admin-setup` is the inert stub and that no
+  `*@example.com` accounts from the sweep remain.
+  **CI is live now (2026-11-04+): never fix anything by deploying it live
+  and stopping there.** `deploy-supabase.yml` redeploys every function from
+  `main` on any `supabase/**` push, which silently erased a live-only fix
+  within days (2026-11-02 → 11-05, `send-welcome-email`). A fix lands via
+  PR; a live deploy is only a way to verify it first.
 - **Supabase advisors** (`get_advisors`, both `security` and `performance`
   lint types) and the **24h error-log scan** (`query_logs`) — cheap and
   fast enough that a dedicated worker would be pure overhead. Diff against

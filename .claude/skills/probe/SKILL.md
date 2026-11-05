@@ -113,14 +113,21 @@ before concluding a real bug:
   regression** — same "flake vs. real" discipline this project already
   applies to CI. A failure that reproduces identically on a clean retry,
   with nothing about the request changed, is real.
-- **Always use the established `test-admin-setup` throwaway-account
-  lifecycle** — never a real customer account, ever. Check its live source
-  via `get_edge_function` *before* redeploying it: if it's not the inert
-  410 stub, another specialist/session is actively using it (this exact
-  collision has happened twice in this project's history) — wait and
-  retry rather than overwrite. Restub to the inert 410 response and
-  confirm via a live curl **every time**, even if the run is otherwise
-  incomplete.
+- **Never use a real customer account, ever.** When dispatched by
+  `site-guardian`, **the orchestrator provisions your throwaway accounts
+  and hands you their credentials — do NOT redeploy `test-admin-setup`
+  yourself** (a three-way collision on 2026-11-02 left it live and
+  non-inert for three days; see `site-guardian/SKILL.md`). Use
+  `execute_sql` for balance setup (`insert into credit_ledger`) and for
+  cleanup (`delete from auth.users where id in (...)`, which cascades).
+  When run standalone with no orchestrator: check its live source via
+  `get_edge_function` *before* redeploying it — if it's not the inert 410
+  stub someone else is using it, wait rather than overwrite — and restub
+  to the inert 410 response and confirm via a live curl **every time**,
+  even if the run is otherwise incomplete. Either way, delete every
+  account you used and confirm zero orphaned rows before you finish, and
+  if you are about to run out of budget or hit a rate limit, clean up
+  **first**.
 
 ## Fix vs. escalate
 
