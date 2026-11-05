@@ -39,3 +39,18 @@ not after — checking page content once already on Stripe's hosted
 checkout page would false-positive-match benign Stripe-domain mentions
 that have nothing to do with this constraint) contains zero
 `buy.stripe.com` matches. Hard security constraint holds.
+
+**2026-11-05 sweep — PASSED across every entry point (production,
+Playwright).** Stubbed `checkout.stripe.com/**` with `page.route()` so the page
+could "navigate" without loading Stripe, and read where `buy-credits`
+(200) sent the browser: topbar "Buy more" → `starter`, low-balance banner link →
+`value`, depleted bar link → `power`, the inline 402 "Buy credits" button →
+`pro_7k`, and the Intelligence → Tasks "Insufficient credits… Buy credits →"
+link → `value` — all five landed on `https://checkout.stripe.com/c/pay/cs_live_…`
+(real sessions, never completed), zero `buy.stripe.com` in the rendered
+`chat.html`. Modal prices/credits $4/200, $10/600, $30/2000, $90/7000 match
+`pack-config.js`. **Found:** the Tasks "Buy credits →" link is rendered into
+`#lowBalance`, which sits behind the open Intelligence panel's `#intelOverlay`,
+so the first click only closes the panel (`elementFromPoint` at the link =
+`intelOverlay`); the link works on the second click. UX paper-cut, reported not
+fixed (a design call: close the panel first, or render the link inside it).

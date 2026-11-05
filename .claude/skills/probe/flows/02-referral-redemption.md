@@ -27,3 +27,14 @@ None flow-specific.
 
 ## History
 First run: see this skill's build PR (2026-11-02).
+
+**2026-11-05 sweep — PASSED (in-browser, production).** Referee session
+injected, opened `https://aethyro.com/?ref=<referrer code>` (`localStorage.
+aethyro_ref` = the code), then `chat.html`: `redeem-referral` auto-fired once →
+200 `{success:true,credits_added:100}`, balance 200 → 300, the key cleared from
+`localStorage`. Duplicate redemption → 409 `You have already redeemed a referral
+code`; self-referral → 400 `Cannot redeem your own referral code`; garbage code →
+404 `Invalid referral code`. `credit_ledger`: exactly one `+100 referral_bonus`
+on each side, no row from any rejected attempt. (Call the rejection paths from
+a page on the `aethyro.com` origin — the function's CORS allowlist rejects
+`localhost`.)
