@@ -260,6 +260,137 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **Found 2026-11-05, `backend-reviewer` sweep — latent fail-open call
+  sites around the billing/cap RPCs; the 2026-10-03 `get_credit_balance`
+  incident's *call-site* half was never closed.** That incident fixed the
+  function (service-role bypass) but not the pattern that let it hide:
+  every caller destructures only `{ data }` from `supaAdmin.rpc(...)` and
+  discards `error`. Grep (`checks/09-rpc-error-discard-grep.md`) finds 15
+  such sites. **Two matter.** (1) **`chat/index.ts:631`** — the pre-send
+  balance gate is `typeof balance === "number" && balance <= 0`, so an RPC
+  *error* (`balance: null`) makes the gate not fire: **fail-open, the exact
+  mechanism of the 2026-10-03 incident.** Not exploitable today —
+  `get_credit_balance` works for its service-role caller — but any future
+  RPC error (a bad migration, a grant change, a transient DB error) turns
+  `chat` into an unmetered endpoint again. The other three billed surfaces
+  fail *closed* (`api-chat:249`, `run-agent-task:385`, `run-routines:329`
+  all coerce a non-number to 0). (2) **All six `get_monthly_spend` sites**
+  (`api-chat:261`, `auto-topup-charge:52`, `chat:693`, `chat:1025`,
+  `run-agent-task:395`, `run-routines:338`) coerce an error to `spent = 0`,
+  so the opt-in monthly cap silently stops enforcing on any RPC failure —
+  lower stakes (the cap protects the user, it isn't a security boundary)
+  but still a fail-open default. **Proposed fix, not built** (billing-path
+  change to the most critical function; can't be verified live without
+  injecting an RPC failure, which an unattended sweep shouldn't do):
+  `const { data: balance, error: balErr } = ...; if (balErr) return 503`
+  (fail closed, retryable) at each gate, and log-and-fail-closed on the cap
+  reads. Two smaller `backend-reviewer` notes on the same window:
+  `send-welcome-email`'s winback branch **stamps `email_drip_state` even
+  when its user lookup errors** (lines ~385/392 — a transient Supabase blip
+  permanently skips that user) and **never checks the stamp upsert's
+  `error`** (a failed stamp after a successful send repeats the email on
+  the next cron run); and the new caps gate on `spent >= cap` with **no
+  worst-case estimate** (unlike `chat`), so one call or task can overshoot
+  the cap (a routine that now uses `web_search` can take up to 5 Anthropic
+  calls — PR #214 — widening that overshoot, still bounded).
+
+- **Found 2026-11-05, `oracle` — public legal copy says messages go to
+  Anthropic only; they don't.** `trust.html:133` says user messages go to
+  Anthropic "and for nothing else"; `privacy.html` §4 and `terms.html:84`
+  list Anthropic as the only processor (`privacy.html` is dated June 1);
+  `claude-without-subscription.html` repeats "requests go to Anthropic's
+  API." Verified live this sweep: **44 billed replies have been served by
+  OpenAI** (5 since 2026-11-02, latest 2026-11-05 11:27 UTC — the failover
+  absorbed Anthropic outages), there is an explicit "GPT" model button, and
+  **Voyage (embeddings) and Tavily (web search) also receive user text.**
+  This is legal/privacy copy and a trust claim the product's own data
+  contradicts — needs the owner, not a sweep (what to disclose, how to
+  word the failover, whether the "for nothing else" line stays). Highest
+  priority of the content findings because it is a factual privacy claim,
+  not marketing wording.
+
+- **Found 2026-11-05, `probe` — memory embeddings are being dropped at a
+  high, sustained rate (for `codex`).** `memory_embeddings.embedding IS
+  NULL` for **89% of today's rows (155/174)** and 25-67% on most days since
+  2026-10-28 (0% only on low-volume days — 10-25, 10-27, 10-30); verified
+  with `checks/08-memory-embedding-null-rate.sql`. `probe` reproduced it
+  with two chat sends ~2s apart (4 rows, all null; the Search tab then
+  shows "No matches"), while one send after a 90s idle embedded fine.
+  Mechanism from the source: `embed-content`'s `embedTexts()` returns null
+  on *any* Voyage failure — no retry, no log — and the row is inserted
+  anyway; the Search tab fires two `embed-content` calls in parallel and
+  swallows failures. Working hypothesis (unconfirmed — no Voyage dashboard
+  or per-key log access here): a Voyage per-minute request/token limit
+  (free-tier limits are very low), i.e. the same bursts-vs-provider-limit
+  class as the 11-05 Resend finding. **User impact**: semantic memory
+  recall and cross-conversation/document search quietly degrade for most
+  users, with no error anywhere. **Proposed fix, not built**: log the
+  Voyage status, retry 429s with backoff (the `send-welcome-email` v5
+  pattern), batch the user+assistant pair into one request, and re-embed
+  null rows from a small cron/backfill.
+
+- **Found 2026-11-05, `oracle` — new abuse signals; evidence only, not
+  adjudicated (for `warden`, with `ledger` to price it).** (1)
+  **`fldubai.com`: 14 accounts, 2026-11-03T17:52 → 11-05T02:38** — 12 with
+  an `aethyro<7 digits>` local part, 11 carrying one hub account's referral
+  code (`9CFEDB6B`, owner `aethyro041909@fldubai.com`) in
+  `signup_referrer` metadata, which the signup page never writes that way
+  (direct API calls); 117 `api_usage` rows costing 741 credits in total
+  (mostly Opus), `convs=0` on 13 of 14, 14 signup bonuses = 2,800 credits;
+  one signup in the last 24h, so possibly still active. (2) **Two Outlook
+  plus-alias accounts burned their entire 200-credit grant in ~15 minutes
+  on 11-05** (`dorabyrd7379+…`, `bradleybeck3110+…`, created 13 minutes
+  apart; 159 usage rows, 0 messages, 4 API keys); a third with the same
+  shape (`baxterflower9946+ercnu@outlook.com`, 11-02) shows almost no use.
+  (3) A probable automated tester pair (`xzbhv3iwtu9q1@zzt.lingeringp.com`
+  → referred `qadw9fjeh2dh@fldubai.com`; random 12-13 char local parts, 6
+  API keys, routines + an agent task) — may be benign. (4) **Gmail
+  dot-variant cluster grew**: `giovannibarretthdf` now has 9 accounts; a
+  second pair was created 42 µs apart (one script). Nothing new on that
+  cluster since 11-02 23:48. No new lockstep domain beyond `fldubai.com`;
+  the one-off disposable domains show no repeat pattern. Same posture as
+  every prior cluster: a domain block or velocity cap risks catching a real
+  user, so this is escalated with evidence rather than defended
+  mechanically.
+
+- **Found 2026-11-05, `oracle` — public copy that is wrong, unverifiable,
+  or stale (brand-wording calls; the mechanical ones already shipped in
+  PR #215).** (1) **~17 "Anthropic's most capable model/AI" claims** (e.g.
+  `index.html:1039`/`:1477`, `pricing.html:249`/`:392`/`:409`,
+  `claude-opus-alternative.html`, `use-cases.html:82`, `app/share.html`,
+  `app/chat.html:906`/`:2462`, `app/dashboard.html:236`) are now wrong:
+  claude.com/pricing calls Fable 5.1 "our top model" and Opus 5.5 the
+  "daily driver"; `blog/test-your-ai-connection…:167` ("currently the
+  strongest general-purpose AI") is unverifiable. (2) **`pricing.html`
+  comparison table**: its "✗" for scheduled tasks, agentic tasks and
+  document RAG, and for "free to start", contradict the competitors' live
+  pages (Claude Pro has scheduled tasks/Projects/Research; ChatGPT Plus has
+  scheduled tasks/Projects/Codex; both have free tiers); "hit frequently"
+  is unverifiable. (3) **Other unverifiable claims**: "200k context" on
+  `use-cases.html:131` and `ai-chat-for-developers.html:126`/`:145`,
+  "outperforms… SWE-bench/HumanEval/MATH" / "better than any other model"
+  on `ai-chat-for-developers.html:111`/`:145`, "no wrapper or fine-tuning"
+  on `claude-opus-alternative.html:136`, "dozens of long-form prompts" for
+  $4 on `claude-opus-alternative.html:101` (contradicts the site's own ~13
+  Opus replies), "response within 24 hours" at `index.html:1606`, and the
+  ~10-credits-per-conversation figure in the homepage calculator
+  (unsourced). (4) **~55 leftover "Opus 5" names** (`claude-opus-alternative`,
+  `use-cases`, `ai-chat-for-developers`, blog, `terms.html`,
+  `manifest.json`, `app/share.html`, `send-welcome-email:170`) vs "Opus 5.5"
+  elsewhere — not bulk-renamed because `claude-opus-alternative.html` may
+  be an SEO keyword page and `terms.html` is legal text.
+
+- **Found 2026-11-05, `probe` — two small UI defects, not fixed (plus one
+  caveat on PR #214).** (1) The Tasks tab's "Buy credits →" link renders
+  *behind* the Intelligence overlay, so it needs a second click. (2) The
+  "Routine complete" toast also appears when "Run now" was *skipped*
+  (no credits / monthly cap) — misleading; the run log is correct. (3)
+  **PR #214's `web_search` grounds a routine in real current results but
+  doesn't check recency**: the verified live Daily Briefing reported a real
+  story that was a week old (2026-10-29) for a "last 24 hours" prompt — a
+  prompt/UX refinement (ask for dates, or instruct the model to say when the
+  newest result is older than the requested window), not a regression.
+
 - **Found 2026-11-05, `site-guardian` sweep — `send-welcome-email` is an
   unauthenticated email relay for its `welcome`/`engagement`/`reengagement`
   types.** `verify_jwt` is `false` (it must be: pg_net and the auth trigger
@@ -1196,6 +1327,14 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
 
+- **2026-11-05** — **`site-guardian` consolidated pass: specialist results, what shipped, and what's escalated** (second half of the 11-02 → 11-05 sweep entry directly below, which covers the 11-02 specialist pass and the `send-welcome-email` retry fix).
+  **Shipped, all merged by the owner the same day (6 PRs, none self-merged):** #212 (`send-welcome-email` v5 — retry Resend 429s), #213 (`backend-reviewer`: `routine_run_log_status_check` didn't allow `skipped_monthly_cap`, so PR #211's cap-skip history row was silently failing), #214 (`codex`: `run-routines` v5 `web_search`, closes the Daily Briefing stale-news Pending — verified live twice, see its own entry), #215 (`oracle`: content-accuracy fixes — "typical light use ≈ $3/month" contradicted the page's own $3.83 example, "no rate limits" was false (chat is 20/min, API 30/90/min), "200k context / full history on every request" was wrong (`chat` sends the last 20 messages + retrieval), Opus 5.5 naming on the pages that carry the pricing claim), #216 (`probe`: three real `chat.html` bugs — highlight.js has **never** loaded (CommonJS builds loaded as plain scripts, `hljs` undefined, 3 console errors on every load), "Your routines" listed the 12 community templates for an account with none, the hover Copy button covered the Receipt link). #217 (`probe` flows corpus: 04 corrected — the image-attachment floor is Sonnet, not Opus —, 07 notes the burst-sensitive embedding behaviour, new flows 09-10) is docs-only, CI green, still a draft at the time of writing.
+  **Specialists:** `exploit` — **all 7 roster attacks blocked** (negative balance across all four billed surfaces, cross-user RPCs, 12 locked tables via `anon`, webhook replay, referral self/duplicate, chain cycles, raw Stripe grep) **plus two new surfaces blocked**: the monthly-cap bypass on all four billed endpoints (zero new ledger rows; a cross-user cap write returns `[]`; client writes to `stripe_payment_method_id`/`auto_topup_last_attempt_at` → `42501`) and `send-welcome-email`'s `winback` recipient spoofing (the body `email` is ignored); both added to the roster as #8/#9. `probe` — flows 01-06 and 08 pass; 07 passes only when the Voyage quota is idle (finding in Pending); new surfaces from PRs #207-#211 pass (try-box → signup → chat carry-over prefills and never auto-sends, OAuth-first signup, `/claude-without-subscription.html`, CTA sweep across 9 pages, pre-run estimates, 390px mobile). `oracle` — 336 users (+63 since 11-01), 121 raw 7-day signups → **71 real** after 36 known-farm + 14 `fldubai.com`; 48h activation 51% (mature cohort 22/43) / 54% (full week, right-censored); 15 returners (up from 11); **$0 lifetime revenue**, 18 `purchase_funnel_events` rows ever (16 successful checkout sessions); pack math, per-credit prices (2.0¢/1.67¢/1.5¢/1.29¢) and competitor prices all re-verified. `drift` — `verify_jwt` 26/26 matching `config.toml`, 8 live `pg_cron` jobs all documented (the 7 prior + `drip-winback`), all 4 diagnostic stubs inert; **partial coverage, stated plainly**: only `chat`, `buy-credits`, `stripe-webhook` and `run-routines` plus both shared modules (`_shared/llm.ts`, `_shared/packs.ts`) were literally byte-diffed; `run-agent-task` and `send-welcome-email` were diffed on distinctive marker lines only; the remaining 17 rest on CI run #30's success + a shared `updated_at` inside that run, not a literal byte-diff. (Note `run-routines` was diffed *before* PR #214 deployed, so its live-vs-disk match is the pre-`web_search` version.) `buy-credits`' live `entrypoint_path` is the one that isn't `file:///home/runner/...` (bytes identical to `main`; read as a bundling quirk of the same CI run). `backend-reviewer` — the `skipped_monthly_cap` CHECK gap (→ #213), the winback burst (→ #212) and the latent fail-open call sites in Pending.
+  **CI note**: `deploy-supabase.yml` run #29 (PR #210) failed on `supabase/setup-cli@v1`; #30 onward (`@v3`) succeeded and redeployed everything. The CLI is still unpinned (`version: latest`).
+  **Process (the 11-02 lesson held)**: the orchestrator provisioned every specialist's throwaway accounts in one short helper deployment and restubbed it immediately; **zero `test-admin-setup` collisions this pass**, both specialists deleted their own accounts and `probe` confirmed zero orphans across 20 tables. I used the helper once more, deliberately and alone, for a canary that ran PR #214's new code against real Anthropic + Tavily before it merged (v237), restubbed (v238) and confirmed `401` at the gateway. Post-merge, the deployed `run-routines` ran the real quick-start Daily Briefing for a throwaway account end to end (`completed`, run-log row, `routine` -1) — that account deleted, zero orphans. `probe` left 5 unpaid live Stripe Checkout sessions from the buy-credits flow (they expire on their own) and possibly a Stripe customer record (no Stripe connector authorized here to remove it).
+  **To verify tomorrow (11-06 09:25 UTC)**: this morning's `drip-winback` run (pre-fix, 09:25 on 11-05) was 38 × `200` and 83 × `500` (Resend 429s); PR #212 deployed at 14:10 UTC. After tomorrow's run, expect far fewer 500s and `email_drip_state.winback_sent_at IS NULL` among eligible users to start falling from 46 — if it doesn't, the retry isn't draining the burst and the cron dispatch itself needs bounding.
+  **Roster/corpus growth**: `site-guardian-exploit` roster +2 (#8 monthly-cap bypass, #9 winback recipient spoofing); `checks/` +2 (`08-memory-embedding-null-rate.sql`, `09-rpc-error-discard-grep.md`, both verified against live data/the repo before being trusted). Escalations are the five new Pending entries at the top of that section.
+
 - **2026-11-05** — **`run-routines` web_search (`codex`/Cole): closes the "Daily Briefing serves stale news" bug `growth` found 2026-11-02.**
   `run-routines` (now v5) had no tool access at all, so a news-shaped routine prompt just pattern-completed from training data and presented months-old events as current. It now offers the same Tavily-backed `web_search` tool `chat` uses (same `/search` endpoint, `api_key` in the JSON body, gated on `TAVILY_API_KEY`), looped up to `MAX_TOOL_ROUNDS = 4` with `tool_choice:"auto"` so a routine that doesn't need current info never calls it. Billing now sums `input_tokens`/`output_tokens` across every Anthropic call in the loop before the unchanged credit formula runs, so a search-using routine is charged for the real extra tokens. Scoped to `web_search` only — no `fetch_url`/`crawl_site`/GitHub/Notion (no per-user token plumbing in this function). `app/chat.html` gained a one-line hint under the routine Prompt field.
   **Verified live against real Anthropic + Tavily, not just by code review** — through a short-lived canary on the diagnostic helper that ran the new block verbatim (live `run-routines` was never touched; the helper was restubbed to the inert 410 and confirmed 401 at the gateway, v238): (1) a news-dependent briefing prompt made 2 real Tavily calls and returned a story that an independent search confirms is real and current (Xen's two grant-copy VM-escape CVEs credited to Claude, disclosed 2026-11-03; source "AI Weekly" matches aiweekly.co) — 3,441 in / 239 out tokens on Haiku; (2) a control prompt with no need for search ("haiku about autumn") made 0 Tavily calls and 1 Anthropic call (664 in / 36 out), so unneeded routines pay no search overhead; (3) the post-`MAX_TOOL_ROUNDS` fallback shape (messages containing `tool_use`/`tool_result` blocks sent with **no** `tools` param — the same shape `chat`'s own fallback has always used) is accepted by the live Anthropic API, so that edge case is not a latent 400. Billing arithmetic on the real run: 3.441×0.08 + 0.239×0.40 ≈ 0.37 credits → the existing 1-credit floor, i.e. no visible price change for typical Haiku routines.
@@ -1268,7 +1407,7 @@ that). Newest first.
   (rate limit); re-run in the consolidated pass below.
   Logged to `agent_missions` (`division:'sentinel'`).
 
-- **2026-11-03** — **Day-6 winback email (5th `pg_cron` job, `drip-winback`, `25 9 * * *`).** Targets the real retention leak: users who sent >=1 message but no user message on any later day, 6-30 days after signup. New `winback` type in `send-welcome-email` (v4): ignores body `email` and derives it from `user_id` via `auth.admin.getUserById` (UUID-validated), re-checks eligibility server-side and fails closed, deep-links their latest titled conversation (`?c=`), shows personal credit balance only for non-team users with >=20 credits, pitches Routines as the habit loop. Stamps `email_drip_state.winback_sent_at` (new column) whether or not it sends, so the cron never re-selects a user. Tested locally against a mocked Supabase/Resend (eligible → sent to the real address, not the body's; returned → not sent, stamped; already stamped → no-op). Measure: 2nd-day returners in `oracle`'s counts, conversation `?c=` reopenings.
+- **2026-11-03** — **Day-6 winback email (`drip-winback` `pg_cron` job, `25 9 * * *`; the 8th live job — corrected 2026-11-05, this entry originally said "5th").** Targets the real retention leak: users who sent >=1 message but no user message on any later day, 6-30 days after signup. New `winback` type in `send-welcome-email` (v4): ignores body `email` and derives it from `user_id` via `auth.admin.getUserById` (UUID-validated), re-checks eligibility server-side and fails closed, deep-links their latest titled conversation (`?c=`), shows personal credit balance only for non-team users with >=20 credits, pitches Routines as the habit loop. Stamps `email_drip_state.winback_sent_at` (new column) whether or not it sends, so the cron never re-selects a user. Tested locally against a mocked Supabase/Resend (eligible → sent to the real address, not the body's; returned → not sent, stamped; already stamped → no-op). Measure: 2nd-day returners in `oracle`'s counts, conversation `?c=` reopenings.
 
 - **2026-11-03** — **Activation/acquisition pass.** Signup page now leads with Google/GitHub (email form below; new `sign_up_start` GA event on OAuth clicks — OAuth signups previously fired no event). Chat skips the intro tour when a carried-over prompt is prefilled. Homepage trimmed: removed capability ticker, `#capabilities` ("Ask it anything") and `#product-demo` sections plus dead scripted-demo JS (~21KB). New SEO page `claude-without-subscription.html` (FAQPage JSON-LD, in sitemap, linked from homepage footer). Fixed `claude-opus-alternative.html` FAQ "1–5 credits per message" to the ~1 Haiku / ~15 Opus figures. Sonnet per-message figure standardized on **~4** site-wide (was ~2 on index.html): CREDIT_RATES puts Sonnet at 1/5 of Opus (~3 at the published ~15 Opus), rounded up deliberately so credits outlast the estimate rather than drain faster; matches pricing.html's per-pack Sonnet counts (200cr ≈ 50 msgs).
 
