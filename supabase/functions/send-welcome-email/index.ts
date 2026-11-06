@@ -63,10 +63,14 @@ const BASE_URL = "https://aethyro.com";
 
 // Retries only on 429 (rate limit) -- any other error fails immediately,
 // unchanged from before. Honors Resend's own Retry-After header (seconds)
-// when present; otherwise backs off 500ms * 2^attempt, capped at 3s. Worst
-// case across all retries is ~10.5s, comfortably enough to drain a burst
-// against Resend's real 10 req/sec account limit.
+// when present (each sleep capped at MAX_RETRY_AFTER_MS so a large header can't
+// hold the invocation past the edge wall-clock limit -- worst case with the cap
+// is ~25s; a killed run sends nothing and the daily cron retries); otherwise
+// backs off 500ms * 2^attempt, capped at 3s (worst case across all retries
+// ~9.5s there), comfortably enough to drain a burst against Resend's real
+// 10 req/sec account limit.
 const MAX_RESEND_RETRIES = 5;
+const MAX_RETRY_AFTER_MS = 5000;
 async function sendEmail(to: string, subject: string, html: string) {
   for (let attempt = 0; attempt <= MAX_RESEND_RETRIES; attempt++) {
     const res = await fetch("https://api.resend.com/emails", {
@@ -83,7 +87,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       const retryAfterHeader = res.headers.get("Retry-After");
       const retryAfterMs = retryAfterHeader ? parseFloat(retryAfterHeader) * 1000 : NaN;
       const backoffMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0
-        ? retryAfterMs
+        ? Math.min(retryAfterMs, MAX_RETRY_AFTER_MS)
         : Math.min(3000, 500 * 2 ** attempt);
       await new Promise((r) => setTimeout(r, backoffMs));
       continue;
