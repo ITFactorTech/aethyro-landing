@@ -1770,6 +1770,15 @@ I often need help with: client quotes, contract review, business Instagram posts
         }
         return;
       }
+      if(resp.status===503){
+        /* Fail-closed billing preflight (credit balance / account state could not be verified):
+           nothing was generated or charged. Retryable -- do NOT lock the input. */
+        if(thinkingEl && thinkingEl.parentNode===bubble) thinkingEl.remove();
+        cursor.remove(); bubble.classList.add('error');
+        var d503=await resp.json().catch(function(){return{};});
+        bubble.textContent=(d503&&d503.error)||'Billing is temporarily unavailable. Please try again in a moment.';
+        return;
+      }
       if(!resp.ok||!resp.body){
         if(thinkingEl && thinkingEl.parentNode===bubble) thinkingEl.remove();
         bubble.classList.add('error');

@@ -326,17 +326,28 @@ serve(async (req) => {
 
     try {
       // Credit check — treat null balance (new user, no ledger rows) as 0
-      const { data: rawBalance } = await supaAdmin.rpc("get_credit_balance", {
+      const { data: rawBalance, error: balanceErr } = await supaAdmin.rpc("get_credit_balance", {
         p_user_id: routine.user_id,
       });
-      const { data: routineProfile } = await supaAdmin
+      const { data: routineProfile, error: profileErr } = await supaAdmin
         .from("profiles").select("team_id, monthly_spend_cap_credits").eq("id", routine.user_id).single();
-      const balance = typeof rawBalance === "number" ? rawBalance : 0;
+      // Fail closed (2026-11-06): get_credit_balance() coalesces to 0, so an
+      // error or non-number means the preflight failed -- never run the
+      // routine, and never mislabel it "skipped_no_credits". Throwing lands in
+      // the per-routine catch below, which records status 'error' (this slot is
+      // missed and visible in routine_run_log, not silently run unbilled).
+      if (balanceErr || profileErr || !routineProfile || typeof rawBalance !== "number") {
+        throw new Error(`Billing preflight failed: ${balanceErr?.message ?? profileErr?.message ?? "invalid state"}`);
+      }
+      const balance = rawBalance;
       // Monthly spend cap (opt-in, NULL = off): skip like a no-credits run,
       // with its own status so it is distinguishable in routine_run_log.
       if (typeof routineProfile?.monthly_spend_cap_credits === "number") {
-        const { data: spentSoFar } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: routine.user_id });
-        const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+        const { data: spentSoFar, error: spendErr } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: routine.user_id });
+        if (spendErr || typeof spentSoFar !== "number") {
+          throw new Error(`Billing preflight failed: ${spendErr?.message ?? "non-numeric monthly spend"}`);
+        }
+        const spent = spentSoFar;
         if (spent >= routineProfile.monthly_spend_cap_credits) {
           await supaAdmin.from("user_routines").update({
             last_run_at:  new Date().toISOString(),
