@@ -325,6 +325,39 @@ serve(async (req) => {
     const rates = CREDIT_RATES[modelKey];
 
     try {
+      // ── Atomic claim of a SCHEDULED run (2026-11-06) ─────────────────────
+      // Due routines are selected up front and then processed serially with no
+      // lock, so overlapping invocations (a tick that outlasts the 15-minute
+      // cron interval, a retry, two callers) could each run -- and bill -- the
+      // same routine. Claim it first with a compare-and-swap on next_run_at: the
+      // UPDATE only matches while next_run_at is still the value we read, so
+      // exactly one caller wins and advances the slot. Semantics are now
+      // AT-MOST-ONCE per scheduled slot: a run killed after the claim misses that
+      // slot (visible: no routine_run_log row for it) instead of re-running and
+      // risking a double bill. A claim *error* (DB blip) skips without advancing,
+      // so the routine stays due and the next tick retries it.
+      // Explicit runs (routine_id in the body: "Run now", webhooks, chained steps)
+      // are not schedule-driven and are not claimed here.
+      if (!singleRoutineId) {
+        let claimQ = supaAdmin.from("user_routines")
+          .update({ next_run_at: nextCronDate(routine.schedule).toISOString() })
+          .eq("id", routine.id)
+          .eq("enabled", true);
+        claimQ = routine.next_run_at == null
+          ? claimQ.is("next_run_at", null)
+          : claimQ.eq("next_run_at", routine.next_run_at);
+        const { data: claimed, error: claimErr } = await claimQ.select("id");
+        if (claimErr) {
+          console.error("run-routines: claim failed, leaving routine due for the next tick", routine.id, claimErr.message);
+          results.push({ id: routine.id, name: routine.name, status: "skipped_claim_error" });
+          continue;
+        }
+        if (!claimed?.length) {
+          results.push({ id: routine.id, name: routine.name, status: "skipped_already_claimed" });
+          continue;
+        }
+      }
+
       // Credit check — treat null balance (new user, no ledger rows) as 0
       const { data: rawBalance, error: balanceErr } = await supaAdmin.rpc("get_credit_balance", {
         p_user_id: routine.user_id,
