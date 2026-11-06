@@ -86,3 +86,18 @@ carry-over (see flow 09) and the composer's pre-send estimate ("up to ~N
 credits": 2 / 13 / 62 / 62 (auto) / 13 (gpt) for a 59-char message on
 haiku / sonnet / opus / auto / gpt — matches `estimateWorstCaseCost()`; empty
 input clears it).
+
+**2026-11-06 sweep — PASSED (production, in-browser; account provisioned by the
+orchestrator).** Four pre-provisioned accounts each had exactly one `profiles`, one
+`referral_codes`, one `signup_bonus` (+200). Explicit Haiku / Sonnet / Opus sends in
+`chat.html` rendered replies and cost badges (`1 credit · 1,043 in / 23 out tokens ·
+haiku`, `… sonnet`, `2 credits · 1,027 in / 5 out tokens · opus`), ledger `-1/-1/-2`
+with `metadata.model` = tier and `provider: anthropic`, one signed receipt per send
+(3 `generation_receipts` for 3 sends). PR #216 checks on the same pass:
+`typeof hljs === 'object'`, a fenced `js` reply gets `hljs-keyword/-number/-title`
+spans, zero `module is not defined` errors; hovering the reply and clicking the
+"Receipt" link opens the receipt modal (`elementFromPoint` at the link's centre is the
+link, no longer the hover Copy button). Note: right after the first navigation of a run
+the app once bounced `chat.html` -> `dashboard.html` (a transient session-restore
+failure over the sandbox proxy); an immediate retry loaded normally — retry before
+concluding anything.
