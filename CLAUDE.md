@@ -260,6 +260,160 @@ it to the `?buy=` pattern instead.
 
 ## Pending / not yet applied
 
+- **Adjudicated 2026-11-05 (`warden`, run on request after the usage
+  update) — the abuse signals `oracle` flagged earlier the same day.**
+  Scope: activity since `warden`'s last run (2026-11-02 02:15Z); read-only
+  SQL; **no account was touched and no defense was built** (hard boundary).
+  **Confirmed scripted farming, two clusters.** (1) **`fldubai.com`** — 14
+  accounts in ~33h; 12 named `aethyro<digits>`, 1 `geo<digits>`, 1 created
+  by the tester pair's referral. 12 of 14 minted an API key (14 keys), 8
+  spent credits (741 of the 2,800 issued; three drained ≥195), **59% of
+  their API calls were Opus**, and **0 stored conversations** (API-only
+  — so no message content exists to read for stated intent; the evidence
+  is structural). Signups arrive in bursts; the heavy users finished
+  using their grant within ~37 minutes to ~6.5 hours of signup (two
+  trickled over ~24h). This is the same "auto-register + harvest
+  the API key" shape as the 2026-10-12 `daunshlyha` request. (2) **Two
+  Outlook plus-alias accounts** (`<name><4 digits>+<8 random>@outlook.com`),
+  created **13 minutes apart on 11-05**, each minted 2 API keys and drained
+  its **whole 200-credit grant in 8 and 26 minutes** through a mix of
+  direct `chat` calls (74 and 6) and `api-chat` calls (37 and 52) with **0
+  stored messages** — i.e. the `chat` function called directly, not
+  through the UI (the `voidash.cyou` / `maxxspace.com` signature). 399
+  credits; a third account of the same shape (11-02) used 4. **Still
+  open from before:** the Gmail dot-variant cluster is 11 accounts on 2
+  normalized addresses (9 + 2), only 2 of them email-confirmed.
+  **Checked and cleared, not abuse:** two Gmail users share a long
+  `⟦ZS-SYS⟧` "ZeroScript" browser-extension / Roblox Studio prompt — the
+  only cross-account exact-duplicate prompts since the last run — and are
+  real heavy users of a third-party tool (see the checkout entry below).
+  No stated-intent messages and no `AETHYRO0NN_…_OK`-style probe-template
+  messages appeared since the last run (the template watch stays at 2
+  historical instances). **The tester pair** `xzbhv3iwtu9q1@zzt.lingeringp.com`
+  (6 API keys, referred a `fldubai.com` account, ran routines and an
+  agent task) is an automated product tester; its two `buy-credits`
+  calls with `pack:"__proto__"` are the only `outcome:'error'` rows in
+  `purchase_funnel_events` (see the validation gap below). Treat as a
+  probing agent, not a customer.
+  **The important negative results — what would NOT work:** (a) **email
+  confirmation does not separate farms from real users**: `fldubai.com`
+  93% confirmed, the older farm domains 90%, the Outlook accounts 100%,
+  vs 92% for everyone else (only the Gmail dot-variants, 18%, differ,
+  because they share one real inbox). Throwaway-mail domains accept
+  mail, so "require confirmation before the grant" is useless here.
+  (b) **Credit-burn velocity does not separate them either**: the best
+  real prospect on the site burned 307 credits in 19 minutes (below), the
+  same speed as the scripted Outlook pair. A velocity cap would hurt the
+  most valuable user. (c) Stripping `+tag` before deduping would **not**
+  link the Outlook pair — they are different mailboxes (`dorabyrd7379`
+  vs `bradleybeck3110`).
+  **Candidate defenses, ranked by false-positive risk (all need `codex`
+  sign-off — they touch the signup trigger/grant; none is built):**
+  1. **One signup bonus per normalized Gmail address** (strip dots and
+     `+tag` for `gmail.com`/`googlemail.com`): historically affects **0
+     other accounts** (the only 2 duplicate groups are the cluster), would
+     have withheld 9 duplicate grants. Narrow — fixes one cluster class
+     only.
+  2. **Cloudflare Turnstile / hCaptcha on email sign-up** via Supabase
+     Auth's built-in CAPTCHA (documented with no plan restriction in the
+     docs read; confirm the toggle is available on the Free plan in the
+     dashboard: Auth > Bot and Abuse Protection). The farms' signups look
+     like direct Auth-API calls (crafted `signup_referrer` metadata a real
+     signup page never writes), so a CAPTCHA token requirement raises their
+     per-account cost sharply while a real visitor sees one widget. Needs a
+     dashboard setting (human) plus a small `signup.html` change.
+     OAuth sign-up is unaffected. **Recommended first step.**
+  3. **Make the free grant Haiku/Sonnet-only, or non-API-only**, until a
+     first purchase: would blunt both clusters (59% Opus; all API) but
+     also removes the free Opus trial from real users — **a product call,
+     not a mechanical one.**
+  4. Rejecting `+tag` aliases on Outlook: 3 of 3 such accounts are
+     suspicious, 0 known real users — but n=3 and plus-addressing is
+     legitimate; not recommended on this evidence.
+  Dollar exposure is `ledger`'s to quantify: **credits only here** — 741
+  (fldubai) + 399 (Outlook pair) drained, ~2,059 + 0 dormant on fldubai.
+
+- **Found 2026-11-05 (`oracle`, checkout-abandonment diagnosis requested
+  after the usage update) — "$0 revenue" is mostly "nobody reaches the
+  paywall", not Stripe friction.** Of **232** non-farm, non-flagged
+  accounts, **131** have spent any credits, **25** spent ≥100, **8** are at
+  ≤30 credits and only **5 have ever reached ≤0** (after use). **0 of those
+  5 clicked Buy afterwards**; none purchased. All 12 successful
+  `purchase_funnel_events` rows (8 distinct users) happened at a **172-200
+  credit balance** — before the wall — or belong to the farm/tester: they
+  are pricing-comparison clicks, about half within a minute of signup. So the
+  checkout flow itself has **no evidence of friction** (`probe` confirmed
+  all 4 packs reach a real `checkout.stripe.com` session), and **0 of 5**
+  is far too small a sample to claim a post-wall conversion rate either
+  way. What it does show is the volume problem: only ~2% of real accounts
+  ever hit the wall, so conversion work is gated on activation and
+  usage depth first. (The funnel table reads 12 successes / 2 errors
+  lifetime now; `oracle` counted 18 rows / 16 successes earlier the
+  same day. The difference is most likely rows belonging to the sweep's
+  throwaway accounts, which cascade-delete with the account — inferred,
+  not checked row by row.)
+  **The one real, high-intent case**: a Gmail user clicked the **$10
+  Value pack 11 seconds after signing up**, then ran a Roblox-Studio
+  workflow through a third-party browser extension, burned **307 credits
+  (9 messages) in 19 minutes**, hit the wall (balance -7),
+  got the low-credit and depleted emails 18 seconds apart, and **never
+  re-attempted checkout** — then received the day-1 onboarding email "Your
+  200 free credits are ready" a day later. **That is a real gap:
+  `queue_onboarding_emails()` schedules emails 1-3 unconditionally and
+  `send-onboarding-email` doesn't check balance/usage**, so a user who has
+  already used (or exhausted) their credits is told they are "ready". Email 2
+  ("How credits actually work") and 3 are still queued for him. **Proposed,
+  not built:** make `send-onboarding-email` state-aware — for a user at
+  ≤0 credits, skip 1-3 or send a single "you're out; Starter is $4/200
+  credits" variant (links via `/#pricing`, never a bare Stripe link). Also:
+  the product gives a heavy, high-value user **no path between "free
+  grant exhausted" and "stopped"** beyond the one-time depleted email; a
+  contextual top-up modal at the 402 already exists (the 2026-10-06
+  purchase-moment redesign) but a browser-extension-driven session may
+  never render it.
+  **`buy-credits` validation gap (found via the tester):**
+  `CREDIT_PACKS[pack]` (`buy-credits/index.ts:80`) is a plain object
+  index, so `pack:"__proto__"` (also `constructor`, `toString`, …) passes
+  the `!selected` guard, builds a line item with `priceId: undefined`, and
+  fails at Stripe ("You must provide one of `price` or `price_data`").
+  Not exploitable for money (Stripe rejects it, nothing is charged) — it
+  only logs an error row and returns a 5xx instead of a 400. **Fix, not
+  built (rides with the `chat:631` fail-closed patch):**
+  `Object.hasOwn(CREDIT_PACKS, pack)` before the lookup, in `buy-credits`
+  and any other `CREDIT_PACKS[...]` reader fed by client input.
+  **Email deliverability (new, unrelated to the funnel but found on the
+  way):** Resend's 6-day window (10-30 → 11-05) shows **736 sent, 683
+  delivered, 53 bounced → a 7.2% bounce rate** (52 transient, 1
+  permanent) against Resend's own published guidance of **<4%**, plus
+  **0 opens / 0 clicks** — open and click tracking is evidently off, so
+  email effectiveness (including whether anyone clicks the depleted-email
+  "Top up credits →" link) **cannot be measured at all today**. The
+  drip crons are emailing farmed addresses (`maxxspace.com`,
+  `fldubai.com`, Gmail dot-variants, disposable domains) — one
+  `fldubai.com` address is already **suppressed** by Resend — so every
+  farmed signup also costs sender reputation. Mitigations: skip onboarding/
+  drip sends to known-farm domains (cheap, mechanical), and turn on
+  open/click tracking for the three transactional-ish drip templates only
+  if the privacy page is updated to say so.
+
+- **Correction 2026-11-05 (`oracle`) — the "14 pending testimonials" are
+  not a review backlog.** All 14 `testimonials` rows are **outbound
+  requests that nobody answered**: `status:'pending'`, `submitted_at`
+  null, empty `content`, `consent` false on every row — **0 responses to 14
+  requests** (2026-10-09 → 11-04; 12 of the 14 went to real-looking
+  accounts, 1 to a Gmail dot-variant, 1 to a disposable domain). There is
+  nothing to approve or reject in `admin.html`'s Reviews panel; earlier
+  notes (the 2026-10-17 sweep, and the 2026-11-05 usage update) that
+  called these "waiting for review" were wrong. The request emails do
+  deliver (`"quick favor?"`, status delivered), so the 0% is a response
+  problem, not a delivery one — expected for a cold automated ask to
+  users who have mostly spent two days with the product, and not
+  measurable further without open/click tracking. **A better use of the
+  mechanism:** the ~15 genuine returners are worth a personal,
+  founder-written note (`growth` can draft, never send) rather than more
+  automated requests; keep the automation as-is only as a low-cost
+  background trickle.
+
 - **Found 2026-11-05, `backend-reviewer` sweep — latent fail-open call
   sites around the billing/cap RPCs; the 2026-10-03 `get_credit_balance`
   incident's *call-site* half was never closed.** That incident fixed the
