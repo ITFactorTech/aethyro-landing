@@ -2,7 +2,9 @@
 // EdgeRuntime.waitUntil() fire-and-forget when a user with auto-topup
 // enabled crosses the low-credit threshold. Creates a real off-session
 // PaymentIntent against their saved default payment method for their
-// chosen pack and grants credits directly once it actually succeeds.
+// chosen pack and grants credits directly once it actually succeeds. If that
+// inline grant fails, stripe-webhook's payment_intent.succeeded handler is the
+// durable recovery path (idempotent via the same ledger unique index).
 //
 // Pack cents/credits now imported from ../_shared/packs.ts, the single
 // source of truth shared with buy-credits and setup-auto-topup — this
@@ -70,13 +72,28 @@ serve(async (req) => {
   if (lastAttempt && lastAttempt.getTime() > Date.now() - COOLDOWN_MS)
     return new Response(JSON.stringify({ skipped: "cooldown" }));
 
-  // Mark the attempt BEFORE charging so a concurrent request can't also fire
-  // while this PaymentIntent call is in flight.
-  await supabase.from("profiles")
-    .update({ auto_topup_last_attempt_at: new Date().toISOString() })
-    .eq("id", userId);
+  // Atomically CLAIM the attempt BEFORE charging (2026-11-06): one conditional
+  // UPDATE whose WHERE re-checks the cooldown, so two near-simultaneous
+  // invocations can't both pass the read above and both charge (the read-then-
+  // write that used to be here was not atomic, and its write error was ignored).
+  // Fail closed: no recorded claim -> no charge.
+  const claimAt = new Date();
+  const cutoffIso = new Date(claimAt.getTime() - COOLDOWN_MS).toISOString();
+  const { data: claimed, error: claimErr } = await supabase.from("profiles")
+    .update({ auto_topup_last_attempt_at: claimAt.toISOString() })
+    .eq("id", userId)
+    .or(`auto_topup_last_attempt_at.is.null,auto_topup_last_attempt_at.lt.${cutoffIso}`)
+    .select("id");
+  if (claimErr) {
+    console.error("auto-topup-charge: attempt claim failed, not charging", claimErr.message);
+    return new Response(JSON.stringify({ skipped: "attempt claim failed" }), { status: 503 });
+  }
+  if (!claimed || claimed.length === 0)
+    return new Response(JSON.stringify({ skipped: "cooldown" }));
 
   try {
+    // Stable idempotency key per claimed attempt: a retried/duplicated HTTP call
+    // for the SAME attempt can never create a second PaymentIntent.
     const pi = await stripe.paymentIntents.create({
       amount: pack.cents,
       currency: "usd",
@@ -89,7 +106,7 @@ serve(async (req) => {
         credit_pack: profile.auto_topup_pack,
         auto_topup: "true",
       },
-    });
+    }, { idempotencyKey: `autotopup:${userId}:${claimAt.toISOString()}` });
 
     if (pi.status !== "succeeded") {
       return new Response(JSON.stringify({ ok: false, status: pi.status }));
@@ -108,8 +125,12 @@ serve(async (req) => {
       metadata: { credit_pack: profile.auto_topup_pack, amount_total: pack.cents, auto_topup: true },
     });
     if (ledgerErr && ledgerErr.code !== "23505") {
-      console.error("auto-topup credit_ledger insert failed", ledgerErr.message);
-      return new Response(JSON.stringify({ ok: false, error: "credit grant failed after charge" }));
+      // The card WAS charged. Do not charge again; the stripe-webhook
+      // payment_intent.succeeded handler re-grants idempotently (same unique
+      // index) and Stripe retries it until it succeeds. 503 (not the old 200) so
+      // this is visible in edge logs / error scans.
+      console.error("auto-topup credit_ledger insert failed AFTER CHARGE (webhook will recover)", { payment_intent: pi.id, message: ledgerErr.message });
+      return new Response(JSON.stringify({ ok: false, error: "credit grant failed after charge", payment_intent: pi.id }), { status: 503 });
     }
 
     return new Response(JSON.stringify({ ok: true, credits: pack.credits }));

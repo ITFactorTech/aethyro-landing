@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
+import { CREDIT_PACKS } from "../_shared/packs.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2024-04-10" });
 const supabase = createClient(
@@ -14,12 +15,65 @@ const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 // stripe_subscription_id, stripe_price_id, created_at, updated_at.
 // status constraint: trialing | active | past_due | canceled | expired  (one 'l')
 
-// Grant the credits a one-time pack session paid for.
+// Postgres errors that can never succeed on retry (user deleted -> FK 23503,
+// CHECK 23514, NOT NULL 23502, data exceptions 22xxx). Everything else
+// (connection failures carry no code; 40001, 57014, 5xx, ...) is treated as
+// transient so Stripe retries the delivery.
+function isPermanentDbError(code?: string | null): boolean {
+  return !!code && (code === "23503" || code === "23514" || code === "23502" || code.startsWith("22"));
+}
+
+// Insert one purchase ledger row for money Stripe has actually settled.
 //
-// Safe to call more than once for the same session: credit_ledger has a partial
-// unique index on stripe_session_id WHERE reason = 'purchase', so a duplicate
-// webhook delivery (or both checkout.session.completed and
-// async_payment_succeeded firing) raises 23505 and is swallowed here.
+// Safe to call more than once for the same Stripe id: credit_ledger has a
+// partial unique index on stripe_session_id WHERE reason = 'purchase', so a
+// duplicate delivery (or the inline auto-topup grant racing this recovery
+// path) raises 23505 and is treated as success.
+//
+// Retry semantics (2026-11-06): a TRANSIENT failure (buyer lookup or ledger
+// insert) now THROWS so the handler returns 500 and Stripe re-delivers for
+// days, instead of being swallowed and 200'd -- previously a paid purchase
+// whose insert failed once was silently lost. PERMANENT problems (buyer
+// profile gone, constraint violation) are logged loudly for manual review and
+// return normally (200): retrying them forever can never help and would get
+// the endpoint auto-disabled by Stripe.
+async function grantCredits(opts: {
+  userId: string; credits: number; stripeId: string; metadata: Record<string, unknown>;
+}) {
+  // Stamp the buyer's current team, if any, so a purchase by any team
+  // member feeds the shared pool get_credit_balance() understands.
+  const { data: buyer, error: buyerErr } = await supabase.from("profiles")
+    .select("team_id").eq("id", opts.userId).single();
+  if (buyerErr) {
+    if (buyerErr.code === "PGRST116") { // zero rows: buyer deleted their account
+      console.error("PAID but cannot credit: buyer profile not found (manual review needed)", {
+        stripe_id: opts.stripeId, user: opts.userId, credits: opts.credits,
+      });
+      return;
+    }
+    throw new Error(`buyer profile lookup failed for ${opts.stripeId}: ${buyerErr.message}`);
+  }
+
+  const { error } = await supabase.from("credit_ledger").insert({
+    user_id: opts.userId,
+    delta: opts.credits,
+    reason: "purchase",
+    stripe_session_id: opts.stripeId,
+    team_id: buyer?.team_id ?? null,
+    metadata: opts.metadata,
+  });
+  // 23505 = unique_violation (duplicate delivery) — idempotent, not an error
+  if (!error || error.code === "23505") return;
+  if (isPermanentDbError(error.code)) {
+    console.error("PAID but credit grant permanently failed (manual review needed)", {
+      stripe_id: opts.stripeId, user: opts.userId, credits: opts.credits, code: error.code, message: error.message,
+    });
+    return;
+  }
+  throw new Error(`credit grant failed for ${opts.stripeId}: ${error.message}`);
+}
+
+// Grant the credits a one-time pack Checkout session paid for.
 async function grantPackCredits(s: Stripe.Checkout.Session) {
   const userId = s.metadata?.supabase_user_id;
   const credits = parseInt(s.metadata?.credits ?? "0", 10);
@@ -31,23 +85,10 @@ async function grantPackCredits(s: Stripe.Checkout.Session) {
     });
     return;
   }
-
-  // Stamp the buyer's current team, if any, so a purchase by any team
-  // member feeds the shared pool get_credit_balance() understands.
-  const { data: buyer } = await supabase.from("profiles").select("team_id").eq("id", userId).single();
-
-  const { error } = await supabase.from("credit_ledger").insert({
-    user_id: userId,
-    delta: credits,
-    reason: "purchase",
-    stripe_session_id: s.id,
-    team_id: buyer?.team_id ?? null,
+  await grantCredits({
+    userId, credits, stripeId: s.id,
     metadata: { credit_pack: s.metadata?.credit_pack, amount_total: s.amount_total },
   });
-  // 23505 = unique_violation (duplicate delivery) — idempotent, not an error
-  if (error && error.code !== "23505") {
-    console.error("credit_ledger insert failed", error.message);
-  }
 }
 
 serve(async (req) => {
@@ -71,6 +112,35 @@ serve(async (req) => {
       case "checkout.session.async_payment_succeeded": {
         const s = event.data.object as Stripe.Checkout.Session;
         if (s.mode === "payment" && s.metadata?.credit_pack) await grantPackCredits(s);
+        break;
+      }
+
+      // Recovery path for auto-topup charges (auto-topup-charge/index.ts). That
+      // function grants inline right after a successful off-session charge; if
+      // the inline grant fails (or the PaymentIntent settles later, e.g.
+      // status 'processing'), THIS event is the durable retry -- Stripe
+      // re-delivers until it returns 2xx. Idempotent against the inline grant via
+      // the same unique index (stripe_session_id = the pi_ id). Only auto-topup
+      // PaymentIntents (metadata.auto_topup) are handled: Checkout-created
+      // PaymentIntents are credited through their session events above and must
+      // not be double-granted here. Requires the Stripe webhook endpoint to be
+      // subscribed to payment_intent.succeeded (Dashboard > Developers > Webhooks).
+      case "payment_intent.succeeded": {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        if (pi.metadata?.auto_topup !== "true") break;
+        const userId = pi.metadata?.supabase_user_id;
+        const packKey = pi.metadata?.credit_pack ?? "";
+        const pack = CREDIT_PACKS[packKey];
+        if (!userId || !pack || pi.amount_received !== pack.cents) {
+          console.error("auto-topup PaymentIntent cannot be credited (manual review needed)", {
+            payment_intent: pi.id, has_user: !!userId, pack: packKey, amount_received: pi.amount_received,
+          });
+          break;
+        }
+        await grantCredits({
+          userId, credits: pack.credits, stripeId: pi.id,
+          metadata: { credit_pack: packKey, amount_total: pack.cents, auto_topup: true },
+        });
         break;
       }
 
@@ -178,8 +248,11 @@ serve(async (req) => {
       }
     }
   } catch (err) {
-    console.error("webhook handler error", err.message);
-    // Always 200 back to Stripe — a handler bug shouldn't cause infinite retries
+    // 500 so Stripe re-delivers (exponential backoff, up to ~3 days). Permanent,
+    // known-unrecoverable cases are handled inside the handlers and return 200
+    // (see grantCredits) -- only unexpected/transient failures reach here.
+    console.error("webhook handler error (returning 500 so Stripe retries)", (err as Error).message);
+    return new Response("Webhook processing failed", { status: 500 });
   }
 
   return new Response(JSON.stringify({ received: true }), { headers: { "Content-Type": "application/json" } });
