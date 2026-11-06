@@ -55,3 +55,20 @@ bar/modal, `credit_ledger` row count unchanged (14 → 14). Tip for forcing a re
 402 on the pre-send gate: use a second tab/context to drain the balance after
 the first page has loaded (a page loaded at balance 0 locks the input and never
 sends).
+
+**2026-11-06 sweep — all four gates PASSED again (production, Playwright), against
+the code deployed after PRs #212-#216.** (1) Balance 25: low-balance banner visible
+only for the Opus pick, hidden for Haiku/Sonnet. (2) 3 prior messages, 196 credits,
+no flag: explicit Opus -> one-time modal ("196" shown, banner not shown); Cancel kept
+the typed text, set the flag, sent nothing; in a fresh browser "Switch to Sonnet &
+send" flipped the active model button to Sonnet and billed 1 credit. (3) Tab loaded
+at 25, balance drained to 0 elsewhere, send -> `402 {"error":"No credits","balance":0}`,
+inline "You're out of credits. Buy credits", depleted bar + disabled input, buy modal
+with Starter highlighted; the session-usage line was empty because that tab had sent
+zero messages (the contextual line is suppressed at 0 messages, as designed).
+(4) Cap 1 with 200 spent: `402 {"error":"Monthly cap reached","monthly_spend":200,
+"monthly_cap":1,"estimated_cost":2}`, inline cap message linking
+`./dashboard.html#spendCapPanel`, no depleted bar/modal, ledger row count unchanged
+(8 -> 8). Observation: `monthly_spend` counted the forced negative
+`admin_adjustment` rows (-170, -25) as spend, i.e. it sums every negative delta, not
+just usage.

@@ -54,3 +54,11 @@ link → `value` — all five landed on `https://checkout.stripe.com/c/pay/cs_li
 so the first click only closes the panel (`elementFromPoint` at the link =
 `intelOverlay`); the link works on the second click. UX paper-cut, reported not
 fixed (a design call: close the panel first, or render the link inside it).
+
+**2026-11-06 sweep — PASSED (production, Playwright), one pass only (each click
+creates an unpaid live Stripe session).** Topbar "Buy more" -> each of the 4 pack
+buttons -> `buy-credits` 200 -> `https://checkout.stripe.com/c/pay/cs_live_…` (the
+checkout host was stubbed with `page.route()` so the browser could "land" without
+loading Stripe). Modal: starter $4/200, value $10/600, power $30/2,000, pro_7k
+$90/7,000 (matches `pack-config.js`). `buy.stripe.com` count in the rendered DOM and
+in the raw `chat.html` source: 0.

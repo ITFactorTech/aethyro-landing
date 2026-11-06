@@ -2798,7 +2798,13 @@ I often need help with: client quotes, contract review, business Instagram posts
     sel.value=prev;
   }
 
+  /* loadRoutines() is called concurrently by several paths (tab click + openDailyBriefingFlow's explicit call, etc.).
+     Each call awaits twice and then appends cards to the same list, so two overlapping calls both cleared the list
+     and both appended -- the quick-start "Daily Briefing" button rendered the new routine as two identical cards
+     (only one DB row). Only the newest call may render. */
+  var routinesLoadSeq=0;
   async function loadRoutines(){
+    var seq=++routinesLoadSeq;
     var list=$('routineList');
     list.innerHTML='<div class="intel-loading">Loading…</div>';
     /* Own routines only: routines_public_read also lets every signed-in user SELECT other users' public routines,
@@ -2806,8 +2812,12 @@ I often need help with: client quotes, contract review, business Instagram posts
        (with owner-only controls that silently no-op under RLS, and a "Routine complete" toast on a run that
        run-routines ignores). Community routines are rendered separately by loadCommunityRoutines(). */
     var r=await supabase.from('user_routines').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false}).limit(20);
+    if(seq!==routinesLoadSeq) return;
     populateChainSelect(r.data||[]);
-    if(r.error||!r.data||!r.data.length){ list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="font-size:1.8rem;margin-bottom:.5rem">⏰</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No routines yet</div><div>Schedule a recurring AI task above — daily briefings, weekly reports, hourly data checks, and more.</div></div>'; return; }
+    /* The community gallery must load on the empty branch too: loadCommunityRoutines() used to run only at the end of
+       the card loop below, so an account with zero routines of its own (every new user) left the gallery stuck on
+       "Loading…" forever once the own-routines query was filtered to the caller. */
+    if(r.error||!r.data||!r.data.length){ loadCommunityRoutines(); list.innerHTML='<div class="intel-empty" style="padding:2.5rem 1rem"><div style="font-size:1.8rem;margin-bottom:.5rem">⏰</div><div style="font-weight:600;color:var(--text);margin-bottom:.3rem">No routines yet</div><div>Schedule a recurring AI task above — daily briefings, weekly reports, hourly data checks, and more.</div></div>'; return; }
     list.innerHTML='';
     var routineNameById={};
     r.data.forEach(function(rt){ routineNameById[rt.id]=rt.name; });
@@ -2822,6 +2832,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     var routineIds=r.data.map(function(rt){ return rt.id; });
     if(routineIds.length){
       var logRes=await supabase.from('routine_run_log').select('routine_id,status,detail,ran_at').in('routine_id',routineIds).order('ran_at',{ascending:false}).limit(200);
+      if(seq!==routinesLoadSeq) return;
       (logRes.data||[]).forEach(function(row){
         if(!runLogByRoutine[row.routine_id]) runLogByRoutine[row.routine_id]=[];
         if(runLogByRoutine[row.routine_id].length<5) runLogByRoutine[row.routine_id].push(row);

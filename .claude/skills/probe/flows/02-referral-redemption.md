@@ -38,3 +38,11 @@ code`; self-referral → 400 `Cannot redeem your own referral code`; garbage cod
 on each side, no row from any rejected attempt. (Call the rejection paths from
 a page on the `aethyro.com` origin — the function's CORS allowlist rejects
 `localhost`.)
+
+**2026-11-06 sweep — PASSED (production, in-browser).** Referee session injected,
+`https://aethyro.com/?ref=<code>` stored `localStorage.aethyro_ref`, then `chat.html`
+auto-fired `redeem-referral` once -> 200 `{success:true,credits_added:100}`, balance
+200 -> 300, the key cleared. Duplicate -> 409 `You have already redeemed a referral
+code`; self -> 400 `Cannot redeem your own referral code`; garbage code -> 404
+`Invalid referral code`. Ledger: exactly one `+100 referral_bonus` per side, one
+`referral_events` row.
