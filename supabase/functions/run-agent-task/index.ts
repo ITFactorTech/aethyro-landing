@@ -380,11 +380,18 @@ serve(async (req) => {
   const supaAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   // ── Credit gate ───────────────────────────────────────────────────────────────
-  const { data: taskProfile } = await supaAdmin
+  const { data: taskProfile, error: profileErr } = await supaAdmin
     .from("profiles").select("team_id, monthly_spend_cap_credits").eq("id", user.id).single();
-  const { data: balance } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
-  // balance is null for brand-new users with no ledger rows — treat as 0
-  const currentBalance = typeof balance === "number" ? balance : 0;
+  const { data: balance, error: balanceErr } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
+  // Fail closed (2026-11-06): get_credit_balance() coalesces to 0 (never null),
+  // so a non-number or any read error means the preflight itself failed.
+  if (profileErr || !taskProfile || balanceErr || typeof balance !== "number") {
+    console.error("run-agent-task: billing preflight failed", profileErr?.message ?? balanceErr?.message ?? "invalid state");
+    return new Response(JSON.stringify({ error: "Billing temporarily unavailable. Please try again in a moment." }), {
+      status: 503, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+  const currentBalance = balance;
   if (currentBalance < MIN_CREDITS)
     return new Response(JSON.stringify({
       error: `Insufficient credits — need at least ${MIN_CREDITS}, have ${currentBalance}`,
@@ -392,8 +399,14 @@ serve(async (req) => {
 
   // Monthly spend cap (opt-in, NULL = off; same get_monthly_spend RPC chat uses).
   if (typeof taskProfile?.monthly_spend_cap_credits === "number") {
-    const { data: spentSoFar } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: user.id });
-    const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+    const { data: spentSoFar, error: spendErr } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: user.id });
+    if (spendErr || typeof spentSoFar !== "number") {
+      console.error("run-agent-task: monthly spend lookup failed", spendErr?.message ?? "non-numeric result");
+      return new Response(JSON.stringify({ error: "Billing temporarily unavailable. Please try again in a moment." }), {
+        status: 503, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+    const spent = spentSoFar;
     if (spent >= taskProfile.monthly_spend_cap_credits) {
       return new Response(JSON.stringify({
         error: "Monthly cap reached", monthly_spend: spent, monthly_cap: taskProfile.monthly_spend_cap_credits,

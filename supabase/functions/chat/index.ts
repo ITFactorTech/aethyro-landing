@@ -628,8 +628,17 @@ serve(async (req) => {
     });
 
   // Credit check
-  const { data: balance } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
-  if (typeof balance === "number" && balance <= 0)
+  // Fail closed (2026-11-06): get_credit_balance() coalesces to 0, so a
+  // non-number result can only mean the RPC itself failed. Treating that as
+  // "no problem" let a billed completion run with an unverifiable balance.
+  const { data: balance, error: balanceErr } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
+  if (balanceErr || typeof balance !== "number") {
+    console.error("chat: credit balance lookup failed", balanceErr?.message ?? "non-numeric result");
+    return new Response(JSON.stringify({ error: "Billing temporarily unavailable. Please try again in a moment." }), {
+      status: 503, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+  if (balance <= 0)
     return new Response(JSON.stringify({ error: "No credits", balance: 0 }), {
       status: 402, headers: { ...CORS, "Content-Type": "application/json" },
     });
@@ -682,6 +691,13 @@ serve(async (req) => {
   // reply length, since every model's output rate here dwarfs its input
   // rate -- a confident "it'll probably use less" estimate would be the
   // wrong thing to build trust on. See chat v52's header comment.
+  // Fail closed: an unreadable profile would silently disable the monthly cap.
+  if (profileRes.error || !profileRes.data) {
+    console.error("chat: profile lookup failed", profileRes.error?.message ?? "no row");
+    return new Response(JSON.stringify({ error: "Account state temporarily unavailable. Please try again in a moment." }), {
+      status: 503, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
   const capCredits = profileRes.data?.monthly_spend_cap_credits;
   if (typeof capCredits === "number") {
     const estInputTokens = Math.ceil(message.length / 4);
@@ -690,8 +706,14 @@ serve(async (req) => {
       1,
       Math.ceil((estInputTokens / 1000) * rates.input + (estMaxTokens / 1000) * rates.output),
     );
-    const { data: spentSoFar } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: user.id });
-    const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+    const { data: spentSoFar, error: spendErr } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: user.id });
+    if (spendErr || typeof spentSoFar !== "number") {
+      console.error("chat: monthly spend lookup failed", spendErr?.message ?? "non-numeric result");
+      return new Response(JSON.stringify({ error: "Billing temporarily unavailable. Please try again in a moment." }), {
+        status: 503, headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+    const spent = spentSoFar;
     if (spent + worstCaseCost > capCredits) {
       return new Response(JSON.stringify({
         error: "Monthly cap reached",

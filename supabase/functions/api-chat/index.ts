@@ -246,20 +246,33 @@ serve(async (req) => {
   const model = MODEL_MAP[modelKey];
   const rates = CREDIT_RATES[modelKey];
 
-  const { data: rawBalance } = await supaAdmin.rpc("get_credit_balance", { p_user_id: keyRow.user_id });
-  const balance = typeof rawBalance === "number" ? rawBalance : 0;
+  // Fail closed (2026-11-06): the RPC coalesces to 0, so a non-number is a failure.
+  const { data: rawBalance, error: balanceErr } = await supaAdmin.rpc("get_credit_balance", { p_user_id: keyRow.user_id });
+  if (balanceErr || typeof rawBalance !== "number") {
+    console.error("api-chat: balance lookup failed", balanceErr?.message ?? "non-numeric result");
+    return json({ error: "Billing temporarily unavailable" }, 503);
+  }
+  const balance = rawBalance;
   if (balance <= 0) {
     return json({ error: "Insufficient credits" }, 402);
   }
 
-  const { data: profile } = await supaAdmin
+  const { data: profile, error: profileErr } = await supaAdmin
     .from("profiles").select("team_id, monthly_spend_cap_credits").eq("id", keyRow.user_id).single();
+  if (profileErr || !profile) {
+    console.error("api-chat: profile lookup failed", profileErr?.message ?? "no row");
+    return json({ error: "Account state temporarily unavailable" }, 503);
+  }
 
   // Monthly spend cap (opt-in, NULL = off; chat already gates this way).
   // Uses the existing get_monthly_spend RPC — no new migration.
   if (typeof profile?.monthly_spend_cap_credits === "number") {
-    const { data: spentSoFar } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: keyRow.user_id });
-    const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+    const { data: spentSoFar, error: spendErr } = await supaAdmin.rpc("get_monthly_spend", { p_user_id: keyRow.user_id });
+    if (spendErr || typeof spentSoFar !== "number") {
+      console.error("api-chat: monthly spend lookup failed", spendErr?.message ?? "non-numeric result");
+      return json({ error: "Billing temporarily unavailable" }, 503);
+    }
+    const spent = spentSoFar;
     if (spent >= profile.monthly_spend_cap_credits) {
       return json({ error: "Monthly cap reached", monthly_spend: spent, monthly_cap: profile.monthly_spend_cap_credits }, 402);
     }

@@ -147,6 +147,7 @@ data: [DONE]</pre>
     <tr><td class="mono"><span class="badge err">401</span></td><td>Missing, malformed, or revoked API key.</td></tr>
     <tr><td class="mono"><span class="badge err">400</span></td><td>Malformed request body — see the returned <span class="inline-code">error</span> field.</td></tr>
     <tr><td class="mono"><span class="badge err">402</span></td><td>Insufficient credits on the account that owns the key.</td></tr>
+    <tr><td class="mono"><span class="badge err">503</span></td><td>Billing or account state could not be verified. Nothing was generated or charged; retry shortly.</td></tr>
     <tr><td class="mono"><span class="badge err">429</span></td><td>Over your key's per-minute limit (30, or 90 if the account has ever bought a Power or Pro pack). Check the <span class="inline-code">Retry-After</span> header (seconds).</td></tr>
     <tr><td class="mono"><span class="badge err">502</span></td><td>The upstream model call failed. Safe to retry.</td></tr>
   </table>
