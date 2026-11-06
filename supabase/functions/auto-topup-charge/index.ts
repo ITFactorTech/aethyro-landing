@@ -49,8 +49,15 @@ serve(async (req) => {
 
   // Monthly spend cap: do not auto-charge a user who has already hit it.
   if (typeof profile.monthly_spend_cap_credits === "number") {
-    const { data: spentSoFar } = await supabase.rpc("get_monthly_spend", { p_user_id: userId });
-    const spent = typeof spentSoFar === "number" ? spentSoFar : 0;
+    const { data: spentSoFar, error: spendErr } = await supabase.rpc("get_monthly_spend", { p_user_id: userId });
+    // Fail closed (2026-11-06): get_monthly_spend() coalesces to a number, so an
+    // error/non-number means the lookup failed. With a cap set, never create a
+    // real off-session charge on an unverifiable spend figure -- skip instead.
+    if (spendErr || typeof spentSoFar !== "number") {
+      console.error("auto-topup-charge: monthly spend lookup failed", spendErr?.message ?? "non-numeric result");
+      return new Response(JSON.stringify({ skipped: "monthly spend lookup failed" }), { status: 503 });
+    }
+    const spent = spentSoFar;
     if (spent >= profile.monthly_spend_cap_credits)
       return new Response(JSON.stringify({ skipped: "monthly spend cap reached" }));
   }
