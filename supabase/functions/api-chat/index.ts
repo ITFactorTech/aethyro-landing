@@ -172,6 +172,30 @@ serve(async (req) => {
     return json({ error: "Invalid or revoked API key" }, 401);
   }
 
+  // Purchase gate (2026-11-07): the public API is for accounts that have bought
+  // a credit pack. Scripted signup-bonus farming (fldubai.com, warden) was
+  // ~86% API-key traffic against the free grant -- the browser chat is
+  // unaffected. Fails closed (503) if the lookup errors, never open. Counts
+  // the user's own purchase rows only (auto-top-up rows use the same reason).
+  {
+    const { data: anyPurchase, error: purchaseErr } = await supaAdmin
+      .from("credit_ledger")
+      .select("id")
+      .eq("user_id", keyRow.user_id)
+      .eq("reason", "purchase")
+      .limit(1);
+    if (purchaseErr) {
+      console.error("api-chat: purchase gate lookup failed", purchaseErr.message);
+      return json({ error: "Billing temporarily unavailable" }, 503);
+    }
+    if (!anyPurchase || anyPurchase.length === 0) {
+      return json({
+        error: "API access requires a credit-pack purchase. Buy any pack at https://aethyro.com/#pricing -- the free signup credits work in the Aethyro chat only.",
+        code: "purchase_required",
+      }, 403);
+    }
+  }
+
   // Tiered per-key rate limit: a lifetime Power/Pro pack purchase (a real,
   // one-time purchase row in credit_ledger -- this product has no
   // recurring subscriptions to check against) raises the cap. Fails
