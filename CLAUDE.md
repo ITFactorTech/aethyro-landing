@@ -473,7 +473,7 @@ it to the `?buy=` pattern instead.
   the cap (a routine that now uses `web_search` can take up to 5 Anthropic
   calls — PR #214 — widening that overshoot, still bounded).
 
-- **Found 2026-11-05, `oracle` — public legal copy says messages go to
+~~- **Found 2026-11-05, `oracle` — public legal copy says messages go to
   Anthropic only; they don't.** `trust.html:133` says user messages go to
   Anthropic "and for nothing else"; `privacy.html` §4 and `terms.html:84`
   list Anthropic as the only processor (`privacy.html` is dated June 1);
@@ -486,7 +486,7 @@ it to the `?buy=` pattern instead.
   contradicts — needs the owner, not a sweep (what to disclose, how to
   word the failover, whether the "for nothing else" line stays). Highest
   priority of the content findings because it is a factual privacy claim,
-  not marketing wording.
+  not marketing wording.~~ — **copy fixed 2026-11-07 (draft PR), owner wording review still open** — see the 2026-11-07 provider-disclosure entry in the work log below.
 
 - **Found 2026-11-05, `probe` — memory embeddings are being dropped at a
   high, sustained rate (for `codex`).** `memory_embeddings.embedding IS
@@ -1505,6 +1505,8 @@ PR #149 (2026-10-08) was still fully possible to repeat. Centralized into:
 
 Keep this short — a few most-recent entries, not a full history (git log has
 that). Newest first.
+
+- **2026-11-07** — **Public provider-disclosure copy corrected (draft PR) — closes the 2026-11-05 `oracle` finding's factual gap.** Pages said user messages go to Anthropic (trust.html: "and for nothing else"; privacy §4 and terms listed it as the only processor) while live data shows OpenAI serving failover replies (44 as of 11-05) and the explicit "GPT" button, plus Voyage AI (embeddings of messages/documents) and Tavily (web search queries/URLs) receiving user text. Edited: `privacy.html` (dated Nov 7, 2026; §2 data flow, §4 now lists OpenAI/Voyage AI/Tavily/Resend/Cloudflare with policy links + a connectors note, §7 "share with third parties" → "only the providers in §4"), `terms.html` (dated; processors list), `trust.html` (lead paragraph and "doesn't sell or share" bullet), `index.html` (FAQ JSON-LD + 3 visible claims), `claude-without-subscription.html` (JSON-LD + FAQ). JSON-LD re-validated as parseable. Anthropic's no-training claim is now scoped to Anthropic only; **no training-policy claim is made for OpenAI, Voyage or Tavily** (not verified). Image attachments are described as not sent to OpenAI (matches the 400/guard in `chat`). **Owner calls left open:** whether the "GPT" model should carry a visible privacy note in-app beyond its tooltip; the two blog posts still say "your conversations never train the model" (true of Aethyro, unverified for non-Anthropic providers); OpenAI's privacy URL returned 403 to curl (bot protection) — click-check it; the other five policy URLs returned 200. Copy only: no migration, no edge function.
 
 - **2026-11-07** — **`run-routines`: empty reply after exhausted tool rounds fixed, and tokens consumed before a mid-loop error are now recorded (draft PR) — closes the two token items from the 2026-11-06 Pending entry.**
   **(1) Empty reply:** when `MAX_TOOL_ROUNDS` ran out, the final call sent a history full of `tool_use`/`tool_result` blocks with no `tools` parameter and came back without usable text — a live test (a Sonnet routine told to run six sequential searches) billed 5 credits and stored only the fallback `"Routine completed."`. The final call now keeps the tool definitions but sets `tool_choice: {type: "none"}`, and the same user turn gets an appended text block saying the tool budget is used up and to write the final result from what was found (say so plainly if something wasn't). Only applies when tools were actually used.

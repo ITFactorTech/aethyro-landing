@@ -130,7 +130,7 @@
   <p class="lead">Checkout is Stripe-hosted. Aethyro's own servers never see, touch, or store your card number — a purchase becomes a credit grant on your account via a signed webhook, and that's the only thing that crosses back into our database.</p>
 
   <h2><span class="ic" style="color:var(--violet)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8A3.5 3.5 0 0 0 7 19a3 3 0 0 0 5-2V6a3 3 0 0 0-3-2Z"/><path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5.8A3.5 3.5 0 0 1 17 19a3 3 0 0 1-5-2"/></svg></span> What your conversations are used for</h2>
-  <p class="lead">Messages are sent to Anthropic's Claude API to generate your response, and for nothing else. Anthropic's API terms are a no-training policy on API inputs — your conversations aren't used to train Claude or any other model. Aethyro doesn't sell, share, or otherwise monetize your conversation content.</p>
+  <p class="lead">Messages are sent to Anthropic's Claude API to generate your response. If Claude is unavailable, or you pick the GPT model, they go to OpenAI's API instead. Message and document text is also sent to Voyage AI to compute the embeddings behind memory and search, and when the assistant searches the web, the search query goes to Tavily. Anthropic's API terms are a no-training policy on API inputs, and Aethyro itself doesn't train models on your conversations; each other provider handles data under its own privacy policy. Aethyro doesn't sell or otherwise monetize your conversation content. The full list of providers is in the <a href="/privacy.html">Privacy Policy</a>.</p>
 
   <h2><span class="ic" style="color:var(--gold)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V9l8-5 8 5v12"/><path d="M4 21h16"/><path d="M9 21v-6h6v6"/><path d="M9 12h.01M9 9h.01M15 12h.01M15 9h.01"/></svg></span> Infrastructure</h2>
   <p class="lead">The frontend runs on Cloudflare Workers; data, auth, and access control run on Supabase/Postgres. Both are established infrastructure providers Aethyro builds on top of — this page describes what Aethyro itself does with your data on that infrastructure, not a claim about their own certifications.</p>
@@ -138,7 +138,7 @@
   <div class="not-box">
     <h3>What Aethyro deliberately doesn't do</h3>
     <ul>
-      <li>Doesn't sell or share your data with third parties, ever.</li>
+      <li>Doesn't sell your data, and doesn't share it with anyone beyond the service providers needed to run the product (listed in the <a href="/privacy.html">Privacy Policy</a>).</li>
       <li>Doesn't train AI models on your conversations.</li>
       <li>Doesn't run a subscription you have to remember to cancel — credit packs are one-time purchases that never expire and never auto-renew unless you explicitly turn on auto-topup.</li>
       <li>Doesn't claim certifications (SOC 2, ISO 27001, etc.) it doesn't hold. If that ever changes, this page will say so specifically, not with a badge.</li>
