@@ -295,6 +295,27 @@ serve(async (req) => {
     chainDepth = Number.isInteger(body?.chain_depth) ? body.chain_depth : 0;
   } catch { /* no body or non-JSON from pg_cron — fine */ }
 
+  // ── Caller-identity guard (2026-11-07, found by the site-guardian exploit probe) ──
+  // verify_jwt=true only proves the bearer is *some* valid Supabase JWT -- and the
+  // public anon key (embedded in client JS) is one. With the anon key,
+  // getUser() resolves no user, so userFilter stays null; before this guard a body
+  // {routine_id} then matched purely on id, so anyone holding the anon key could
+  // run -- and bill to its owner -- any enabled routine whose id they knew (ids of
+  // PUBLISHED routines are anon-readable), and chain_context was prepended to the
+  // prompt of every due routine. Legitimate callers:
+  //   * pg_cron:             anon key, body {} (no routine_id)  -> scheduled path, allowed
+  //   * "Run now" button:    the user's own session JWT         -> userFilter set, allowed
+  //   * chained steps / webhook-routine-trigger: service-role key -> allowed
+  // So an EXPLICIT routine run needs a real user or the service role, and the
+  // internal-only chain fields are honored only from the service role.
+  const isServiceCaller = jwt === SERVICE_ROLE_KEY;
+  if (singleRoutineId && !isServiceCaller && !userFilter) {
+    return new Response(JSON.stringify({ error: "Authentication required to run a specific routine" }), {
+      status: 401, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+  if (!isServiceCaller) { chainContext = null; chainDepth = 0; }
+
   // Fetch due routines
   // When running a specific routine on demand, skip the schedule filter.
   let query = supaAdmin
