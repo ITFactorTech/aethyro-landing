@@ -64,6 +64,25 @@ serve(async (req: Request) => {
     auth: { persistSession: false },
   });
 
+  // Blocked bonus domains (bonus_blocked_domains): no referral credit for
+  // either side. Checked before any event/credit row is written. Fails
+  // closed if the lookup errors.
+  {
+    const domain = (user.email ?? "").split("@")[1]?.toLowerCase() ?? "";
+    if (domain) {
+      const { data: blocked, error: blockedErr } = await admin
+        .from("bonus_blocked_domains")
+        .select("domain")
+        .eq("domain", domain)
+        .maybeSingle();
+      if (blockedErr) {
+        console.error("redeem-referral: blocklist lookup failed", blockedErr.message);
+        return json({ error: "Temporarily unavailable" }, 503);
+      }
+      if (blocked) return json({ error: "Referral credits are not available for this account" }, 403);
+    }
+  }
+
   // Look up the referral code
   const { data: codeRow, error: codeErr } = await admin
     .from("referral_codes")
