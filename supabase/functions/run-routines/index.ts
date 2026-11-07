@@ -155,9 +155,13 @@ async function runRoutineCompletion(
   anthropic: Anthropic,
   model: string,
   promptText: string,
+  // Caller-owned accumulator, updated after EVERY API call: if a later call throws, the
+  // caller still knows what was consumed so far (it is recorded in routine_run_log's
+  // detail as absorbed cost, not billed -- same "nothing delivered, nothing charged"
+  // rule as chat's empty-reply handling). Previously the counters were locals and an
+  // exception lost them without a trace.
+  usage: { inputTokens: number; outputTokens: number },
 ): Promise<{ resultText: string; inputTokens: number; outputTokens: number }> {
-  let inputTokens = 0;
-  let outputTokens = 0;
   let messages: any[] = [{ role: "user", content: promptText }];
   const system = "You are Aethyro, a scheduled AI assistant. Produce a concise, useful result for the user's routine task. Use markdown. Be direct and actionable.";
 
@@ -171,12 +175,12 @@ async function runRoutineCompletion(
         tools: TOOLS,
         tool_choice: { type: "auto" },
       });
-      inputTokens += r.usage.input_tokens;
-      outputTokens += r.usage.output_tokens;
+      usage.inputTokens += r.usage.input_tokens;
+      usage.outputTokens += r.usage.output_tokens;
 
       if (r.stop_reason !== "tool_use") {
         const resultBlock = r.content.find((b) => b.type === "text") as any;
-        return { resultText: resultBlock?.text || "Routine completed.", inputTokens, outputTokens };
+        return { resultText: resultBlock?.text || "Routine completed.", inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
       }
 
       const toolResults: any[] = [];
@@ -197,19 +201,37 @@ async function runRoutineCompletion(
     }
   }
 
-  // No tools configured, or MAX_TOOL_ROUNDS exhausted still requesting a
-  // tool: one final call with no tools forces a text reply, same fallback
-  // shape as chat's own tool loop.
+  // No tools configured, or MAX_TOOL_ROUNDS exhausted still requesting a tool: one
+  // final call must force a text reply. Found 2026-11-06 (live test): the old shape --
+  // a history full of tool_use/tool_result blocks but NO `tools` parameter -- came back
+  // without usable text, so the user got the "Routine completed." fallback after paying
+  // for every round. Now the tool definitions stay (the history references them) but
+  // calling them is forbidden with tool_choice "none", and the same user turn tells the
+  // model the budget is spent and it must answer from what it already found.
+  const toolsWereUsed = TOOLS.length > 0 && messages.length > 1;
+  if (toolsWereUsed) {
+    const last = messages[messages.length - 1];
+    if (last?.role === "user" && Array.isArray(last.content)) {
+      messages = [...messages.slice(0, -1), {
+        role: "user",
+        content: [...last.content, {
+          type: "text",
+          text: "Your tool budget is used up. Do not call any more tools. Write the final result now, using what you have already found; if something could not be found, say so plainly.",
+        }],
+      }];
+    }
+  }
   const final = await anthropic.messages.create({
     model,
     max_tokens: 1500,
     system,
     messages,
-  });
-  inputTokens += final.usage.input_tokens;
-  outputTokens += final.usage.output_tokens;
-  const resultBlock = final.content.find((b) => b.type === "text") as any;
-  return { resultText: resultBlock?.text || "Routine completed.", inputTokens, outputTokens };
+    ...(toolsWereUsed ? { tools: TOOLS, tool_choice: { type: "none" } } : {}),
+  } as any);
+  usage.inputTokens += final.usage.input_tokens;
+  usage.outputTokens += final.usage.output_tokens;
+  const resultBlock = final.content.find((b: any) => b.type === "text") as any;
+  return { resultText: resultBlock?.text || "Routine completed.", inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
 }
 
 // Chained routines re-invoke this function internally after each successful
@@ -345,6 +367,9 @@ serve(async (req) => {
     const model = MODEL_MAP[modelKey];
     const rates = CREDIT_RATES[modelKey];
 
+    // Tokens consumed so far by this routine's API calls (see runRoutineCompletion).
+    const usage = { inputTokens: 0, outputTokens: 0 };
+
     try {
       // ── Atomic claim of a SCHEDULED run (2026-11-06) ─────────────────────
       // Due routines are selected up front and then processed serially with no
@@ -456,7 +481,7 @@ serve(async (req) => {
         ? `Context from the previous step in this routine chain:\n${chainContext}\n\n---\n\nYour task:\n${routine.prompt}`
         : routine.prompt;
 
-      const { resultText, inputTokens, outputTokens } = await runRoutineCompletion(anthropic, model, promptText);
+      const { resultText, inputTokens, outputTokens } = await runRoutineCompletion(anthropic, model, promptText, usage);
 
       // Bill credits -- summed across every Anthropic call this run made
       // (including any tool round), not just a single call's usage, so a
@@ -543,7 +568,10 @@ serve(async (req) => {
         routine_id: routine.id,
         user_id:    routine.user_id,
         status:     "error",
-        detail:     (e as Error).message.slice(0, 500),
+        // A failed run is not billed (nothing was delivered), but any tokens it
+        // had already consumed are recorded so absorbed cost is visible.
+        detail:     ((e as Error).message + (usage.inputTokens + usage.outputTokens > 0
+          ? ` [absorbed, not billed: ${usage.inputTokens} in / ${usage.outputTokens} out tokens]` : "")).slice(0, 500),
       });
       if (logErr) console.error("run-routines: routine_run_log insert failed", logErr.message);
       results.push({ id: routine.id, name: routine.name, status: "error" });
