@@ -1,3 +1,5 @@
+// run-agent-task v6 — (1) a FAILED task is no longer charged (it used to cost the 10-credit
+// minimum even when every step errored); (2) today's UTC date is in the step prompt.
 // run-agent-task v5 — OpenAI failover on every model call (planner, each step's tool loop,
 // final synthesis). Each call runs on Anthropic first and falls back to OpenAI if Anthropic
 // throws or the shared provider_health circuit is open, so an unfunded Anthropic account no
@@ -335,7 +337,7 @@ async function executeStep(
 
 // Shared by the Claude and OpenAI step executors so both get the identical instructions.
 function stepPrompt(goal: string, stepDesc: string, stepContext: string): string {
-  return `You are executing step "${stepDesc}" as part of the larger goal: "${goal}"\n\n` +
+  return `You are executing step "${stepDesc}" as part of the larger goal: "${goal}". Today's date is ${new Date().toISOString().slice(0, 10)} (UTC).\n\n` +
     `Context so far:\n${stepContext}\n\n` +
     `Complete this step. Use tools if needed. ` +
     `If a tool result is marked "TOOL_FAILED", that lookup did not succeed -- do not answer as if it had, and do not substitute your own general/background knowledge and present it as verified information from that tool. Say plainly in your result that the lookup failed and that part of your answer is unverified. ` +
@@ -666,15 +668,23 @@ serve(async (req) => {
   }
 
   // ── Billing ──────────────────────────────────────────────────────────────────────────────
-  const cost = calcCredits(totalInput, totalOutput, modelKey);
-  const { error: ledgerErr } = await supaAdmin.from("credit_ledger").insert({
-    user_id: user.id,
-    delta:   -cost,
-    reason:  "agent_task",
-    team_id: taskProfile?.team_id ?? null,
-    metadata: { providers: [...servedBy], input_tokens: totalInput, output_tokens: totalOutput },
-  });
-  if (ledgerErr) console.error("agent_task credit_ledger insert failed", ledgerErr.message);
+  // A task that FAILED delivered nothing, so it is not charged (same rule as chat's
+  // empty-reply fix and failed routines). Before 2026-11-08 the ledger insert ran
+  // regardless of taskFailed, so a task that died on every provider still cost the
+  // 10-credit minimum. What the failed attempt consumed is absorbed and logged.
+  const cost = taskFailed ? 0 : calcCredits(totalInput, totalOutput, modelKey);
+  if (cost > 0) {
+    const { error: ledgerErr } = await supaAdmin.from("credit_ledger").insert({
+      user_id: user.id,
+      delta:   -cost,
+      reason:  "agent_task",
+      team_id: taskProfile?.team_id ?? null,
+      metadata: { providers: [...servedBy], input_tokens: totalInput, output_tokens: totalOutput },
+    });
+    if (ledgerErr) console.error("agent_task credit_ledger insert failed", ledgerErr.message);
+  } else {
+    console.error(`agent_task ${taskId} failed -- not billed (absorbed ${totalInput} in / ${totalOutput} out tokens)`);
+  }
 
   // ── Finalise task record ──────────────────────────────────────────────────────────
   await supaAdmin.from("agent_tasks").update({

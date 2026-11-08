@@ -1,3 +1,5 @@
+// run-routines v10 — today's UTC date is now part of the routine system prompt (both the
+// Claude and OpenAI paths), so date-sensitive prompts stop answering from stale sources.
 // run-routines v9 — OpenAI failover. If Anthropic is unavailable (out of credits, an
 // outage, or the shared provider_health circuit is open) the routine now runs on OpenAI
 // instead of failing: same prompt, same web_search tool, same billing (summed tokens at the
@@ -151,7 +153,14 @@ const TOOLS: Anthropic.Tool[] = TAVILY_API_KEY
     }]
   : [];
 const MAX_TOOL_ROUNDS = 4;
-const ROUTINE_SYSTEM = "You are Aethyro, a scheduled AI assistant. Produce a concise, useful result for the user's routine task. Use markdown. Be direct and actionable.";
+// A function, not a const: it carries TODAY'S date, so "most recent" / "last 24 hours"
+// prompts and web_search queries anchor to the real date instead of the model's
+// training cutoff (found live 2026-11-08: a "most recent World Cup" routine answered
+// with a 2022 source when a 2026 result existed). chat got the same line 2026-11-08.
+function routineSystem(): string {
+  return "You are Aethyro, a scheduled AI assistant. Produce a concise, useful result for the user's routine task. Use markdown. Be direct and actionable." +
+    ` Today's date is ${new Date().toISOString().slice(0, 10)} (UTC).`;
+}
 
 // Runs one routine's completion, looping through tool-use rounds (if
 // TOOLS is non-empty) exactly like chat's generateCompletion: the model
@@ -173,7 +182,7 @@ async function runRoutineCompletion(
   usage: { inputTokens: number; outputTokens: number },
 ): Promise<{ resultText: string; inputTokens: number; outputTokens: number }> {
   let messages: any[] = [{ role: "user", content: promptText }];
-  const system = ROUTINE_SYSTEM;
+  const system = routineSystem();
 
   if (TOOLS.length > 0) {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -258,7 +267,7 @@ async function runRoutineCompletionOpenAI(
   const r = await runOpenAIToolLoop({
     apiKey: OPENAI_API_KEY!,
     model: OPENAI_MODEL_MAP[modelKey],
-    system: ROUTINE_SYSTEM,
+    system: routineSystem(),
     messages: [{ role: "user", content: promptText }],
     tools: TOOLS as any,
     executeTool: async (name, input) =>
