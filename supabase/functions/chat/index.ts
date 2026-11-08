@@ -1,3 +1,10 @@
+// chat v60 — free tier. An account with no purchase (its own or its team's) is
+// served on the Haiku billing rate by OpenAI gpt-6.1-terra only: modelKey is forced
+// to "haiku" and forceProvider to "openai" before any other routing, so free usage
+// never reaches the Anthropic account. Explicit sonnet/opus/gpt picks are served by
+// Terra too and reported to the client as cost.lockedTier (upsell note); image
+// attachments are refused with 403 free_tier_locked. A purchase-history lookup
+// error is a 503. Ledger rows from free accounts carry metadata.free_tier = true.
 // chat v59 — connector tools (GitHub/Notion) now authenticate with the real token. Since
 // 2026-10-09 user_integrations.access_token is an encrypted bytea; this function selected
 // the column directly and sent the ciphertext as the bearer token, so every github_*/notion_*
@@ -167,7 +174,7 @@
 // AUTO_MODEL_CREDIT_FLOOR (100, half the free signup grant); it tops out
 // at Sonnet instead. Never touches an explicit model choice. Real data
 // motivating this: 82% of all billed messages were Opus against a
-// one-time 200-credit free grant, and 89% of users who ever opened a
+// one-time 100-credit free grant, and 89% of users who ever opened a
 // chat never returned on a second day -- the auto-router had zero
 // balance-awareness, so new users could burn their entire free grant on
 // a handful of auto-routed Opus replies with no runway left to discover
@@ -234,6 +241,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
 import { completeWithFailover } from "../_shared/llm.ts";
+import { hasPurchased } from "../_shared/freetier.ts";
 
 // CORS is locked to aethyro.com + this project's Cloudflare preview
 // subdomains (<branch-or-commit>-aethyro-landing.<account>.workers.dev) —
@@ -271,7 +279,7 @@ const LOW_CREDIT_THRESHOLD = 30;
 // Credit-aware router cap: below this balance, model:"auto" stops
 // offering Opus and tops out at Sonnet -- never affects an explicit
 // model choice. Real data (2026-10-06): 82% of all billed messages were
-// Opus against a one-time 200-credit free grant, and 89% of users who
+// Opus against a one-time 100-credit free grant, and 89% of users who
 // ever chatted never returned on a second day -- the auto-router had no
 // awareness of remaining balance at all, so a low-balance account could
 // still get auto-routed to the most expensive model right before the
@@ -681,12 +689,34 @@ serve(async (req) => {
     embedText(message),
   ]);
 
+  // Free tier (2026-11-08): no purchase by this user or their team => Haiku
+  // billing rate, served by OpenAI gpt-6.1-terra, never the Anthropic account.
+  // Sonnet/Opus/GPT picks and image attachments are what a pack unlocks.
+  // Fails closed: an unreadable purchase history is a 503, never a paid tier.
+  const purchaseCheck = await hasPurchased(supaAdmin, user.id, profileRes.data?.team_id);
+  if (!purchaseCheck.ok) {
+    console.error("chat: purchase lookup failed", purchaseCheck.error);
+    return new Response(JSON.stringify({ error: "Billing temporarily unavailable. Please try again in a moment." }), {
+      status: 503, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+  const freeTier = !purchaseCheck.purchased;
+  let lockedTier: "sonnet" | "opus" | "gpt" | null = null;
+  if (freeTier && hasImageAttachment)
+    return new Response(JSON.stringify({ error: "Image attachments unlock with any credit pack (from $4). Free credits cover text chat." , code: "free_tier_locked" }), {
+      status: 403, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+
   let modelKey: "haiku" | "sonnet" | "opus";
   // Explicit OpenAI pick skips the embedding classifier entirely and forces
   // completeWithFailover straight to OpenAI (no Anthropic attempt, no
   // circuit-breaker check) -- "gpt" is a deliberate choice, not a fallback.
   let forceProvider: "openai" | undefined;
-  if (requestedModel === "gpt") {
+  if (freeTier) {
+    modelKey = "haiku";
+    forceProvider = "openai";
+    if (requestedModel === "sonnet" || requestedModel === "opus" || requestedModel === "gpt") lockedTier = requestedModel;
+  } else if (requestedModel === "gpt") {
     modelKey = "sonnet";
     forceProvider = "openai";
   } else if (requestedModel === "auto") {
@@ -1145,7 +1175,7 @@ serve(async (req) => {
         delta: -cost,
         reason: "chat_usage",
         team_id: profileRes.data?.team_id ?? null,
-        metadata: { model: modelKey, input_tokens: inputTokens, output_tokens: outputTokens, provider, actual_model: actualModel },
+        metadata: { model: modelKey, input_tokens: inputTokens, output_tokens: outputTokens, provider, actual_model: actualModel, ...(freeTier ? { free_tier: true } : {}) },
       });
     }
     const { data: newBal } = await supaAdmin.rpc("get_credit_balance", { p_user_id: user.id });
@@ -1218,6 +1248,8 @@ serve(async (req) => {
         credits: cost,
         model: modelKey,
         requestedModel,
+        freeTier,
+        lockedTier,
         provider,
         actualModel,
         inputTokens,

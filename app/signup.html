@@ -26,7 +26,7 @@
 <div class="wrap">
   <a href="/" class="brand"><span class="dot"></span> Aethyro</a>
   <div class="card">
-    <h1>Get 200 free credits</h1>
+    <h1>Get 100 free credits</h1>
     <p class="sub">No credit card required. Powered by Claude Opus 5.5.</p>
     <button class="btn btn-oauth" id="googleBtn" type="button" style="margin-top:0">
       <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47c-.28 1.5-1.13 2.78-2.4 3.63v3.02h3.89c2.28-2.1 3.56-5.19 3.56-8.84z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.89-3.02c-1.08.72-2.45 1.15-4.04 1.15-3.11 0-5.74-2.1-6.68-4.92H1.3v3.09C3.26 21.3 7.3 24 12 24z"/><path fill="#FBBC05" d="M5.32 14.31A7.2 7.2 0 0 1 4.93 12c0-.8.14-1.58.39-2.31V6.6H1.3A11.98 11.98 0 0 0 0 12c0 1.93.46 3.76 1.3 5.4l4.02-3.09z"/><path fill="#EA4335" d="M12 4.77c1.76 0 3.34.61 4.58 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0 7.3 0 3.26 2.7 1.3 6.6l4.02 3.09C6.26 6.87 8.89 4.77 12 4.77z"/></svg>
@@ -52,7 +52,7 @@
     <div class="msg" id="msg"></div>
     <p class="alt">Already have an account? <a href="./login.html" id="loginAlt">Log in</a></p>
   </div>
-  <p class="note">// 200 credits granted on signup · credits never expire · <a href="../trust.html" style="color:var(--t3);text-decoration:underline">no data sold</a></p>
+  <p class="note">// 100 credits granted on signup · credits never expire · <a href="../trust.html" style="color:var(--t3);text-decoration:underline">no data sold</a></p>
 </div>
 <script src="./vendor/supabase.js"></script>
 <script src="./config.js"></script>
@@ -126,7 +126,7 @@
     var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:nextAbs, data:{ signup_referrer:signupAttribution.referrer, signup_utm:signupAttribution.utm } } });
     if(r.error){ show(r.error.message,'err'); magicBtn.disabled=false; magicBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg> Sign up with magic link'; return; }
     if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'magic_link', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); }
-    show('Magic link sent — check your inbox. Clicking it creates your account and grants 200 free credits.','ok');
+    show('Magic link sent — check your inbox. Clicking it creates your account and grants 100 free credits.','ok');
     magicBtn.textContent='Link sent ✓';
   });
 
@@ -162,7 +162,7 @@
       if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Create account →'; return; }
       if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'email', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); gtag('event','begin_checkout',{currency:'USD',value:0}); }
       if(r.data && r.data.session){ location.href=nextUrl; return; }
-      show('Account created — check your email to confirm, then log in to claim your 200 free credits.','ok'); btn.textContent='Check your email ✓';
+      show('Account created — check your email to confirm, then log in to claim your 100 free credits.','ok'); btn.textContent='Check your email ✓';
     }catch(err){ show((err&&err.message)||String(err),'err'); btn.disabled=false; btn.textContent='Create account →'; }
   });
 })();

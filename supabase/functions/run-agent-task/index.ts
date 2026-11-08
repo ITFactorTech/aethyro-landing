@@ -47,6 +47,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
 import { OPENAI_MODEL_MAP, runWithOpenAIFailover, type ModelKey } from "../_shared/failover.ts";
+import { hasPurchased } from "../_shared/freetier.ts";
 import { runOpenAIToolLoop } from "../_shared/openai_tools.ts";
 
 // CORS locked to aethyro.com (+ preview subdomains); was a bare "*". See
@@ -454,7 +455,7 @@ serve(async (req) => {
       status: 400, headers: { ...CORS, "Content-Type": "application/json" },
     });
 
-  const modelKey = ["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "sonnet";
+  let modelKey = ["haiku", "sonnet", "opus"].includes(body.model) ? body.model : "sonnet";
   const supaAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   // ── Credit gate ───────────────────────────────────────────────────────────────
@@ -469,6 +470,17 @@ serve(async (req) => {
       status: 503, headers: { ...CORS, "Content-Type": "application/json" },
     });
   }
+  // Free tier (2026-11-08): no purchase by this user or their team => Haiku
+  // billing rate, served by OpenAI only (never the Anthropic account). Fails closed.
+  const purchaseCheck = await hasPurchased(supaAdmin, user.id, taskProfile.team_id);
+  if (!purchaseCheck.ok) {
+    console.error("run-agent-task: purchase lookup failed", purchaseCheck.error);
+    return new Response(JSON.stringify({ error: "Billing temporarily unavailable. Please try again in a moment." }), {
+      status: 503, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+  const freeTier = !purchaseCheck.purchased;
+  if (freeTier) modelKey = "haiku";
   const currentBalance = balance;
   if (currentBalance < MIN_CREDITS)
     return new Response(JSON.stringify({
@@ -516,6 +528,7 @@ serve(async (req) => {
   try {
     const { value: planCall, provider: planBy } = await runWithOpenAIFailover({
       supaAdmin,
+      forceOpenAI: freeTier,
       openaiApiKey: OPENAI_API_KEY,
       label: "run-agent-task/plan",
       anthropic: async () => {
@@ -572,6 +585,7 @@ serve(async (req) => {
     try {
       const { value: stepRes, provider: stepBy } = await runWithOpenAIFailover({
         supaAdmin,
+        forceOpenAI: freeTier,
         openaiApiKey: OPENAI_API_KEY,
         label: "run-agent-task/step",
         anthropic: () => executeStep(anthropic, goal, plan[i], stepContext, modelKey),
@@ -629,6 +643,7 @@ serve(async (req) => {
         `Write a comprehensive final answer/report in markdown. If any part of the work above is marked "TOOL_FAILED" or otherwise shows a research step that failed, say so plainly instead of filling the gap with your own general knowledge presented as verified fact.`;
       const { value: synth, provider: synthBy } = await runWithOpenAIFailover({
         supaAdmin,
+        forceOpenAI: freeTier,
         openaiApiKey: OPENAI_API_KEY,
         label: "run-agent-task/synthesis",
         anthropic: async () => {

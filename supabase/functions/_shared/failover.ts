@@ -79,12 +79,18 @@ export async function runWithOpenAIFailover<T>(o: {
   supaAdmin: SupabaseClient;
   openaiApiKey: string | undefined;
   label: string;                 // for logs, e.g. "run-routines"
+  // Free-tier accounts never reach the Anthropic account (see freetier.ts):
+  // when true, go straight to OpenAI without touching the circuit breaker.
+  forceOpenAI?: boolean;
   anthropic: () => Promise<T>;
   openai: () => Promise<T>;
 }): Promise<{ value: T; provider: Provider }> {
+  if (o.forceOpenAI && !o.openaiApiKey) throw new Error("OpenAI is not configured.");
   if (!o.openaiApiKey) return { value: await o.anthropic(), provider: "anthropic" };
 
-  if (!(await isCircuitOpen(o.supaAdmin, "anthropic"))) {
+  if (o.forceOpenAI) {
+    // straight to OpenAI below
+  } else if (!(await isCircuitOpen(o.supaAdmin, "anthropic"))) {
     try {
       const value = await o.anthropic();
       await recordSuccess(o.supaAdmin, "anthropic");

@@ -33,17 +33,17 @@ function btn(text: string, url: string) {
 
 // queue_onboarding_emails() (the on_auth_user_created_queue_emails trigger)
 // only ever schedules email_num 1-3, one per day after signup. There is no
-// trial and nothing to "upgrade" out of -- every account gets 200 free
+// trial and nothing to "upgrade" out of -- every account gets 100 free
 // credits on signup, permanently, and tops up with one-time credit packs
 // whenever they want. Only 3 templates exist now for that reason.
 const emails: Record<number, { subject: string; html: (name: string) => string }> = {
   1: {
-    subject: "Your 200 free credits are ready",
+    subject: "Your 100 free credits are ready",
     html: (n) => wrap(`
       <p>Hey ${n},</p>
       <p>Welcome to Aethyro.</p>
-      <p>You started with <strong>200 free credits</strong>, automatically, no card required. That's enough for dozens of conversations right now.</p>
-      <p>Pick your model per message: <strong>Haiku</strong> for quick, everyday questions, <strong>Sonnet</strong> for balanced everyday work, or <strong>Opus</strong> when a problem is genuinely hard.</p>
+      <p>You started with <strong>100 free credits</strong>, automatically, no card required. That's enough for dozens of conversations right now.</p>
+      <p>Your free credits run on our fast model, which handles most everyday questions. Buy any credit pack (from $4) and you can pick <strong>Sonnet</strong> for balanced work or <strong>Opus</strong> when a problem is genuinely hard.</p>
       ${btn("→ Start chatting", CHAT)}
       <p>If you hit any issues, reply to this email. I read every one.</p>
       <p>— Robert<br/>Founder, Aethyro</p>

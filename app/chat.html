@@ -275,6 +275,11 @@
   .model-btn:hover{color:var(--text);border-color:var(--b3)}
   .model-btn.active{background:rgba(0,212,255,.12);border-color:var(--cyan);color:var(--cyan)}
   .model-btn .model-cost{opacity:.65;margin-left:.25rem;font-size:.68rem}
+  /* Free tier: Sonnet/Opus/GPT unlock with any credit pack. Still clickable so the pick can explain itself. */
+  #modelBar.free-tier .model-btn.tier-locked{opacity:.6}
+  #modelBar.free-tier .model-btn.tier-locked::after{content:" \1F512\FE0E";font-size:.62rem;opacity:.8}
+  .msg-cost .mc-upsell{color:var(--t2)}
+  .msg-cost .mc-upsell button{background:none;border:0;padding:0;font:inherit;color:var(--orange,#ff4d00);cursor:pointer;text-decoration:underline}
 
   /* ── Attachments ── */
   .attach-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .55rem;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);border-radius:6px;font-size:.75rem;color:var(--cyan);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -507,7 +512,7 @@
     <div class="msgs" id="msgs">
       <div class="empty-state" id="emptyState">
         <h2>Ask Aethyro anything.</h2>
-        <p>Code, research, writing, strategy. New accounts start with 200 free credits.</p>
+        <p>Code, research, writing, strategy. New accounts start with 100 free credits.</p>
         <div class="prompt-chips" id="promptChips">
           <button class="prompt-chip" data-prompt="Write a Python function with exponential backoff retry logic">Write a Python retry wrapper</button>
           <button class="prompt-chip" data-prompt="Summarize this contract and highlight any risky clauses I should watch out for">Summarize a contract for risks</button>
@@ -534,7 +539,7 @@
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 9v5M12 16.5h.01"/></svg> Low balance (<span id="lowBalanceVal">0</span> credits)<span id="lowBalanceModelNote"></span>. <a href="#" id="lowBalanceBuy">Buy more →</a>
       </div>
       <div class="low-balance" id="trialLimitBar" style="display:none">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg> That's today's 3 free preview messages. <a href="./signup.html?next=chat" id="trialLimitBarLink">Sign up free for 200 credits →</a>
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg> That's today's 3 free preview messages. <a href="./signup.html?next=chat" id="trialLimitBarLink">Sign up free for 100 credits →</a>
       </div>
       <div class="depleted-bar" id="depletedBar" style="display:none">
         <svg class="ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg> No credits left. <a href="#" id="depletedBuy">Buy credits →</a>
@@ -1006,7 +1011,27 @@ I often need help with: client quotes, contract review, business Instagram posts
   }
 
   /* ── Model selector ── */
+  var isFreeTier=false;
+  function applyFreeTier(on){
+    isFreeTier=!!on;
+    var bar=$('modelBar'); if(!bar) return;
+    bar.classList.toggle('free-tier', isFreeTier);
+    bar.querySelectorAll('.model-btn').forEach(function(b){
+      var k=b.getAttribute('data-model');
+      b.classList.toggle('tier-locked', isFreeTier && (k==='sonnet'||k==='opus'||k==='gpt'));
+    });
+  }
+  /* One cheap RLS-scoped read: does this user have any purchase? (Team purchases are
+     not visible here; the server's cost.freeTier on the first reply corrects the UI.) */
+  async function detectFreeTier(){
+    try{
+      var r=await supabase.from('credit_ledger').select('id').eq('reason','purchase').limit(1);
+      if(!r.error) applyFreeTier(!(r.data&&r.data.length));
+    }catch(e){}
+  }
   function setModel(key){
+    if(isFreeTier && (key==='sonnet'||key==='opus'||key==='gpt'))
+      showToast('Free credits run on the fast Haiku-rate model. Any credit pack (from $4) unlocks '+(key==='gpt'?'GPT':key==='opus'?'Opus':'Sonnet')+'.','ok');
     currentModel=key;
     localStorage.setItem('aethyro_model', currentModel);
     $('modelBar').querySelectorAll('.model-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-model')===currentModel); });
@@ -1053,6 +1078,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     $('buyBtn').style.display='';
     $('exportBtn').style.display='';
     initModelBar();
+    detectFreeTier();
     await refreshBalance();
     await loadConversationList();
     await loadWorkspaceContext();
@@ -1118,7 +1144,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     $('trialBadge').style.display='inline-flex';
     $('signupLink').style.display='inline-flex';
     $('cloudNote').textContent='// Aethyro Cloud — free preview, no signup required.';
-    $('emptyState').innerHTML='<h2>Try Aethyro Cloud free.</h2><p>3 free messages a day, no signup. <a href="./signup.html?next=chat" style="color:var(--orange)">Sign up for 200 free credits</a> to save your conversations.</p><div class="prompt-chips" id="promptChips"><button class="prompt-chip" data-prompt="Write a Python function with exponential backoff retry logic">Write a Python retry wrapper</button><button class="prompt-chip" data-prompt="Summarize this contract and highlight any risky clauses I should watch out for">Summarize a contract for risks</button><button class="prompt-chip" data-prompt="Help me build a go-to-market strategy for a new SaaS product">Plan a GTM strategy</button><button class="prompt-chip" data-prompt="Explain how large language models work, in plain language">Explain how LLMs work</button><button class="prompt-chip" data-prompt="Write a compelling cold email for a B2B SaaS outreach">Draft a cold outreach email</button><button class="prompt-chip" data-prompt="Review my code for bugs and suggest improvements">Review my code</button></div>';
+    $('emptyState').innerHTML='<h2>Try Aethyro Cloud free.</h2><p>3 free messages a day, no signup. <a href="./signup.html?next=chat" style="color:var(--orange)">Sign up for 100 free credits</a> to save your conversations.</p><div class="prompt-chips" id="promptChips"><button class="prompt-chip" data-prompt="Write a Python function with exponential backoff retry logic">Write a Python retry wrapper</button><button class="prompt-chip" data-prompt="Summarize this contract and highlight any risky clauses I should watch out for">Summarize a contract for risks</button><button class="prompt-chip" data-prompt="Help me build a go-to-market strategy for a new SaaS product">Plan a GTM strategy</button><button class="prompt-chip" data-prompt="Explain how large language models work, in plain language">Explain how LLMs work</button><button class="prompt-chip" data-prompt="Write a compelling cold email for a B2B SaaS outreach">Draft a cold outreach email</button><button class="prompt-chip" data-prompt="Review my code for bugs and suggest improvements">Review my code</button></div>';
     $('signupLink').addEventListener('click', function(){ track('trial_signup_cta_click',{surface:'chat_page',location:'topbar'}); });
     $('trialLimitBarLink').addEventListener('click', function(){ track('trial_signup_cta_click',{surface:'chat_page',location:'limit_bar'}); });
   }
@@ -1364,7 +1390,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     history=[];
     $('msgs').innerHTML='';
     var es=document.createElement('div'); es.id='emptyState'; es.className='empty-state';
-    es.innerHTML='<h2>Ask Aethyro anything.</h2><p>Code, research, writing, strategy. New accounts start with 200 free credits.</p><div class="prompt-chips" id="promptChips"><button class="prompt-chip" data-prompt="Write a Python function with exponential backoff retry logic">Write a Python retry wrapper</button><button class="prompt-chip" data-prompt="Summarize this contract and highlight any risky clauses I should watch out for">Summarize a contract for risks</button><button class="prompt-chip" data-prompt="Help me build a go-to-market strategy for a new SaaS product">Plan a GTM strategy</button><button class="prompt-chip" data-prompt="Explain how large language models work, in plain language">Explain how LLMs work</button><button class="prompt-chip" data-prompt="Write a compelling cold email for a B2B SaaS outreach">Draft a cold outreach email</button><button class="prompt-chip" data-prompt="Review my code for bugs and suggest improvements">Review my code</button></div>';
+    es.innerHTML='<h2>Ask Aethyro anything.</h2><p>Code, research, writing, strategy. New accounts start with 100 free credits.</p><div class="prompt-chips" id="promptChips"><button class="prompt-chip" data-prompt="Write a Python function with exponential backoff retry logic">Write a Python retry wrapper</button><button class="prompt-chip" data-prompt="Summarize this contract and highlight any risky clauses I should watch out for">Summarize a contract for risks</button><button class="prompt-chip" data-prompt="Help me build a go-to-market strategy for a new SaaS product">Plan a GTM strategy</button><button class="prompt-chip" data-prompt="Explain how large language models work, in plain language">Explain how LLMs work</button><button class="prompt-chip" data-prompt="Write a compelling cold email for a B2B SaaS outreach">Draft a cold outreach email</button><button class="prompt-chip" data-prompt="Review my code for bugs and suggest improvements">Review my code</button></div>';
     $('msgs').appendChild(es);
     $('chatTitle').textContent='';
     var url=new URL(location.href);
@@ -1680,6 +1706,11 @@ I often need help with: client quotes, contract review, business Instagram posts
       showToast('GPT doesn\'t support image attachments yet — switch to a Claude model for this message.','err');
       return;
     }
+    /* Free tier: image attachments unlock with any pack (server answers 403 free_tier_locked). */
+    if(isFreeTier && attachments && attachments.some(function(a){ return a.type==='image'; })){
+      showToast('Image attachments unlock with any credit pack (from $4). Free credits cover text chat.','err');
+      return;
+    }
     busy=true; $('sendBtn').disabled=true;
     addMessage('user',message);
 
@@ -1878,6 +1909,14 @@ I often need help with: client quotes, contract review, business Instagram posts
             receiptLink.addEventListener('click',(function(r){ return function(){ showGenerationReceipt(r); }; })(meta.receipt));
             costEl.appendChild(receiptLink);
           }
+          if(typeof mc.freeTier==='boolean') applyFreeTier(mc.freeTier);
+          if(mc.freeTier && mc.lockedTier){
+            var up=document.createElement('span');
+            up.className='mc-upsell';
+            up.innerHTML='· Free credits use the fast model. <button type="button">Unlock '+(mc.lockedTier==='gpt'?'GPT':mc.lockedTier==='opus'?'Opus':'Sonnet')+' with any pack →</button>';
+            up.querySelector('button').addEventListener('click',function(){ openCreditModal('tier_locked'); });
+            costEl.appendChild(up);
+          }
           bubble.parentNode.appendChild(costEl);
           requestAnimationFrame(function(){ costEl.classList.add('show'); });
           addSessionCost(mc.credits);
@@ -1922,6 +1961,7 @@ I often need help with: client quotes, contract review, business Instagram posts
 
   async function shouldWarnBeforeOpusSend(){
     if(!session || currentModel!=='opus') return false;
+    if(isFreeTier) return false; /* free accounts are served the fast model whatever is picked; there is no Opus bill to warn about */
     if(localStorage.getItem(OPUS_WARN_LS_KEY)) return false;
     if(_prevBalance!==null && _prevBalance<=lowBalanceThreshold('opus')) return false;
     try{
