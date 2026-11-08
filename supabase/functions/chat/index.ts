@@ -1,3 +1,9 @@
+// chat v59 — connector tools (GitHub/Notion) now authenticate with the real token. Since
+// 2026-10-09 user_integrations.access_token is an encrypted bytea; this function selected
+// the column directly and sent the ciphertext as the bearer token, so every github_*/notion_*
+// tool call returned 401 (for Claude and GPT alike). Tokens are now read through the
+// service-role-only get_integration_token() RPC, as connector-proxy does. No user had
+// connected an integration, so no one was affected yet.
 // chat v58 — GPT now has tools. An explicit "gpt" pick runs the same tool
 // registry Claude gets (web_search, fetch_url, and the GitHub/Notion
 // connector tools) through an OpenAI function-calling loop
@@ -669,7 +675,9 @@ serve(async (req) => {
   // latency -- the classifier just runs after this Promise.all resolves.
   const [profileRes, integrationsRes, queryEmbedding] = await Promise.all([
     supaAdmin.from("profiles").select("workspace_context, memory, team_id, monthly_spend_cap_credits").eq("id", user.id).single(),
-    supaAdmin.from("user_integrations").select("provider, access_token, metadata").eq("user_id", user.id),
+    // access_token is deliberately NOT selected: since 2026-10-09 it is a pgp-encrypted bytea,
+    // readable only through get_integration_token() (see below).
+    supaAdmin.from("user_integrations").select("provider, metadata").eq("user_id", user.id),
     embedText(message),
   ]);
 
@@ -809,9 +817,27 @@ serve(async (req) => {
   }
 
   // ── Build connector tools dynamically ───────────────────────────
-  const integrations = integrationsRes.data || [];
-  const githubInt = integrations.find(i => i.provider === "github");
-  const notionInt = integrations.find(i => i.provider === "notion");
+  // Connector tokens are stored encrypted (migration 20261009000000: access_token is a
+  // pgp_sym_encrypt bytea). Reading the column directly returns the ciphertext as a hex
+  // string, which was then sent to GitHub/Notion as the bearer token -- so every GitHub/
+  // Notion tool call in chat has failed with a 401 since that migration (nobody had
+  // connected an integration yet, so it went unnoticed). The only way to get the plaintext
+  // is the service-role-only get_integration_token() RPC, as connector-proxy already does.
+  // A lookup failure just means that connector's tools aren't offered this turn.
+  const integrations = (integrationsRes.data || []) as { provider: string; metadata: any }[];
+  async function connectedIntegration(provider: string) {
+    const row = integrations.find(i => i.provider === provider);
+    if (!row) return undefined;
+    const { data: token, error: tokenErr } = await supaAdmin.rpc("get_integration_token", {
+      p_user_id: user.id, p_provider: provider,
+    });
+    if (tokenErr || typeof token !== "string" || !token) {
+      console.error(`chat: could not read ${provider} integration token`, tokenErr?.message ?? "empty result");
+      return undefined;
+    }
+    return { ...row, access_token: token };
+  }
+  const [githubInt, notionInt] = await Promise.all([connectedIntegration("github"), connectedIntegration("notion")]);
 
   const connectorTools: Anthropic.Tool[] = [];
 
