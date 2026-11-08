@@ -1,3 +1,9 @@
+// run-routines v9 — OpenAI failover. If Anthropic is unavailable (out of credits, an
+// outage, or the shared provider_health circuit is open) the routine now runs on OpenAI
+// instead of failing: same prompt, same web_search tool, same billing (summed tokens at the
+// routine's own Claude tier rate). Previously a routine had no fallback at all, so an
+// unfunded Anthropic account silently stopped every scheduled routine. The credit_ledger
+// row now carries metadata {provider, model, input_tokens, output_tokens}.
 // run-routines v5 — real web_search tool access, closing a real customer
 // -impact bug `growth` found 2026-11-02 (CLAUDE.md Pending, PR #206): this
 // function had zero tool access at all, unlike chat/index.ts's proven
@@ -53,6 +59,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
+import { OPENAI_MODEL_MAP, runWithOpenAIFailover, type ModelKey } from "../_shared/failover.ts";
+import { runOpenAIToolLoop } from "../_shared/openai_tools.ts";
 
 // CORS locked to aethyro.com (+ preview subdomains); was a bare "*". See
 // chat/index.ts v48's comment for the rationale.
@@ -75,6 +83,7 @@ const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const TAVILY_API_KEY    = Deno.env.get("TAVILY_API_KEY");
+const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY"); // optional -- unset just means no OpenAI failover
 
 const MODEL_MAP: Record<string, string> = {
   haiku:  "claude-haiku-4-5-20251001",
@@ -142,6 +151,7 @@ const TOOLS: Anthropic.Tool[] = TAVILY_API_KEY
     }]
   : [];
 const MAX_TOOL_ROUNDS = 4;
+const ROUTINE_SYSTEM = "You are Aethyro, a scheduled AI assistant. Produce a concise, useful result for the user's routine task. Use markdown. Be direct and actionable.";
 
 // Runs one routine's completion, looping through tool-use rounds (if
 // TOOLS is non-empty) exactly like chat's generateCompletion: the model
@@ -163,7 +173,7 @@ async function runRoutineCompletion(
   usage: { inputTokens: number; outputTokens: number },
 ): Promise<{ resultText: string; inputTokens: number; outputTokens: number }> {
   let messages: any[] = [{ role: "user", content: promptText }];
-  const system = "You are Aethyro, a scheduled AI assistant. Produce a concise, useful result for the user's routine task. Use markdown. Be direct and actionable.";
+  const system = ROUTINE_SYSTEM;
 
   if (TOOLS.length > 0) {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -232,6 +242,34 @@ async function runRoutineCompletion(
   usage.outputTokens += final.usage.output_tokens;
   const resultBlock = final.content.find((b: any) => b.type === "text") as any;
   return { resultText: resultBlock?.text || "Routine completed.", inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
+}
+
+// OpenAI twin of runRoutineCompletion, used when Anthropic is unavailable (out of
+// credits, an outage, circuit open). Same prompt, same web_search tool and
+// executor, same tool-round budget (then a forced-text answer, so an exhausted
+// budget still yields a written result). Billing is unchanged: the caller bills the
+// summed tokens at the ROUTINE'S OWN Claude tier rate, whichever provider answered
+// (same parity decision as chat -- see _shared/failover.ts for the model/price match).
+async function runRoutineCompletionOpenAI(
+  modelKey: ModelKey,
+  promptText: string,
+  usage: { inputTokens: number; outputTokens: number },
+): Promise<{ resultText: string; inputTokens: number; outputTokens: number }> {
+  const r = await runOpenAIToolLoop({
+    apiKey: OPENAI_API_KEY!,
+    model: OPENAI_MODEL_MAP[modelKey],
+    system: ROUTINE_SYSTEM,
+    messages: [{ role: "user", content: promptText }],
+    tools: TOOLS as any,
+    executeTool: async (name, input) =>
+      name === "web_search" ? await executeWebSearch(String(input.query ?? "")) : "Tool execution failed or not supported.",
+    maxTokens: 3000, // includes hidden reasoning tokens, hence above the Claude path's 1500
+    maxRounds: MAX_TOOL_ROUNDS,
+    onTextDelta: () => {},
+  });
+  usage.inputTokens += r.inputTokens;
+  usage.outputTokens += r.outputTokens;
+  return { resultText: r.fullText.trim() || "Routine completed.", inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
 }
 
 // Chained routines re-invoke this function internally after each successful
@@ -481,7 +519,20 @@ serve(async (req) => {
         ? `Context from the previous step in this routine chain:\n${chainContext}\n\n---\n\nYour task:\n${routine.prompt}`
         : routine.prompt;
 
-      const { resultText, inputTokens, outputTokens } = await runRoutineCompletion(anthropic, model, promptText, usage);
+      const { value: completion, provider: servedBy } = await runWithOpenAIFailover({
+        supaAdmin,
+        openaiApiKey: OPENAI_API_KEY,
+        label: "run-routines",
+        anthropic: () => runRoutineCompletion(anthropic, model, promptText, usage),
+        openai: () => {
+          // Restart from scratch: whatever a half-finished Anthropic attempt consumed is
+          // absorbed, not billed (the user is billed only for the attempt that delivered).
+          usage.inputTokens = 0;
+          usage.outputTokens = 0;
+          return runRoutineCompletionOpenAI(modelKey as ModelKey, promptText, usage);
+        },
+      });
+      const { resultText, inputTokens, outputTokens } = completion;
 
       // Bill credits -- summed across every Anthropic call this run made
       // (including any tool round), not just a single call's usage, so a
@@ -499,6 +550,12 @@ serve(async (req) => {
         delta:   -cost,
         reason:  "routine",
         team_id: routineProfile?.team_id ?? null,
+        metadata: {
+          provider: servedBy,
+          model: servedBy === "openai" ? OPENAI_MODEL_MAP[modelKey as ModelKey] : model,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+        },
       });
       if (ledgerErr) console.error("routine credit_ledger insert failed", ledgerErr.message);
 
