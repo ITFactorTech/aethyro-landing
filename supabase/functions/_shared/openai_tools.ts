@@ -50,6 +50,9 @@ export interface ToolLoopOptions {
   maxCallsPerRound?: number;   // extra calls in one round get a "skipped" result (default 4)
   reasoningEffort?: string;    // default "low": tool turns favour latency and cost
   onFinalStart?: () => void;   // fires once, just before the first answer text is emitted
+  // Checked after each round's tools have run; true ends the loop right there
+  // (run-agent-task's `synthesize` tool: calling it IS the answer).
+  stopWhen?: () => boolean;
   onTextDelta: (text: string) => void;
   onToolCall?: (name: string, input: Record<string, unknown>) => void;
 }
@@ -121,8 +124,9 @@ export async function runOpenAIToolLoop(o: ToolLoopOptions): Promise<ToolLoopRes
         model: o.model,
         instructions: o.system,
         input,
-        tools: oaTools,
-        tool_choice: forceText ? "none" : "auto",
+        // An empty tool list makes this a plain (tool-free) completion, which
+        // the background jobs also use for planning/synthesis calls.
+        ...(oaTools.length > 0 ? { tools: oaTools, tool_choice: forceText ? "none" : "auto" } : {}),
         reasoning: { effort: o.reasoningEffort ?? "low" },
         max_output_tokens: o.maxTokens,
         store: false,
@@ -210,6 +214,9 @@ export async function runOpenAIToolLoop(o: ToolLoopOptions): Promise<ToolLoopRes
         }
       }
       input.push({ type: "function_call_output", call_id: c.call_id, output: String(result).slice(0, MAX_TOOL_RESULT_CHARS) });
+    }
+    if (o.stopWhen?.()) {
+      return { fullText, inputTokens, outputTokens, finishReason, rounds: round + 1, toolCalls };
     }
   }
 

@@ -1,3 +1,10 @@
+// run-agent-task v5 — OpenAI failover on every model call (planner, each step's tool loop,
+// final synthesis). Each call runs on Anthropic first and falls back to OpenAI if Anthropic
+// throws or the shared provider_health circuit is open, so an unfunded Anthropic account no
+// longer kills every agent task (it used to: planning silently fell to a default plan, then
+// every step failed). Same prompts, same tools (web_search / crawl_site / synthesize), same
+// billing (summed tokens at the task's own Claude tier rate, whichever provider answered).
+// The credit_ledger row now carries metadata {providers, input_tokens, output_tokens}.
 // run-agent-task v3 — Long-horizon agentic task runner
 // Plans a goal into steps, executes each with tool use, stores progress in DB.
 //
@@ -37,6 +44,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
+import { OPENAI_MODEL_MAP, runWithOpenAIFailover, type ModelKey } from "../_shared/failover.ts";
+import { runOpenAIToolLoop } from "../_shared/openai_tools.ts";
 
 // CORS locked to aethyro.com (+ preview subdomains); was a bare "*". See
 // chat/index.ts v48's comment for the rationale.
@@ -59,6 +68,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const TAVILY_API_KEY    = Deno.env.get("TAVILY_API_KEY");
+const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY"); // optional -- unset just means no OpenAI failover
 
 const PLANNER_MODEL = "claude-haiku-4-5-20251001";
 const EXECUTOR_MODEL_MAP: Record<string, string> = {
@@ -239,12 +249,7 @@ async function executeStep(
 
   const messages: Anthropic.MessageParam[] = [{
     role: "user",
-    content:
-      `You are executing step "${stepDesc}" as part of the larger goal: "${goal}"\n\n` +
-      `Context so far:\n${stepContext}\n\n` +
-      `Complete this step. Use tools if needed. ` +
-      `If a tool result is marked "TOOL_FAILED", that lookup did not succeed -- do not answer as if it had, and do not substitute your own general/background knowledge and present it as verified information from that tool. Say plainly in your result that the lookup failed and that part of your answer is unverified. ` +
-      `When you have enough information to fully answer the entire goal, call the synthesize tool.`,
+    content: stepPrompt(goal, stepDesc, stepContext),
   }];
 
   let toolCalls: any[] = [];
@@ -326,6 +331,77 @@ async function executeStep(
   }
 
   return { result, toolCalls, done, inputTokens, outputTokens, toolAttempts, toolFailures };
+}
+
+// Shared by the Claude and OpenAI step executors so both get the identical instructions.
+function stepPrompt(goal: string, stepDesc: string, stepContext: string): string {
+  return `You are executing step "${stepDesc}" as part of the larger goal: "${goal}"\n\n` +
+    `Context so far:\n${stepContext}\n\n` +
+    `Complete this step. Use tools if needed. ` +
+    `If a tool result is marked "TOOL_FAILED", that lookup did not succeed -- do not answer as if it had, and do not substitute your own general/background knowledge and present it as verified information from that tool. Say plainly in your result that the lookup failed and that part of your answer is unverified. ` +
+    `When you have enough information to fully answer the entire goal, call the synthesize tool.`;
+}
+
+// OpenAI twin of executeStep, used when Anthropic is unavailable (see runWithOpenAIFailover).
+// Same prompt, same three tools and executors, same per-step tool budget (then a forced-text
+// answer rather than an empty result), same deterministic failure banner. Returns the same
+// shape, so billing and step bookkeeping downstream don't care which provider answered.
+async function executeStepOpenAI(
+  goal: string,
+  stepDesc: string,
+  stepContext: string,
+  modelKey: string,
+): Promise<{
+  result: string; toolCalls: any[]; done: boolean;
+  inputTokens: number; outputTokens: number; toolAttempts: number; toolFailures: number;
+}> {
+  const toolCalls: any[] = [];
+  let result = "";
+  let done = false;
+  let toolAttempts = 0;
+  let toolFailures = 0;
+
+  const r = await runOpenAIToolLoop({
+    apiKey: OPENAI_API_KEY!,
+    model: OPENAI_MODEL_MAP[(modelKey in OPENAI_MODEL_MAP ? modelKey : "haiku") as ModelKey],
+    system: "You are Aethyro's research agent. Carry out the step you are given, using the tools when they help.",
+    messages: [{ role: "user", content: stepPrompt(goal, stepDesc, stepContext) }],
+    tools: agentTools() as any,
+    executeTool: async (name, input) => {
+      if (name === "web_search") {
+        const q = String(input.query ?? "");
+        const res = await webSearch(q);
+        toolCalls.push({ tool: "web_search", query: q, ok: res.ok });
+        toolAttempts++; if (!res.ok) toolFailures++;
+        return res.text;
+      }
+      if (name === "crawl_site") {
+        const url = String(input.url ?? "");
+        const res = await crawlSite(url, typeof input.max_pages === "number" ? input.max_pages : undefined);
+        toolCalls.push({ tool: "crawl_site", url, ok: res.ok });
+        toolAttempts++; if (!res.ok) toolFailures++;
+        return res.text;
+      }
+      if (name === "synthesize") {
+        result = `**${(input.title as string) ?? "Result"}**\n\n${(input.content as string) ?? ""}`;
+        done = true;
+        toolCalls.push({ tool: "synthesize" });
+        return "Synthesis complete.";
+      }
+      return "Tool execution failed or not supported.";
+    },
+    stopWhen: () => done,
+    maxTokens: STEP_MAX_TOK * 2, // includes hidden reasoning tokens
+    maxRounds: STEP_MAX_TOOLS,
+    onTextDelta: () => {},
+  });
+  if (!result) result = r.fullText.trim() || "Step completed.";
+
+  if (toolAttempts > 0 && toolFailures === toolAttempts) {
+    const failedTools = toolCalls.filter(t => t.tool !== "synthesize").map(t => t.tool).join(", ");
+    result = `> ⚠️ **Research failed for this step** — every tool call (${failedTools}) returned an error or no data. The text below reflects the model's own general knowledge, not information verified by this step.\n\n${result}`;
+  }
+  return { result, toolCalls, done, inputTokens: r.inputTokens, outputTokens: r.outputTokens, toolAttempts, toolFailures };
 }
 
 // ── Credits helper ──────────────────────────────────────────────────────────────────────────────
@@ -428,24 +504,45 @@ serve(async (req) => {
   const taskId: string = task.id;
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   let totalInput = 0, totalOutput = 0;
+  const servedBy = new Set<string>(); // providers that actually answered a call in this task
+  const planPrompt =
+    `Break down this goal into ${MAX_STEPS} or fewer concrete, actionable steps. ` +
+    `Return ONLY a JSON array of step description strings, no explanation.\n\nGoal: ${goal}`;
 
   // ── Planning phase ───────────────────────────────────────────────────────────────────
   let plan: string[] = [];
   try {
-    const planRes = await anthropic.messages.create({
-      model: PLANNER_MODEL,
-      max_tokens: 400,
-      messages: [{
-        role: "user",
-        content:
-          `Break down this goal into ${MAX_STEPS} or fewer concrete, actionable steps. ` +
-          `Return ONLY a JSON array of step description strings, no explanation.\n\nGoal: ${goal}`,
-      }],
+    const { value: planCall, provider: planBy } = await runWithOpenAIFailover({
+      supaAdmin,
+      openaiApiKey: OPENAI_API_KEY,
+      label: "run-agent-task/plan",
+      anthropic: async () => {
+        const planRes = await anthropic.messages.create({
+          model: PLANNER_MODEL,
+          max_tokens: 400,
+          messages: [{ role: "user", content: planPrompt }],
+        });
+        const raw = planRes.content.find(b => b.type === "text") as any;
+        return { text: (raw?.text || "") as string, input: planRes.usage.input_tokens, output: planRes.usage.output_tokens };
+      },
+      openai: async () => {
+        const r = await runOpenAIToolLoop({
+          apiKey: OPENAI_API_KEY!,
+          model: OPENAI_MODEL_MAP.haiku,
+          system: "You are a planning assistant. Follow the format instructions exactly.",
+          messages: [{ role: "user", content: planPrompt }],
+          tools: [],
+          executeTool: async () => "",
+          maxTokens: 1500, // includes hidden reasoning tokens
+          onTextDelta: () => {},
+        });
+        return { text: r.fullText, input: r.inputTokens, output: r.outputTokens };
+      },
     });
-    totalInput  += planRes.usage.input_tokens;
-    totalOutput += planRes.usage.output_tokens;
-    const raw = planRes.content.find(b => b.type === "text") as any;
-    const match = (raw?.text || "").match(/\[[\s\S]*?\]/);
+    servedBy.add(planBy);
+    totalInput  += planCall.input;
+    totalOutput += planCall.output;
+    const match = planCall.text.match(/\[[\s\S]*?\]/);
     if (match) plan = (JSON.parse(match[0]) as string[]).slice(0, MAX_STEPS);
   } catch { /* fall through to default plan */ }
 
@@ -471,8 +568,15 @@ serve(async (req) => {
       .eq("step_index", i);
 
     try {
-      const { result, toolCalls, done, inputTokens: si, outputTokens: so, toolAttempts, toolFailures } =
-        await executeStep(anthropic, goal, plan[i], stepContext, modelKey);
+      const { value: stepRes, provider: stepBy } = await runWithOpenAIFailover({
+        supaAdmin,
+        openaiApiKey: OPENAI_API_KEY,
+        label: "run-agent-task/step",
+        anthropic: () => executeStep(anthropic, goal, plan[i], stepContext, modelKey),
+        openai: () => executeStepOpenAI(goal, plan[i], stepContext, modelKey),
+      });
+      servedBy.add(stepBy);
+      const { result, toolCalls, done, inputTokens: si, outputTokens: so, toolAttempts, toolFailures } = stepRes;
 
       totalInput  += si;
       totalOutput += so;
@@ -518,19 +622,43 @@ serve(async (req) => {
     // backstop, independent of model compliance.
     const allToolsFailed = totalToolAttempts > 0 && totalToolFailures === totalToolAttempts;
     try {
-      const synthRes = await anthropic.messages.create({
-        model:      EXECUTOR_MODEL_MAP[modelKey] ?? EXECUTOR_MODEL_MAP.haiku,
-        max_tokens: 2000,
-        messages: [{
-          role:    "user",
-          content:
-            `You completed research for this goal: "${goal}"\n\nWork done:\n${stepContext}\n\n` +
-            `Write a comprehensive final answer/report in markdown. If any part of the work above is marked "TOOL_FAILED" or otherwise shows a research step that failed, say so plainly instead of filling the gap with your own general knowledge presented as verified fact.`,
-        }],
+      const synthPrompt =
+        `You completed research for this goal: "${goal}"\n\nWork done:\n${stepContext}\n\n` +
+        `Write a comprehensive final answer/report in markdown. If any part of the work above is marked "TOOL_FAILED" or otherwise shows a research step that failed, say so plainly instead of filling the gap with your own general knowledge presented as verified fact.`;
+      const { value: synth, provider: synthBy } = await runWithOpenAIFailover({
+        supaAdmin,
+        openaiApiKey: OPENAI_API_KEY,
+        label: "run-agent-task/synthesis",
+        anthropic: async () => {
+          const synthRes = await anthropic.messages.create({
+            model:      EXECUTOR_MODEL_MAP[modelKey] ?? EXECUTOR_MODEL_MAP.haiku,
+            max_tokens: 2000,
+            messages: [{ role: "user", content: synthPrompt }],
+          });
+          return {
+            text: ((synthRes.content.find(b => b.type === "text") as any)?.text || "") as string,
+            input: synthRes.usage.input_tokens,
+            output: synthRes.usage.output_tokens,
+          };
+        },
+        openai: async () => {
+          const r = await runOpenAIToolLoop({
+            apiKey: OPENAI_API_KEY!,
+            model: OPENAI_MODEL_MAP[(modelKey in OPENAI_MODEL_MAP ? modelKey : "haiku") as ModelKey],
+            system: "You are Aethyro's research agent. Write the final report the user asked for.",
+            messages: [{ role: "user", content: synthPrompt }],
+            tools: [],
+            executeTool: async () => "",
+            maxTokens: 4000, // includes hidden reasoning tokens
+            onTextDelta: () => {},
+          });
+          return { text: r.fullText, input: r.inputTokens, output: r.outputTokens };
+        },
       });
-      totalInput  += synthRes.usage.input_tokens;
-      totalOutput += synthRes.usage.output_tokens;
-      finalResult = (synthRes.content.find(b => b.type === "text") as any)?.text || "Task complete.";
+      servedBy.add(synthBy);
+      totalInput  += synth.input;
+      totalOutput += synth.output;
+      finalResult = synth.text || "Task complete.";
     } catch { finalResult = stepContext.trim() || "Task complete."; }
     if (allToolsFailed) {
       finalResult = `> ⚠️ **Research failed** — every tool call attempted for this task returned an error or no data. This report reflects the model's own general knowledge, not information verified during this task.\n\n${finalResult}`;
@@ -544,6 +672,7 @@ serve(async (req) => {
     delta:   -cost,
     reason:  "agent_task",
     team_id: taskProfile?.team_id ?? null,
+    metadata: { providers: [...servedBy], input_tokens: totalInput, output_tokens: totalOutput },
   });
   if (ledgerErr) console.error("agent_task credit_ledger insert failed", ledgerErr.message);
 

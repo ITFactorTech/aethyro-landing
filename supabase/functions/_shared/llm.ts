@@ -31,35 +31,17 @@
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32?target=deno";
 import OpenAI from "https://esm.sh/openai@4?target=deno";
 import { runOpenAIToolLoop, type ToolDef } from "./openai_tools.ts";
+import {
+  OPENAI_MODEL_MAP, isCircuitOpen, recordFailure, recordSuccess,
+  type ModelKey, type Provider,
+} from "./failover.ts";
+
+// Circuit breaker, model map and shared types live in failover.ts (also used by
+// run-routines / run-agent-task); re-exported so existing imports keep working.
+export { OPENAI_MODEL_MAP };
+export type { ToolDef, ModelKey, Provider };
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 
-// OpenAI model per billing tier, chosen 2026-11-08 against OpenAI's own
-// pricing page (developers.openai.com/api/docs/pricing, per 1M tokens in/out)
-// so each OpenAI model costs no more than the Claude tier it is billed as:
-//   haiku  -> gpt-6.1-terra  $1/$5    (Claude Haiku 4.5: $1/$5)
-//   sonnet -> gpt-6.1-sol    $2/$10   (Claude Sonnet 5:   $2/$10)
-//   opus   -> gpt-6.1-sol    $2/$10   (Claude Opus 5.5:   $4/$20 -- the Opus
-//             tier stays on Sol rather than gpt-6-astra, $10/$50, which would
-//             cost 2.5x what an Opus reply bills; Opus-tier failover is a
-//             margin gain, as it was on gpt-5.4)
-// The previous gpt-5.4 ($2.50/$15) was both a generation behind and slightly
-// dearer than the Sonnet rate it was billed at. Never use a "-pro" model
-// here: those 404 on Chat Completions (found live 2026-10-30). gpt-6-luna is
-// deliberately NOT used for haiku: it is a reasoning model whose hidden
-// reasoning tokens ate a 10-token budget completely (empty reply,
-// finish_reason "length") when probed 2026-11-02.
-export const OPENAI_MODEL_MAP: Record<"haiku" | "sonnet" | "opus", string> = {
-  haiku:  "gpt-6.1-terra",
-  sonnet: "gpt-6.1-sol",
-  opus:   "gpt-6.1-sol",
-};
-
-const CIRCUIT_FAILURE_THRESHOLD = 3;
-const CIRCUIT_OPEN_MS = 2 * 60 * 1000; // 2 minutes before the circuit lets a live Anthropic request through again
-
-export type { ToolDef };
-export type ModelKey = "haiku" | "sonnet" | "opus";
-export type Provider = "anthropic" | "openai";
 
 export interface CompletionRequest {
   modelKey: ModelKey;
@@ -85,33 +67,6 @@ export interface CompletionResult {
   inputTokens: number;
   outputTokens: number;
   stopReason: string;     // normalized: "end_turn" | "max_tokens" | "refusal" | other Anthropic-shaped reasons
-}
-
-async function isCircuitOpen(supaAdmin: SupabaseClient, provider: Provider): Promise<boolean> {
-  const { data, error } = await supaAdmin
-    .from("provider_health")
-    .select("opened_until")
-    .eq("provider", provider)
-    .maybeSingle();
-  if (error || !data?.opened_until) return false;
-  return new Date(data.opened_until as string).getTime() > Date.now();
-}
-
-async function recordFailure(supaAdmin: SupabaseClient, provider: Provider): Promise<void> {
-  const { data } = await supaAdmin
-    .from("provider_health")
-    .select("consecutive_failures")
-    .eq("provider", provider)
-    .maybeSingle();
-  const failures = ((data?.consecutive_failures as number) ?? 0) + 1;
-  const opened_until = failures >= CIRCUIT_FAILURE_THRESHOLD
-    ? new Date(Date.now() + CIRCUIT_OPEN_MS).toISOString()
-    : null;
-  await supaAdmin.from("provider_health").upsert({ provider, consecutive_failures: failures, opened_until });
-}
-
-async function recordSuccess(supaAdmin: SupabaseClient, provider: Provider): Promise<void> {
-  await supaAdmin.from("provider_health").upsert({ provider, consecutive_failures: 0, opened_until: null });
 }
 
 // Anthropic content can be a plain string or an array of blocks (text,
