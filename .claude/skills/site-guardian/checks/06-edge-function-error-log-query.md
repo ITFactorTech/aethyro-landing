@@ -43,6 +43,33 @@ order by timestamp desc
 limit 200;
 ```
 
+## Which function? Use `request.pathname`, not `request.pattern`
+
+Added 2026-11-08. The `request.pattern` / `request.path` attributes this
+check used to suggest come back **empty** on this backend, so a grouped scan
+shows only anonymous status-code counts and you cannot tell which function
+is failing. The attribute that names the function is
+`log_attributes['request.pathname']` (e.g. `/functions/v1/api-chat`);
+`event_message` also carries `METHOD | status | full url`. A working grouped
+scan:
+
+```sql
+select log_attributes['request.pathname'] as fn,
+       toInt64OrZero(log_attributes['response.status_code']) as status,
+       count() as n, min(timestamp) as first_seen, max(timestamp) as last_seen
+from logs
+where source = 'function_edge_logs'
+  and toInt64OrZero(log_attributes['response.status_code']) >= 400
+group by fn, status order by n desc limit 40;
+```
+
+Other useful keys on the same rows: `request.headers.user_agent`,
+`execution_time_ms`, `request.method`, `function_id`. Known non-bug rows to
+subtract before judging a count: `send-welcome-email` 500s for
+`@example.com` throwaway accounts (Resend 422), `api-chat/dashboard/billing/subscription`
+405s (OpenAI-client scanners), `test-admin-setup` 500/410 while a helper
+deploy is live, `buy-credits` 500 for the known `pack:"__proto__"` probe.
+
 ## Clean result
 
 Only expected-error-path codes (401s from an intentionally-unauthenticated

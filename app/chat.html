@@ -1001,17 +1001,22 @@ I often need help with: client quotes, contract review, business Instagram posts
     if(!el) return;
     var text=$('input').value.trim();
     if(!text){ el.textContent=''; return; }
-    if(currentModel==='auto'){
+    var em=effectiveModel();
+    if(em==='auto'){
       /* Auto could route anywhere up to Opus -- show the true ceiling
          rather than guessing which tier it'll actually pick. */
       el.textContent='up to ~'+estimateWorstCaseCost('opus', text)+' credits (auto) · ';
     } else {
-      el.textContent='up to ~'+estimateWorstCaseCost(currentModel, text)+' credits · ';
+      el.textContent='up to ~'+estimateWorstCaseCost(em, text)+' credits · ';
     }
   }
 
   /* ── Model selector ── */
   var isFreeTier=false;
+  /* No-purchase accounts are billed and served at the Haiku rate whatever model button is
+     selected (server: freeTier forces haiku), so cost estimates and low-balance warnings
+     must use that, not the picked model's rates. */
+  function effectiveModel(){ return isFreeTier ? 'haiku' : currentModel; }
   function applyFreeTier(on){
     isFreeTier=!!on;
     var bar=$('modelBar'); if(!bar) return;
@@ -1020,6 +1025,9 @@ I often need help with: client quotes, contract review, business Instagram posts
       var k=b.getAttribute('data-model');
       b.classList.toggle('tier-locked', isFreeTier && (k==='sonnet'||k==='opus'||k==='gpt'));
     });
+    setCloudNote();
+    if(_prevBalance!=null) updateLowBalanceWarning(_prevBalance);
+    updateCostEstimate();
   }
   /* One cheap RLS-scoped read: does this user have any purchase? (Team purchases are
      not visible here; the server's cost.freeTier on the first reply corrects the UI.) */
@@ -1050,7 +1058,9 @@ I often need help with: client quotes, contract review, business Instagram posts
   }
   function setCloudNote(){
     var names={auto:'Auto', haiku:'Haiku', sonnet:'Sonnet', opus:'Opus'};
-    $('cloudNote').textContent = currentModel==='auto'
+    $('cloudNote').textContent = isFreeTier
+      ? '// Aethyro Cloud — free credits run on OpenAI GPT-6.1 Terra: your messages are sent to OpenAI, not Anthropic · any credit pack unlocks Claude Sonnet and Opus'
+      : currentModel==='auto'
       ? '// Aethyro Cloud — Auto routing (Haiku/Sonnet/Opus by message) · credits billed per token'
       : currentModel==='gpt'
       ? '// Aethyro Cloud — GPT (OpenAI): your messages and any tool results (web, GitHub, Notion) are sent to OpenAI, not Anthropic · credits billed per token'
@@ -1260,13 +1270,14 @@ I often need help with: client quotes, contract review, business Instagram posts
   }
   function updateLowBalanceWarning(n){
     if(depleted){ $('lowBalance').style.display='none'; return; }
-    var threshold=lowBalanceThreshold(currentModel);
+    var em=effectiveModel();
+    var threshold=lowBalanceThreshold(em);
     if(n>0 && n<=threshold){
       $('lowBalance').style.display='flex';
       $('lowBalanceVal').textContent=n;
       $('lowBalanceModelNote').textContent =
-        (currentModel==='opus' || currentModel==='auto') ? ' — an Opus reply can cost up to ~80 credits and may not complete' :
-        (currentModel==='sonnet' || currentModel==='gpt') ? ' — a reply at this rate can cost up to ~15 credits' : '';
+        (em==='opus' || em==='auto') ? ' — an Opus reply can cost up to ~80 credits and may not complete' :
+        (em==='sonnet' || em==='gpt') ? ' — a reply at this rate can cost up to ~15 credits' : '';
     } else {
       $('lowBalance').style.display='none';
     }
