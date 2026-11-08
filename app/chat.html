@@ -548,7 +548,7 @@
         <button class="model-btn" data-model="haiku" id="mBtnHaiku">Haiku<span class="model-cost">~1 cr/msg</span></button>
         <button class="model-btn" data-model="sonnet" id="mBtnSonnet" title="Scales with reply length — longer answers cost more">Sonnet<span class="model-cost">~1-15 cr/msg</span></button>
         <button class="model-btn" data-model="opus" id="mBtnOpus" title="Scales with reply length — a long reply can cost significantly more than a short one">Opus<span class="model-cost">~5-80 cr/msg</span></button>
-        <button class="model-btn" data-model="gpt" id="mBtnGpt" title="Routes to OpenAI's GPT instead of Claude — your message text and conversation context are sent to OpenAI (not Anthropic) under OpenAI's privacy policy. Billed at the same rate as Sonnet. Falls back to Claude automatically if OpenAI is unavailable.">GPT<span class="model-cost">~1-15 cr/msg</span></button>
+        <button class="model-btn" data-model="gpt" id="mBtnGpt" title="Routes to OpenAI's GPT instead of Claude — your message text and conversation context are sent to OpenAI (not Anthropic) under OpenAI's privacy policy. GPT can use web search, page reading and your connected GitHub/Notion, and what those tools return is sent to OpenAI too. Billed at the same rate as Sonnet. Falls back to Claude automatically if OpenAI is unavailable.">GPT<span class="model-cost">~1-15 cr/msg</span></button>
       </div>
       <div id="attachChips" style="display:none"></div>
       <form class="composer" id="composer">
@@ -1028,7 +1028,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     $('cloudNote').textContent = currentModel==='auto'
       ? '// Aethyro Cloud — Auto routing (Haiku/Sonnet/Opus by message) · credits billed per token'
       : currentModel==='gpt'
-      ? '// Aethyro Cloud — GPT (OpenAI): your messages are sent to OpenAI, not Anthropic · credits billed per token'
+      ? '// Aethyro Cloud — GPT (OpenAI): your messages and any tool results (web, GitHub, Notion) are sent to OpenAI, not Anthropic · credits billed per token'
       : '// Aethyro Cloud — Claude '+names[currentModel]+' · credits billed per token';
   }
 

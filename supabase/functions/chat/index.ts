@@ -1,3 +1,18 @@
+// chat v58 — GPT now has tools. An explicit "gpt" pick runs the same tool
+// registry Claude gets (web_search, fetch_url, and the GitHub/Notion
+// connector tools) through an OpenAI function-calling loop
+// (_shared/openai_tools.ts), instead of being tools-free. The automatic
+// Claude-down fallback gets only the two WEB tools -- connector tools are
+// withheld there because the user didn't choose OpenAI (private repo/Notion
+// content reaches OpenAI only on an explicit "GPT" pick). Same loop shape as
+// Claude's: 4 tool rounds then a forced-text final call, tools run
+// sequentially, only the final round's text is shown. Also: OpenAI model map
+// moved from gpt-5.4 to gpt-6.1-terra / gpt-6.1-sol (see _shared/llm.ts for
+// the price match), three new read-only GitHub tools (github_read_issue,
+// github_list_pull_requests, github_list_commits) offered to Claude and GPT
+// alike when GitHub is connected, and today's date (UTC) is now in the system
+// prompt. Billing is unchanged: a GPT turn still bills at the Sonnet rate on
+// summed tokens across rounds.
 // chat v57 — backend-reviewer sweep fix (2026-10-18), closing a gap the
 // v56 fix directly below left open: runFailoverCompletion()'s own
 // onTextDelta/onThinkingDelta callbacks (used for BOTH the explicit
@@ -446,6 +461,10 @@ async function executeFetchUrl(url: string): Promise<string> {
 
 // ── GitHub proxy ───────────────────────────────────────────────────────────────
 
+// owner/repo as the model supplies it for the newer GitHub tools -- checked
+// before it is spliced into an API path.
+const GITHUB_REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
 async function githubRequest(token: string, path: string): Promise<any> {
   const resp = await fetch(`https://api.github.com${path}`, {
     headers: {
@@ -736,6 +755,11 @@ serve(async (req) => {
     systemPrompt += " You have a web_search tool — use it proactively not just for current events, news, prices, scores, and release dates, but for any specific real-world product, part number, or compatibility question where actual documented data (specs, forum reports, manufacturer pages) would beat general reasoning. Search before telling a user to go acquire or test something physically just to find out — check whether the answer is already documented online first. Answer from knowledge alone only for timeless, well-established facts. You also have a fetch_url tool — use it whenever the user pastes or references a specific URL they want read, summarized, or asked about, instead of guessing at a page's contents from its URL or title alone. It reads one page at a time; it does not crawl a whole site.";
   }
 
+  // Today's date (UTC), so "latest" / "last 24 hours" questions and web_search
+  // queries anchor to the real date instead of the model's training cutoff
+  // (found 2026-11-06: briefings could surface a ~13-month-old story).
+  systemPrompt += ` Today's date is ${new Date().toISOString().slice(0, 10)} (UTC).`;
+
   // Flat JSONB memory (structured facts)
   existingMemory = (profileRes.data?.memory && typeof profileRes.data.memory === "object")
     ? profileRes.data.memory as UserMemory
@@ -829,6 +853,42 @@ serve(async (req) => {
           required: ["repo", "path"],
         },
       },
+      {
+        name: "github_read_issue",
+        description: "Read one GitHub issue or pull request (title, state, body, first comments) by number.",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            repo: { type: "string", description: "owner/repo" },
+            number: { type: "integer", description: "Issue or pull request number" },
+          },
+          required: ["repo", "number"],
+        },
+      },
+      {
+        name: "github_list_pull_requests",
+        description: "List pull requests in a GitHub repository (open by default).",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            repo: { type: "string", description: "owner/repo" },
+            state: { type: "string", enum: ["open", "closed", "all"], description: "Which pull requests to list (default open)" },
+          },
+          required: ["repo"],
+        },
+      },
+      {
+        name: "github_list_commits",
+        description: "List the 10 most recent commits in a GitHub repository, optionally only those touching one file path.",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            repo: { type: "string", description: "owner/repo" },
+            path: { type: "string", description: "Optional file path to filter by" },
+          },
+          required: ["repo"],
+        },
+      },
     );
   }
 
@@ -911,6 +971,32 @@ serve(async (req) => {
           const file = await githubRequest(token, `/repos/${repo}/contents/${path}`);
           const content = file.encoding === "base64" ? atob(file.content.replace(/\n/g, "")) : file.content;
           return content.slice(0, 10000);
+        }
+        if (blk.name === "github_read_issue") {
+          const { repo, number } = blk.input as any;
+          const n = Number(number);
+          if (!GITHUB_REPO_RE.test(String(repo || "")) || !Number.isInteger(n) || n < 1) return "Invalid repo (use owner/repo) or issue number.";
+          const [issue, comments] = await Promise.all([
+            githubRequest(token, `/repos/${repo}/issues/${n}`),
+            githubRequest(token, `/repos/${repo}/issues/${n}/comments?per_page=10`),
+          ]);
+          const head = `#${issue.number} ${issue.title}\nState: ${issue.state} · by ${issue.user?.login || "?"}${issue.pull_request ? " · pull request" : ""}\n\n${(issue.body || "").slice(0, 3000)}`;
+          const tail = (comments || []).map((c: any) => `— ${c.user?.login || "?"}: ${(c.body || "").slice(0, 800)}`).join("\n\n");
+          return (head + (tail ? `\n\nComments:\n${tail}` : "")).slice(0, 10000);
+        }
+        if (blk.name === "github_list_pull_requests") {
+          const { repo, state } = blk.input as any;
+          if (!GITHUB_REPO_RE.test(String(repo || ""))) return "Invalid repo (use owner/repo).";
+          const st = state === "closed" || state === "all" ? state : "open";
+          const prs = await githubRequest(token, `/repos/${repo}/pulls?state=${st}&per_page=15`);
+          return prs.map((p: any) => `#${p.number}: ${p.title} (${p.user?.login || "?"}${p.draft ? ", draft" : ""}) ${p.head?.ref} → ${p.base?.ref}`).join("\n") || "No pull requests.";
+        }
+        if (blk.name === "github_list_commits") {
+          const { repo, path } = blk.input as any;
+          if (!GITHUB_REPO_RE.test(String(repo || ""))) return "Invalid repo (use owner/repo).";
+          const filter = path ? `&path=${encodeURIComponent(String(path))}` : "";
+          const commits = await githubRequest(token, `/repos/${repo}/commits?per_page=10${filter}`);
+          return commits.map((c: any) => `${String(c.sha).slice(0, 7)} ${String(c.commit?.author?.date || "").slice(0, 10)} ${c.commit?.author?.name || "?"}: ${String(c.commit?.message || "").split("\n")[0].slice(0, 120)}`).join("\n") || "No commits.";
         }
       }
 
@@ -1261,9 +1347,10 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
       // (fp = "openai", forced) and the Claude-down fallback in the outer
       // catch below (fp = undefined -- completeWithFailover tries Anthropic
       // once more via the circuit breaker before actually failing to
-      // OpenAI). Never passes `tools:` -- tool calling stays Anthropic-only,
-      // see this file's v54 header comment.
-      async function runFailoverCompletion(fp: "openai" | undefined) {
+      // OpenAI). `tools` applies to the OpenAI leg only (v58, see header):
+      // the explicit "gpt" pick passes the full registry, the Claude-down
+      // fallback passes only the web tools.
+      async function runFailoverCompletion(fp: "openai" | undefined, tools?: Anthropic.Tool[]) {
         let fullText = "";
         let thinkingText = "";
         let thinkingEmitted = false;
@@ -1275,6 +1362,19 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
           maxTokens: supportsThinking ? MAX_TOKENS_THINKING : MAX_TOKENS,
           thinking: supportsThinking,
           forceProvider: fp,
+          ...(tools && tools.length > 0 ? {
+            tools: tools as any,
+            executeTool: (name: string, input: Record<string, unknown>) =>
+              executeTool({ type: "tool_use", id: "", name, input } as any),
+            // A tool round has run: tokens/side effects are spent, so (like
+            // the Claude loop's hadPartialProgress) no retry may re-run it.
+            onToolCall: (name: string, input: Record<string, unknown>) => {
+              hadPartialProgress = true;
+              toolEvents.push({ tool: name, input: input as Record<string, any> });
+            },
+            // The tool-card prefix must precede the first answer byte.
+            onFinalStart: () => emitToolPrefix(controller),
+          } : {}),
           onTextDelta: (text) => {
             // backend-reviewer sweep (2026-10-18): this callback enqueues
             // real bytes to the client exactly like the plain Anthropic
@@ -1312,10 +1412,13 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
       // reply was produced); never throws once it has returned.
       async function generateCompletion(): Promise<{ fullText: string; stopReason: string; provider: "anthropic" | "openai"; model: string }> {
         if (forceProvider === "openai") {
-          // Explicit "gpt" pick -- no tool loop (Anthropic-only), straight to
-          // a forced-OpenAI completion.
-          emitToolPrefix(controller);
-          return await runFailoverCompletion("openai");
+          // Explicit "gpt" pick: straight to OpenAI, with the same tool
+          // registry Claude gets (web search, page fetch, GitHub, Notion) run
+          // through the OpenAI function-calling loop. The tool-card prefix is
+          // emitted by that loop (onFinalStart); with no tools configured
+          // there is nothing to prefix.
+          if (TOOLS.length === 0) emitToolPrefix(controller);
+          return await runFailoverCompletion("openai", TOOLS);
         }
 
         if (TOOLS.length > 0) {
@@ -1406,12 +1509,15 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
       } catch (e) {
         // generateCompletion() threw -- most commonly a real Claude outage,
         // but any exception from that branch (a tool-round error, anything
-        // before a reply was produced) lands here too. Tool calling can't be
-        // retried against OpenAI (Anthropic-only, see this file's v54 header
-        // comment), so retry once, tools-free, via the shared failover
-        // module -- which itself gives Anthropic one more try (covers a
-        // tool-specific/transient error, not just a real outage) before
-        // actually failing over to OpenAI. Skipped entirely for an image
+        // before a reply was produced) lands here too. Retry once via the
+        // shared failover module -- which itself gives Anthropic one more try
+        // (tools-free; covers a tool-specific/transient error, not just a real
+        // outage) before actually failing over to OpenAI. The OpenAI leg gets
+        // the WEB tools only (web_search / fetch_url): their inputs are
+        // already public-web queries. The GitHub/Notion connector tools are
+        // deliberately withheld here, because this path was not chosen by the
+        // user -- private repo or Notion content should only reach OpenAI
+        // when the user explicitly picks "GPT". Skipped entirely for an image
         // attachment, which the OpenAI path would otherwise silently drop
         // rather than error on (see hasImageAttachment above) -- better a
         // clear error than a billed answer that never saw what was attached.
@@ -1426,8 +1532,8 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
         console.error("chat: completion generation failed, retrying tools-free via failover:", e instanceof Error ? e.message : String(e));
         try {
           if (hasImageAttachment || hadPartialProgress) throw e;
-          emitToolPrefix(controller);
-          result = await runFailoverCompletion(undefined);
+          if (BASE_TOOLS.length === 0) emitToolPrefix(controller);
+          result = await runFailoverCompletion(undefined, BASE_TOOLS);
         } catch (e2) {
           try {
             controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({ error: "Server error: " + (e2 instanceof Error ? e2.message : String(e2)) })));
