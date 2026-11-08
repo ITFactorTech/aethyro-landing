@@ -62,6 +62,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
 import { OPENAI_MODEL_MAP, runWithOpenAIFailover, type ModelKey } from "../_shared/failover.ts";
+import { hasPurchased } from "../_shared/freetier.ts";
 import { runOpenAIToolLoop } from "../_shared/openai_tools.ts";
 
 // CORS locked to aethyro.com (+ preview subdomains); was a bare "*". See
@@ -410,9 +411,10 @@ serve(async (req) => {
   const results: { id: string; name: string; status: string }[] = [];
 
   for (const routine of routines) {
-    const modelKey = ["haiku", "sonnet", "opus"].includes(routine.model) ? routine.model : "haiku";
-    const model = MODEL_MAP[modelKey];
-    const rates = CREDIT_RATES[modelKey];
+    let modelKey = ["haiku", "sonnet", "opus"].includes(routine.model) ? routine.model : "haiku";
+    let model = MODEL_MAP[modelKey];
+    let rates = CREDIT_RATES[modelKey];
+    let freeTier = false; // set after the billing preflight (free accounts: Haiku rate, OpenAI only)
 
     // Tokens consumed so far by this routine's API calls (see runRoutineCompletion).
     const usage = { inputTokens: 0, outputTokens: 0 };
@@ -464,6 +466,18 @@ serve(async (req) => {
       // missed and visible in routine_run_log, not silently run unbilled).
       if (balanceErr || profileErr || !routineProfile || typeof rawBalance !== "number") {
         throw new Error(`Billing preflight failed: ${balanceErr?.message ?? profileErr?.message ?? "invalid state"}`);
+      }
+
+      // Free tier (2026-11-08): no purchase by this user or their team => Haiku
+      // billing rate, served by OpenAI only (never the Anthropic account). A
+      // lookup error fails closed, same as the preflight above.
+      const purchaseCheck = await hasPurchased(supaAdmin, routine.user_id, routineProfile.team_id);
+      if (!purchaseCheck.ok) throw new Error(`Billing preflight failed: purchase lookup: ${purchaseCheck.error}`);
+      freeTier = !purchaseCheck.purchased;
+      if (freeTier && modelKey !== "haiku") {
+        modelKey = "haiku";
+        model = MODEL_MAP.haiku;
+        rates = CREDIT_RATES.haiku;
       }
       const balance = rawBalance;
       // Monthly spend cap (opt-in, NULL = off): skip like a no-credits run,
@@ -532,6 +546,7 @@ serve(async (req) => {
         supaAdmin,
         openaiApiKey: OPENAI_API_KEY,
         label: "run-routines",
+        forceOpenAI: freeTier,
         anthropic: () => runRoutineCompletion(anthropic, model, promptText, usage),
         openai: () => {
           // Restart from scratch: whatever a half-finished Anthropic attempt consumed is

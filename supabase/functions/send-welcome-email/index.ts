@@ -111,7 +111,7 @@ function welcomeHtml(email: string): string {
   </div>
   <h1 style="font-size:1.6rem;font-weight:800;margin:0 0 12px;line-height:1.2">Welcome — you're in.</h1>
   <p style="color:#a0a0a0;line-height:1.65;margin:0 0 24px">
-    Your account is ready with <strong style="color:#f0f0f0">200 free credits</strong>.
+    Your account is ready with <strong style="color:#f0f0f0">100 free credits</strong>.
     Each message costs 1–5 credits depending on length, so you have plenty to explore.
   </p>
 
@@ -231,7 +231,7 @@ function reengagementHtml(): string {
     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff4d00;margin-right:6px;vertical-align:middle"></span>
     Aethyro
   </div>
-  <h1 style="font-size:1.5rem;font-weight:800;margin:0 0 12px">Your 200 credits are still waiting</h1>
+  <h1 style="font-size:1.5rem;font-weight:800;margin:0 0 12px">Your 100 credits are still waiting</h1>
   <p style="color:#a0a0a0;line-height:1.65;margin:0 0 24px">
     You haven't sent a message yet — that's okay. Sometimes it helps to have a specific task in mind.
   </p>
@@ -315,7 +315,7 @@ serve(async (req) => {
     );
 
     if (emailType === "welcome") {
-      await sendEmail(email, "Welcome to Aethyro — you have 200 free credits", welcomeHtml(email));
+      await sendEmail(email, "Welcome to Aethyro — you have 100 free credits", welcomeHtml(email));
       // Record drip state
       await supabase.from("email_drip_state").upsert({
         user_id: userId,
@@ -387,7 +387,7 @@ serve(async (req) => {
         }
       }
       if (!hasMessages) {
-        await sendEmail(email, "Your 200 Aethyro credits are still waiting", reengagementHtml());
+        await sendEmail(email, "Your 100 Aethyro credits are still waiting", reengagementHtml());
         await supabase.from("email_drip_state").upsert({
           user_id: userId,
           reengagement_sent_at: new Date().toISOString(),
