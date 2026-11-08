@@ -1,13 +1,17 @@
 // Multi-provider LLM completion: Anthropic primary, OpenAI fallback/variety.
 //
-// Scope, deliberately narrow for v1: text-only. A request that used tool
-// calls (web_search, GitHub/Notion) or carries non-text attachment blocks
-// is NOT a candidate for silent OpenAI failover -- callers should check
-// for that themselves and skip calling completeWithFailover for such a
-// turn (see chat/index.ts's own comment at its call site). Thinking/
-// extended-reasoning is Anthropic-only; an OpenAI-served turn simply
-// produces no thinking content, which every caller already handles
-// gracefully (the reasoning panel just doesn't show).
+// Tools: a caller may pass `tools` + `executeTool`; the OpenAI leg then runs
+// a function-calling loop (_shared/openai_tools.ts) so GPT can use the same
+// tools Claude does (web search, page fetch, GitHub, Notion). The Anthropic
+// leg here stays tools-free -- chat/index.ts runs Claude's own tool loop
+// itself and only reaches this module when that path is bypassed (explicit
+// "gpt" pick) or has failed. Which tools a given path may offer is the
+// CALLER's decision, not this module's (chat deliberately withholds the
+// GitHub/Notion connector tools from the automatic Claude-down fallback --
+// see chat/index.ts). Image/document attachment blocks are still flattened
+// to text on the OpenAI path. Thinking/extended-reasoning is Anthropic-only;
+// an OpenAI-served turn simply produces no thinking content, which every
+// caller already handles gracefully (the reasoning panel just doesn't show).
 //
 // Circuit breaker: public.provider_health (provider text primary key,
 // consecutive_failures int, opened_until timestamptz). A provider trips
@@ -26,40 +30,34 @@
 
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32?target=deno";
 import OpenAI from "https://esm.sh/openai@4?target=deno";
+import { runOpenAIToolLoop, type ToolDef } from "./openai_tools.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 
-// Same generation (2026-03 release train) across all three tiers --
-// verified live against the real OpenAI /v1/models list for this project's
-// key, 2026-10-15. That check only confirmed the model *names* existed in
-// the catalog, not that each one actually works on the Chat Completions
-// endpoint this module calls -- found live 2026-10-30 (site-guardian daily
-// sweep) that "gpt-5.4-pro" genuinely 404s there ("This is not a chat
-// model and thus not supported in the v1/chat/completions endpoint"), and
-// a second live probe of "gpt-5.5-pro" got the identical error -- this
-// API's "-pro" tier across at least two generations is a
-// completions/reasoning-only product line, not a Chat Completions model,
-// despite being listed alongside the chat-compatible mini/base tiers.
-// Real production impact while this was live: every opus-tier request
-// that failed over to OpenAI (all of them, during the concurrent
-// 2026-10-30 Anthropic outage -- see CLAUDE.md's "Pending" section) got a
-// hard error instead of a reply, and each one incorrectly counted against
-// the OpenAI circuit breaker's own failure count (a model-config bug
-// recorded as if OpenAI itself were failing) -- risked tripping OpenAI's
-// circuit open on a run of opus-only traffic and taking the haiku/sonnet
-// fallback down with it, on top of the direct opus failure. Opus now
-// shares gpt-5.4 with sonnet on the OpenAI path -- confirmed chat-
-// completions-compatible live -- rather than guessing at another "-pro"
-// name; billing is unaffected either way since it's keyed to modelKey,
-// never to which model/provider actually answered.
+// OpenAI model per billing tier, chosen 2026-11-08 against OpenAI's own
+// pricing page (developers.openai.com/api/docs/pricing, per 1M tokens in/out)
+// so each OpenAI model costs no more than the Claude tier it is billed as:
+//   haiku  -> gpt-6.1-terra  $1/$5    (Claude Haiku 4.5: $1/$5)
+//   sonnet -> gpt-6.1-sol    $2/$10   (Claude Sonnet 5:   $2/$10)
+//   opus   -> gpt-6.1-sol    $2/$10   (Claude Opus 5.5:   $4/$20 -- the Opus
+//             tier stays on Sol rather than gpt-6-astra, $10/$50, which would
+//             cost 2.5x what an Opus reply bills; Opus-tier failover is a
+//             margin gain, as it was on gpt-5.4)
+// The previous gpt-5.4 ($2.50/$15) was both a generation behind and slightly
+// dearer than the Sonnet rate it was billed at. Never use a "-pro" model
+// here: those 404 on Chat Completions (found live 2026-10-30). gpt-6-luna is
+// deliberately NOT used for haiku: it is a reasoning model whose hidden
+// reasoning tokens ate a 10-token budget completely (empty reply,
+// finish_reason "length") when probed 2026-11-02.
 export const OPENAI_MODEL_MAP: Record<"haiku" | "sonnet" | "opus", string> = {
-  haiku:  "gpt-5.4-mini",
-  sonnet: "gpt-5.4",
-  opus:   "gpt-5.4",
+  haiku:  "gpt-6.1-terra",
+  sonnet: "gpt-6.1-sol",
+  opus:   "gpt-6.1-sol",
 };
 
 const CIRCUIT_FAILURE_THRESHOLD = 3;
 const CIRCUIT_OPEN_MS = 2 * 60 * 1000; // 2 minutes before the circuit lets a live Anthropic request through again
 
+export type { ToolDef };
 export type ModelKey = "haiku" | "sonnet" | "opus";
 export type Provider = "anthropic" | "openai";
 
@@ -73,6 +71,11 @@ export interface CompletionRequest {
   forceProvider?: Provider;     // explicit pick -- "openai" skips Anthropic/the circuit breaker entirely
   onTextDelta: (text: string) => void;
   onThinkingDelta?: (text: string) => void;
+  // OpenAI leg only (see header). Omit or pass [] for a plain completion.
+  tools?: ToolDef[];
+  executeTool?: (name: string, input: Record<string, unknown>) => Promise<string>;
+  onToolCall?: (name: string, input: Record<string, unknown>) => void;
+  onFinalStart?: () => void;    // fires just before the first answer text on a tool-enabled OpenAI turn
 }
 
 export interface CompletionResult {
@@ -164,13 +167,42 @@ async function runAnthropic(apiKey: string, req: CompletionRequest): Promise<Com
   };
 }
 
+function finishToStopReason(finishReason: string): string {
+  return finishReason === "length" ? "max_tokens" : finishReason === "content_filter" ? "refusal" : "end_turn";
+}
+
 async function runOpenAI(apiKey: string, req: CompletionRequest): Promise<CompletionResult> {
   const openai = new OpenAI({ apiKey });
   const model = OPENAI_MODEL_MAP[req.modelKey];
 
+  const flatMessages = req.messages.map((m) => ({ role: m.role, content: flattenToText(m.content) }));
+
+  if (req.tools?.length && req.executeTool) {
+    const r = await runOpenAIToolLoop({
+      apiKey,
+      model,
+      system: req.system,
+      messages: flatMessages,
+      tools: req.tools,
+      executeTool: req.executeTool,
+      maxTokens: req.maxTokens,
+      onFinalStart: req.onFinalStart,
+      onTextDelta: req.onTextDelta,
+      onToolCall: req.onToolCall,
+    });
+    return {
+      provider: "openai",
+      model,
+      fullText: r.fullText,
+      inputTokens: r.inputTokens,
+      outputTokens: r.outputTokens,
+      stopReason: finishToStopReason(r.finishReason),
+    };
+  }
+
   const openaiMessages: { role: "system" | "user" | "assistant"; content: string }[] = [
     { role: "system", content: req.system },
-    ...req.messages.map((m) => ({ role: m.role, content: flattenToText(m.content) })),
+    ...flatMessages,
   ];
 
   const stream = await openai.chat.completions.create({
@@ -205,7 +237,7 @@ async function runOpenAI(apiKey: string, req: CompletionRequest): Promise<Comple
     fullText,
     inputTokens: promptTokens,
     outputTokens: completionTokens,
-    stopReason: finishReason === "length" ? "max_tokens" : finishReason === "content_filter" ? "refusal" : "end_turn",
+    stopReason: finishToStopReason(finishReason),
   };
 }
 
