@@ -118,18 +118,15 @@ a:hover{text-decoration:underline}
   if(!token){ document.getElementById('loading').style.display='none'; document.getElementById('error').style.display=''; return; }
 
   (async function(){
-    var convR=await supabase.from('conversations').select('id,title,created_at').eq('share_token',token).single();
-    if(convR.error||!convR.data){
-      document.getElementById('loading').style.display='none';
-      document.getElementById('error').style.display='';
-      return;
-    }
-    var conv=convR.data;
-    var msgR=await supabase.from('messages')
-      .select('role,content,created_at')
-      .eq('conversation_id',conv.id)
-      .order('created_at',{ascending:true});
-    if(msgR.error||!msgR.data||!msgR.data.length){
+    /* The anon role has no table-level SELECT on conversations/messages (and must
+       not: the old anon RLS policies only required share_token IS NOT NULL, i.e.
+       they would have listed EVERY shared conversation). The only read path is
+       the get_shared_conversation(p_token) RPC, which returns the one conversation
+       whose unguessable token the caller already holds. */
+    var rpcR=await supabase.rpc('get_shared_conversation',{p_token:token});
+    var conv=rpcR.data;
+    var msgs=conv&&conv.messages;
+    if(rpcR.error||!conv||!msgs||!msgs.length){
       document.getElementById('loading').style.display='none';
       document.getElementById('error').style.display='';
       return;
@@ -138,10 +135,10 @@ a:hover{text-decoration:underline}
     document.getElementById('convTitle').textContent=conv.title||'Shared Conversation';
     document.title=(conv.title||'Shared Conversation')+' — Aethyro';
     document.getElementById('convMeta').textContent=
-      msgR.data.length+' messages · shared '+new Date(conv.created_at).toLocaleDateString();
+      msgs.length+' messages · shared '+new Date(conv.created_at).toLocaleDateString();
 
     var list=document.getElementById('msgsList');
-    msgR.data.forEach(function(m){
+    msgs.forEach(function(m){
       var row=document.createElement('div');
       row.className='msg-row '+m.role;
       var who=document.createElement('div');
