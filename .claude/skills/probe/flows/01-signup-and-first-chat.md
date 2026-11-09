@@ -11,8 +11,8 @@ history, the double-signup-bonus bug fixed 2026-09-27) and the `MODEL_MAP`/
    bypasses the real email-confirmation flow, since driving a real inbox
    isn't necessary for this check).
 2. Confirm exactly one `profiles` row, one `referral_codes` row, and one
-   `credit_ledger` row with `reason = 'signup_bonus'` (delta +200) — not
-   two of any of them.
+   `credit_ledger` row with `reason = 'signup_bonus'` (delta **+100** since
+   2026-11-08; it was 200 before) — not two of any of them.
 3. Sign in (inject the real session into `localStorage` per the Sandbox/
    Playwright playbook if the OAuth/password UI hits the proxy's TLS
    artifact) and drive `app/chat.html`.
@@ -26,6 +26,18 @@ history, the double-signup-bonus bug fixed 2026-09-27) and the `MODEL_MAP`/
 ## Expected outcome
 Exactly one signup bonus, three successful replies billed at their
 respective tiers, balance reflects all four debits/credits correctly.
+
+**Since 2026-11-08 (free tier, PR #236) this depends on whether the account
+has ever bought a pack.** A **no-purchase** account is forced to the Haiku
+rate on OpenAI `gpt-6.1-terra` whatever model button is picked: all three
+sends bill 1 credit with `cost.model = "haiku"`, `freeTier: true`,
+`provider: "openai"`, `actualModel: "gpt-6.1-terra"`, and a Sonnet/Opus pick also
+returns `lockedTier` (the badge shows "Free credits use the fast model. Unlock
+Sonnet|Opus with any pack →", which opens the buy modal; the model button
+shows a lock; picking a locked tier toasts "Free credits run on the fast
+Haiku-rate model…"). The three-tier billing (-1/-1/-2) only applies to a
+**paid** account (give one a synthetic `reason='purchase'` row — see flow
+11). Ledger rows of a free account carry `metadata.free_tier = true`.
 
 ## Known workaround
 None flow-specific beyond the general Sandbox/Playwright playbook.
@@ -101,3 +113,16 @@ link, no longer the hover Copy button). Note: right after the first navigation o
 the app once bounced `chat.html` -> `dashboard.html` (a transient session-restore
 failure over the sandbox proxy); an immediate retry loaded normally — retry before
 concluding anything.
+
+**2026-11-09 sweep — PASSED (production, in-browser, free account; account
+provisioned by the orchestrator).** Exactly one `profiles`, `referral_codes`,
+`signup_bonus` (+100). `chat.html`: balance 100, `#modelBar.free-tier`, Sonnet/Opus/GPT
+buttons `tier-locked`, cloud note "free credits run on OpenAI GPT-6.1 Terra: your
+messages are sent to OpenAI, not Anthropic". Haiku / Sonnet / Opus sends each rendered
+a reply, balance 100 -> 99 -> 98 -> 97, badge `1 credit · … · haiku` each; the Sonnet and
+Opus picks show the "Unlock … with any pack →" upsell, and the response `cost` object is
+`{requestedModel: sonnet|opus, lockedTier: sonnet|opus, freeTier: true, provider: openai,
+actualModel: gpt-6.1-terra}`. Ledger: three `chat_usage` -1 rows, `metadata.model =
+haiku`, `provider: openai`, `free_tier: true`; 3 signed receipts. No Opus-cost modal fired
+for the free account's Opus pick (expected). Carry-over of a pending prompt (flow 09,
+signed-in half) also passed on this account.

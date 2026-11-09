@@ -46,3 +46,9 @@ auto-fired `redeem-referral` once -> 200 `{success:true,credits_added:100}`, bal
 code`; self -> 400 `Cannot redeem your own referral code`; garbage code -> 404
 `Invalid referral code`. Ledger: exactly one `+100 referral_bonus` per side, one
 `referral_events` row.
+
+**2026-11-09 sweep — PASSED (production, in-browser).** Referee session injected,
+`https://aethyro.com/?ref=<code>` stored `aethyro_ref`, `chat.html` auto-fired
+`redeem-referral` once -> 200 `{success:true,credits_added:100}`, balance **100 -> 200**
+(free grant is now 100), key cleared. Duplicate -> 409, self -> 400, garbage -> 404 (same
+messages as before). Ledger: one `+100 referral_bonus` per side, one `referral_events` row.

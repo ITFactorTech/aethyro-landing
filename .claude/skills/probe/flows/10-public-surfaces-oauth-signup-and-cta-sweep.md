@@ -54,3 +54,15 @@ the 9 pages, **0** not pointing at `/app/signup.html`; hero + nav clicks landed 
 fixed — `oracle`/brand call): older pages (`claude-opus-alternative`, `use-cases`,
 `ai-chat-for-developers`, `terms`, `blog/*`, `app/share`) still say "Opus 5"
 while the homepage/pricing/chat/new pages say "Opus 5.5".
+
+**2026-11-09 sweep — PASSED.** Signup: Google y=266, GitHub y=321, email form y=427 (copy now
+"100 free credits"); stubbed authorize hits `…/auth/v1/authorize?provider=google|github&redirect_to=
+https%3A%2F%2Faethyro.com%2Fapp%2Fdashboard.html`. `/claude-without-subscription.html`: 200, title as
+expected, one `FAQPage` JSON-LD with 5 Qs, 8 internal links all 200, `id="calculator"` present.
+CTA sweep 9/6/3/3/2/3/2/1/1 CTAs on the nine pages, **0** not pointing at `/app/signup.html`; hero
+("Start free — 100 credits, no card →") and nav ("Get Started →") clicks landed on `/app/signup.html`.
+Homepage ¢/credit 2.0 / 1.67 / 1.5 / 1.29 and `window.AETHYRO_PACKS` 4/200, 10/600, 30/2000, 90/7000;
+`pricing.html` cards $4/200, $10/600, $30/2,000, $90/7,000. 390 px: `scrollWidth == clientWidth == 390`
+on `/`, `/pricing.html`, `/app/signup.html`, `/claude-without-subscription.html` and signed-in
+`/app/chat.html`, zero page/console errors; the homepage nav drawer is opaque and full-viewport
+(not a child of `<nav>`).
