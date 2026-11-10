@@ -41,7 +41,11 @@ export const OPENAI_MODEL_MAP: Record<ModelKey, string> = {
 const CIRCUIT_FAILURE_THRESHOLD = 3;
 const CIRCUIT_OPEN_MS = 2 * 60 * 1000; // 2 minutes before the circuit lets a live Anthropic request through again
 
-export async function isCircuitOpen(supaAdmin: SupabaseClient, provider: Provider): Promise<boolean> {
+// The breaker keys are free text: besides the two providers, the free-tier
+// chain (below) keeps one row per model step ("openai:terra", "openai:luna"),
+// created on first write. A provider-wide row cannot tell "Terra is down" from
+// "OpenAI is down", and the chain's second step is a different OpenAI model.
+export async function isCircuitOpen(supaAdmin: SupabaseClient, provider: string): Promise<boolean> {
   const { data, error } = await supaAdmin
     .from("provider_health")
     .select("opened_until")
@@ -51,7 +55,7 @@ export async function isCircuitOpen(supaAdmin: SupabaseClient, provider: Provide
   return new Date(data.opened_until as string).getTime() > Date.now();
 }
 
-export async function recordFailure(supaAdmin: SupabaseClient, provider: Provider): Promise<void> {
+export async function recordFailure(supaAdmin: SupabaseClient, provider: string): Promise<void> {
   const { data } = await supaAdmin
     .from("provider_health")
     .select("consecutive_failures")
@@ -64,8 +68,96 @@ export async function recordFailure(supaAdmin: SupabaseClient, provider: Provide
   await supaAdmin.from("provider_health").upsert({ provider, consecutive_failures: failures, opened_until });
 }
 
-export async function recordSuccess(supaAdmin: SupabaseClient, provider: Provider): Promise<void> {
+export async function recordSuccess(supaAdmin: SupabaseClient, provider: string): Promise<void> {
   await supaAdmin.from("provider_health").upsert({ provider, consecutive_failures: 0, opened_until: null });
+}
+
+// ── Free-tier failsafe chain ─────────────────────────────────────────────────
+// A free account (no purchase, see freetier.ts) is served on the Haiku billing
+// rate by a chain of providers instead of a single one:
+//   1. OpenAI gpt-6.1-terra   (primary; gets the web tools)
+//   2. OpenAI gpt-6-luna      (reasoning_effort "none"; ~10x cheaper than Terra;
+//                              plain completion, no tools)
+//   3. Anthropic Haiku        (last resort; only while the Anthropic circuit is
+//                              closed, and only if the flag below is true)
+// The user pays the same Haiku rate whichever step answers (billing is keyed to
+// the tier, never the provider), so every step below the first is a cost gain
+// or neutral for Aethyro. Luna's effort must stay "none": left to its default it
+// spends hidden reasoning tokens (13-44 on a one-line prompt, 2026-11-10 probe)
+// and ate a 10-token budget completely on 2026-11-02.
+export const FREE_TIER_LUNA_MODEL = "gpt-6-luna";
+// true: Anthropic Haiku is the last resort when both OpenAI steps fail (the
+// "usage cost always has a backup" ask). false: free usage never reaches the
+// Anthropic account, at the price of failing when OpenAI is entirely down.
+export const FREE_TIER_ANTHROPIC_LAST_RESORT = true;
+// A step that has produced no answer text within this long is abandoned for the
+// next one (a hung connection is a failure too, not just an error response).
+export const FREE_TIER_FIRST_RESPONSE_MS = 25_000;
+export const FREE_CHAIN_KEYS = { terra: "openai:terra", luna: "openai:luna", haiku: "anthropic" } as const;
+
+export interface ChainStep<R> {
+  key: string;                 // provider_health row for this step's circuit breaker
+  label: string;               // for logs
+  run: () => Promise<R>;
+  // true => the step returned but delivered nothing usable (empty reply): counted
+  // as a failure and the next step runs. Never consulted once output has streamed.
+  isEmpty?: (r: R) => boolean;
+}
+
+// Runs the steps in order until one answers. Pure orchestration (no SDK
+// imports) so it can be exercised with stubs.
+//  - A step whose breaker is open is skipped, unless EVERY step's is open, in
+//    which case none is skipped: a chain that gives up without trying anything
+//    is the one outcome this exists to prevent.
+//  - A throw or an empty reply records a failure against that step's breaker
+//    and moves on. A success resets it.
+//  - Once `emittedOutput()` is true a failing step is re-thrown instead: bytes
+//    already reached the caller, and a later step would stream a second,
+//    complete reply on top of the truncated first.
+export async function runChain<R>(o: {
+  supaAdmin: SupabaseClient;
+  label: string;
+  steps: ChainStep<R>[];
+  emittedOutput: () => boolean;
+}): Promise<{ value: R; stepKey: string; attempts: string[] }> {
+  if (o.steps.length === 0) throw new Error(`${o.label}: no providers configured`);
+  const open = await Promise.all(o.steps.map((s) => isCircuitOpen(o.supaAdmin, s.key)));
+  const skipAll = open.every(Boolean);
+  const attempts: string[] = [];
+  let lastErr: unknown = null;
+
+  for (let i = 0; i < o.steps.length; i++) {
+    const step = o.steps[i];
+    if (open[i] && !skipAll) {
+      attempts.push(`${step.label}:skipped(circuit open)`);
+      continue;
+    }
+    try {
+      const value = await step.run();
+      if (!o.emittedOutput() && step.isEmpty?.(value)) {
+        attempts.push(`${step.label}:empty`);
+        lastErr = new Error(`${step.label} returned an empty reply`);
+        await recordFailure(o.supaAdmin, step.key);
+        continue;
+      }
+      await recordSuccess(o.supaAdmin, step.key);
+      attempts.push(`${step.label}:ok`);
+      if (attempts.length > 1) console.error(`${o.label}: answered by ${step.label} after [${attempts.join(", ")}]`);
+      return { value, stepKey: step.key, attempts };
+    } catch (err) {
+      lastErr = err;
+      attempts.push(`${step.label}:error`);
+      console.error(`${o.label}: ${step.label} failed:`, err instanceof Error ? err.message : String(err));
+      await recordFailure(o.supaAdmin, step.key);
+      if (o.emittedOutput()) {
+        console.error(`${o.label}: ${step.label} had already streamed output -- not trying the next step (would duplicate the reply)`);
+        throw err;
+      }
+    }
+  }
+  const e = new Error(`${o.label}: every provider failed [${attempts.join(", ")}]`);
+  (e as any).cause = lastErr;
+  throw e;
 }
 
 // Runs `anthropic()`; if it throws (or the Anthropic circuit is open), runs

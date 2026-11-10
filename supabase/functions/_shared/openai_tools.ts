@@ -49,6 +49,11 @@ export interface ToolLoopOptions {
   maxRounds?: number;          // tool rounds before the forced-text final call (default 4)
   maxCallsPerRound?: number;   // extra calls in one round get a "skipped" result (default 4)
   reasoningEffort?: string;    // default "low": tool turns favour latency and cost
+  // Abandon a round that has produced no real stream event (anything past the
+  // initial response.created / in_progress frames) within this long. Bounds the
+  // wait for a round to START only; once a round is flowing it is not cut off,
+  // and tool execution between rounds is never timed. Throws a plain Error.
+  firstResponseTimeoutMs?: number;
   onFinalStart?: () => void;   // fires once, just before the first answer text is emitted
   // Checked after each round's tools have run; true ends the loop right there
   // (run-agent-task's `synthesize` tool: calling it IS the answer).
@@ -117,7 +122,17 @@ export async function runOpenAIToolLoop(o: ToolLoopOptions): Promise<ToolLoopRes
 
   for (let round = 0; round <= maxRounds; round++) {
     const forceText = round === maxRounds; // tool budget used up: answer now
-    const resp = await fetch("https://api.openai.com/v1/responses", {
+    const ctrl = new AbortController();
+    let timedOut = false;
+    let timer: ReturnType<typeof setTimeout> | undefined = o.firstResponseTimeoutMs
+      ? setTimeout(() => { timedOut = true; ctrl.abort(); }, o.firstResponseTimeoutMs)
+      : undefined;
+    const clearT = () => { if (timer !== undefined) { clearTimeout(timer); timer = undefined; } };
+    const timeoutErr = () => new Error(`OpenAI gave no response within ${o.firstResponseTimeoutMs}ms`);
+    let resp: Response;
+    try {
+    resp = await fetch("https://api.openai.com/v1/responses", {
+      signal: ctrl.signal,
       method: "POST",
       headers: { Authorization: `Bearer ${o.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -134,7 +149,12 @@ export async function runOpenAIToolLoop(o: ToolLoopOptions): Promise<ToolLoopRes
         stream: true,
       }),
     });
+    } catch (e) {
+      clearT();
+      throw timedOut ? timeoutErr() : e;
+    }
     if (!resp.ok || !resp.body) {
+      clearT();
       throw new Error(`OpenAI ${resp.status}: ${(await resp.text().catch(() => "")).slice(0, 300)}`);
     }
 
@@ -146,7 +166,9 @@ export async function runOpenAIToolLoop(o: ToolLoopOptions): Promise<ToolLoopRes
     // Separate this round's answer from text already shown in an earlier one.
     const sep = () => (fullText && !/\s$/.test(fullText) ? "\n\n" : "");
 
+    try {
     for await (const ev of sseEvents(resp.body)) {
+      if (ev.type !== "response.created" && ev.type !== "response.in_progress") clearT();
       if (ev.type === "response.output_text.delta" || ev.type === "response.refusal.delta") {
         const d: string = ev.delta ?? "";
         if (!d) continue;
@@ -171,6 +193,11 @@ export async function runOpenAIToolLoop(o: ToolLoopOptions): Promise<ToolLoopRes
         throw new Error(ev.message || "OpenAI stream error");
       }
     }
+    } catch (e) {
+      clearT();
+      throw timedOut ? timeoutErr() : e;
+    }
+    clearT();
     if (!completed) throw new Error("OpenAI stream ended without a completed response");
 
     inputTokens += completed.usage?.input_tokens ?? 0;

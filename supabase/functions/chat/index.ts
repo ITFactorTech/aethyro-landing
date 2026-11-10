@@ -1,3 +1,16 @@
+// chat v61 — free-tier failsafe chain. A free account is no longer tied to a single
+// provider: completeFreeTier() (_shared/llm.ts, chain engine in failover.ts) tries
+// OpenAI gpt-6.1-terra, then gpt-6-luna (reasoning_effort "none"), then Anthropic Haiku
+// as a last resort (only while the Anthropic circuit is closed; flag
+// FREE_TIER_ANTHROPIC_LAST_RESORT). A step that errors, returns nothing, or shows no
+// answer within 25s hands over to the next; a step that already streamed text is never
+// followed by another (no duplicate reply). Billing is unchanged (Haiku rate whichever
+// step answers). Also: free accounts get the web tools only on the OpenAI path (the
+// GitHub/Notion connector tools stay Claude-only for them), the outer-catch retry is
+// skipped for them (the chain already ran every step), auto-title and memory
+// extraction run on Luna for free accounts (and for anyone while Anthropic's circuit is
+// open) instead of silently failing, and a total failure shows a plain "not charged"
+// message instead of the raw provider error.
 // chat v60 — free tier. An account with no purchase (its own or its team's) is
 // served on the Haiku billing rate by OpenAI gpt-6.1-terra only: modelKey is forced
 // to "haiku" and forceProvider to "openai" before any other routing, so free usage
@@ -240,7 +253,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
-import { completeWithFailover } from "../_shared/llm.ts";
+import {
+  completeWithFailover, completeFreeTier, isCircuitOpen,
+  FREE_TIER_LUNA_MODEL, FREE_TIER_ANTHROPIC_LAST_RESORT,
+} from "../_shared/llm.ts";
 import { hasPurchased } from "../_shared/freetier.ts";
 
 // CORS is locked to aethyro.com + this project's Cloudflare preview
@@ -1100,6 +1116,57 @@ serve(async (req) => {
   ];
 
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+
+  // Small background completions (auto-title, memory extraction). Both used to
+  // call Anthropic Haiku unconditionally and swallow every failure, so with
+  // Anthropic down -- or, for a free account, never meant to be touched -- no
+  // conversation was ever titled and no memory was ever extracted, with no error
+  // anywhere. Now: gpt-6-luna (reasoning_effort "none", ~10x cheaper than Haiku)
+  // for free accounts and for anyone while Anthropic's circuit is open; Claude
+  // Haiku otherwise. A free account reaches Haiku only if Luna fails AND the
+  // last-resort flag is on AND Anthropic is not known to be down. Returns ""
+  // when nothing answered (callers already treat that as "skip").
+  let anthropicDownMemo: Promise<boolean> | undefined;
+  const anthropicDown = () => (anthropicDownMemo ??= isCircuitOpen(supaAdmin, "anthropic").catch(() => false));
+  async function smallCompletion(prompt: string, maxTokens: number): Promise<string> {
+    const viaLuna = async (): Promise<string> => {
+      const r = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: FREE_TIER_LUNA_MODEL,
+          messages: [{ role: "user", content: prompt }],
+          max_completion_tokens: maxTokens,
+          reasoning_effort: "none",
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!r.ok) throw new Error(`OpenAI ${r.status}`);
+      const j = await r.json();
+      return String(j?.choices?.[0]?.message?.content ?? "").trim();
+    };
+    const viaClaude = async (): Promise<string> => {
+      const r = await anthropic.messages.create({
+        model: TITLE_MODEL,
+        max_tokens: maxTokens,
+        messages: [{ role: "user", content: prompt }],
+      });
+      return (r.content.length > 0 ? ((r.content[0] as any).text || "") : "").trim();
+    };
+    const down = await anthropicDown();
+    const lunaFirst = !!OPENAI_API_KEY && (freeTier || down);
+    if (lunaFirst) {
+      try {
+        const out = await viaLuna();
+        if (out) return out;
+      } catch (e) {
+        console.error("chat: small completion on luna failed:", e instanceof Error ? e.message : String(e));
+      }
+    }
+    if ((!freeTier || FREE_TIER_ANTHROPIC_LAST_RESORT) && !(down && lunaFirst)) return await viaClaude();
+    return "";
+  }
+
   const encoder = new TextEncoder();
   let inputTokens = 0, outputTokens = 0;
   // Set the moment generateCompletion() has done anything irreversible for
@@ -1194,12 +1261,13 @@ serve(async (req) => {
     let title: string | undefined;
     if (historyRaw.length === 0 && firstMsg) {
       try {
-        const tr = await anthropic.messages.create({
-          model: TITLE_MODEL,
-          max_tokens: TITLE_TOKENS,
-          messages: [{ role: "user", content: `Generate a 3-6 word title for a chat starting with: "${firstMsg.slice(0, 200)}". Reply with ONLY the title, no quotes or punctuation at the end.` }],
-        });
-        title = (tr.content.length > 0 ? ((tr.content[0] as any).text || "") : "").trim();
+        const raw = await smallCompletion(
+          `Generate a 3-6 word title for a chat starting with: "${firstMsg.slice(0, 200)}". Reply with ONLY the title, no quotes or punctuation at the end.`,
+          TITLE_TOKENS,
+        );
+        // First line only, surrounding quotes stripped: a different model may
+        // not follow "no quotes" as exactly as Haiku did.
+        title = raw.split("\n")[0].replace(/^["'“”]+|["'“”]+$/g, "").trim();
       } catch {}
     }
 
@@ -1332,22 +1400,14 @@ serve(async (req) => {
       const backgroundMemoryWork = (async () => {
         try {
           // 1. JSONB structured memory extraction
-          const extractRes = await anthropic.messages.create({
-            model: TITLE_MODEL,
-            max_tokens: 300,
-            messages: [{
-              role: "user",
-              content: `You are a memory extractor for an AI assistant. Extract NEW facts about the user from this exchange.
+          const raw = await smallCompletion(`You are a memory extractor for an AI assistant. Extract NEW facts about the user from this exchange.
 
 Known facts: ${JSON.stringify(existingMemory)}
 
 User said: "${firstMsg.slice(0, 600)}"
 Assistant replied: "${assistantReply.slice(0, 600)}"
 
-Return a JSON object with only NEW or UPDATED fields from: name, occupation, company, location, preferences (string[]), projects (string[]), facts (string[]). Return {} if nothing new. JSON only, no explanation.`,
-            }],
-          });
-          const raw = (extractRes.content[0] as any)?.text?.trim() || "";
+Return a JSON object with only NEW or UPDATED fields from: name, occupation, company, location, preferences (string[]), projects (string[]), facts (string[]). Return {} if nothing new. JSON only, no explanation.`, 300);
           const match = raw.match(/\{[\s\S]*\}/);
           if (match) {
             const incoming = JSON.parse(match[0]) as Partial<UserMemory>;
@@ -1412,7 +1472,10 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
         let fullText = "";
         let thinkingText = "";
         let thinkingEmitted = false;
-        const result = await completeWithFailover(supaAdmin, ANTHROPIC_API_KEY, OPENAI_API_KEY, {
+        // Free accounts run the whole Terra -> Luna -> Haiku chain inside this one
+        // call (forceProvider is ignored there); everyone else gets the usual
+        // Anthropic-first-then-OpenAI failover or a forced OpenAI pick.
+        const result = await (freeTier ? completeFreeTier : completeWithFailover)(supaAdmin, ANTHROPIC_API_KEY, OPENAI_API_KEY, {
           modelKey,
           anthropicModel: MODEL,
           system: systemPrompt,
@@ -1475,8 +1538,13 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
           // through the OpenAI function-calling loop. The tool-card prefix is
           // emitted by that loop (onFinalStart); with no tools configured
           // there is nothing to prefix.
-          if (TOOLS.length === 0) emitToolPrefix(controller);
-          return await runFailoverCompletion("openai", TOOLS);
+          //
+          // A free account did not choose OpenAI (it is simply where free usage
+          // runs), so private GitHub/Notion content stays out of the request:
+          // it gets the web tools only, like the automatic Claude-down fallback.
+          const openaiTools = freeTier ? BASE_TOOLS : TOOLS;
+          if (openaiTools.length === 0) emitToolPrefix(controller);
+          return await runFailoverCompletion("openai", openaiTools);
         }
 
         if (TOOLS.length > 0) {
@@ -1589,12 +1657,19 @@ Return a JSON object with only NEW or UPDATED fields from: name, occupation, com
         // one -- a clean error is strictly better than either.
         console.error("chat: completion generation failed, retrying tools-free via failover:", e instanceof Error ? e.message : String(e));
         try {
-          if (hasImageAttachment || hadPartialProgress) throw e;
+          // A free account's first call already ran the whole failsafe chain
+          // (every provider, each with its own timeout), so a second pass here
+          // would only repeat the same failures and double the wait.
+          if (hasImageAttachment || hadPartialProgress || freeTier) throw e;
           if (BASE_TOOLS.length === 0) emitToolPrefix(controller);
           result = await runFailoverCompletion(undefined, BASE_TOOLS);
         } catch (e2) {
+          // The raw provider error stays in the logs; the user gets a plain
+          // statement. Nothing was billed: finalize() (the only ledger write)
+          // never ran for this turn.
+          console.error("chat: reply failed, nothing billed:", e2 instanceof Error ? e2.message : String(e2));
           try {
-            controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({ error: "Server error: " + (e2 instanceof Error ? e2.message : String(e2)) })));
+            controller.enqueue(encoder.encode(USAGE_MARK + JSON.stringify({ error: "We couldn't get a reply just now. You weren't charged — please try again in a moment." })));
           } catch {}
           controller.close();
           return;
