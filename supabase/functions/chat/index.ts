@@ -1163,7 +1163,25 @@ serve(async (req) => {
         console.error("chat: small completion on luna failed:", e instanceof Error ? e.message : String(e));
       }
     }
-    if ((!freeTier || FREE_TIER_ANTHROPIC_LAST_RESORT) && !(down && lunaFirst)) return await viaClaude();
+    if ((!freeTier || FREE_TIER_ANTHROPIC_LAST_RESORT) && !(down && lunaFirst)) {
+      try {
+        return await viaClaude();
+      } catch (e) {
+        // Anthropic can be dead while its breaker is closed (the 2-minute cool-down
+        // lapses, and only a failing MAIN completion re-opens it -- an explicit
+        // "GPT" pick never touches it). If Luna was not already tried, it is the
+        // backup; otherwise rethrow (callers swallow, as before).
+        if (!lunaFirst && OPENAI_API_KEY) {
+          try {
+            const out = await viaLuna();
+            if (out) return out;
+          } catch (e2) {
+            console.error("chat: small completion fallback on luna failed:", e2 instanceof Error ? e2.message : String(e2));
+          }
+        }
+        throw e;
+      }
+    }
     return "";
   }
 

@@ -171,12 +171,31 @@ export async function runWithOpenAIFailover<T>(o: {
   supaAdmin: SupabaseClient;
   openaiApiKey: string | undefined;
   label: string;                 // for logs, e.g. "run-routines"
-  // Free-tier accounts never reach the Anthropic account (see freetier.ts):
-  // when true, go straight to OpenAI without touching the circuit breaker.
+  // Free-tier accounts go straight to OpenAI (Terra, the `openai` closure)
+  // without touching Anthropic's circuit breaker...
   forceOpenAI?: boolean;
+  // ...and, when a `luna` closure is also given, run the free-tier failsafe
+  // chain instead of a single attempt: Terra (`openai`) -> Luna (`luna`, a plain
+  // gpt-6-luna completion, see completeWithLuna) -> Anthropic Haiku (`anthropic`,
+  // only when FREE_TIER_ANTHROPIC_LAST_RESORT and its circuit is closed). Each
+  // step has its own breaker row, every closure must reset its own per-attempt
+  // state, and an empty result must be thrown by the closure to count as a failure.
+  luna?: () => Promise<T>;
   anthropic: () => Promise<T>;
   openai: () => Promise<T>;
-}): Promise<{ value: T; provider: Provider }> {
+}): Promise<{ value: T; provider: Provider; stepKey?: string }> {
+  if (o.forceOpenAI && o.luna) {
+    const steps: ChainStep<T>[] = [];
+    if (o.openaiApiKey) {
+      steps.push({ key: FREE_CHAIN_KEYS.terra, label: OPENAI_MODEL_MAP.haiku, run: o.openai });
+      steps.push({ key: FREE_CHAIN_KEYS.luna, label: FREE_TIER_LUNA_MODEL, run: o.luna });
+    }
+    if (FREE_TIER_ANTHROPIC_LAST_RESORT) steps.push({ key: FREE_CHAIN_KEYS.haiku, label: "claude-haiku", run: o.anthropic });
+    // Background jobs stream nothing to a client, so a failed step never needs to
+    // stop the chain: emittedOutput is always false.
+    const { value, stepKey } = await runChain({ supaAdmin: o.supaAdmin, label: o.label, steps, emittedOutput: () => false });
+    return { value, provider: stepKey === FREE_CHAIN_KEYS.haiku ? "anthropic" : "openai", stepKey };
+  }
   if (o.forceOpenAI && !o.openaiApiKey) throw new Error("OpenAI is not configured.");
   if (!o.openaiApiKey) return { value: await o.anthropic(), provider: "anthropic" };
 
@@ -203,4 +222,34 @@ export async function runWithOpenAIFailover<T>(o: {
     await recordFailure(o.supaAdmin, "openai");
     throw err;
   }
+}
+
+// A plain (tool-free) gpt-6-luna completion for the free-tier chain's second step
+// in the background jobs. SDK-free on purpose (this module is imported by
+// functions that don't bundle the OpenAI SDK). reasoning_effort "none" is
+// REQUIRED (see the note on FREE_TIER_LUNA_MODEL). Throws on an HTTP error, a
+// timeout, or an empty reply, so runChain counts all three as a failed step.
+export async function completeWithLuna(o: {
+  apiKey: string;
+  system?: string;
+  user: string;
+  maxTokens: number;
+  timeoutMs?: number;          // whole-call limit (non-streaming); default 50s
+}): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${o.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: FREE_TIER_LUNA_MODEL,
+      messages: [...(o.system ? [{ role: "system", content: o.system }] : []), { role: "user", content: o.user }],
+      max_completion_tokens: o.maxTokens,
+      reasoning_effort: "none",
+    }),
+    signal: AbortSignal.timeout(o.timeoutMs ?? 50_000),
+  });
+  if (!r.ok) throw new Error(`OpenAI ${r.status}: ${(await r.text().catch(() => "")).slice(0, 200)}`);
+  const j = await r.json();
+  const text = String(j?.choices?.[0]?.message?.content ?? "").trim();
+  if (!text) throw new Error(`${FREE_TIER_LUNA_MODEL} returned an empty reply`);
+  return { text, inputTokens: j?.usage?.prompt_tokens ?? 0, outputTokens: j?.usage?.completion_tokens ?? 0 };
 }

@@ -46,7 +46,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
-import { OPENAI_MODEL_MAP, runWithOpenAIFailover, type ModelKey } from "../_shared/failover.ts";
+import {
+  OPENAI_MODEL_MAP, runWithOpenAIFailover, completeWithLuna, FREE_TIER_FIRST_RESPONSE_MS,
+  type ModelKey,
+} from "../_shared/failover.ts";
 import { hasPurchased } from "../_shared/freetier.ts";
 import { runOpenAIToolLoop } from "../_shared/openai_tools.ts";
 
@@ -354,6 +357,9 @@ async function executeStepOpenAI(
   stepDesc: string,
   stepContext: string,
   modelKey: string,
+  // Free-tier chain only: a first-response timeout, and "an empty step is a failed
+  // attempt, not the 'Step completed.' fallback" so the chain moves on to Luna.
+  chain?: { firstResponseTimeoutMs: number },
 ): Promise<{
   result: string; toolCalls: any[]; done: boolean;
   inputTokens: number; outputTokens: number; toolAttempts: number; toolFailures: number;
@@ -365,6 +371,7 @@ async function executeStepOpenAI(
   let toolFailures = 0;
 
   const r = await runOpenAIToolLoop({
+    ...(chain ? { firstResponseTimeoutMs: chain.firstResponseTimeoutMs } : {}),
     apiKey: OPENAI_API_KEY!,
     model: OPENAI_MODEL_MAP[(modelKey in OPENAI_MODEL_MAP ? modelKey : "haiku") as ModelKey],
     system: "You are Aethyro's research agent. Carry out the step you are given, using the tools when they help.",
@@ -398,6 +405,7 @@ async function executeStepOpenAI(
     maxRounds: STEP_MAX_TOOLS,
     onTextDelta: () => {},
   });
+  if (chain && !result && !r.fullText.trim()) throw new Error("OpenAI returned an empty step result");
   if (!result) result = r.fullText.trim() || "Step completed.";
 
   if (toolAttempts > 0 && toolFailures === toolAttempts) {
@@ -405,6 +413,30 @@ async function executeStepOpenAI(
     result = `> ⚠️ **Research failed for this step** — every tool call (${failedTools}) returned an error or no data. The text below reflects the model's own general knowledge, not information verified by this step.\n\n${result}`;
   }
   return { result, toolCalls, done, inputTokens: r.inputTokens, outputTokens: r.outputTokens, toolAttempts, toolFailures };
+}
+
+// Free-tier chain step 2 for a research step: gpt-6-luna as a plain completion. It
+// has NO tools, so the step cannot search or crawl; the model is told so, and the
+// result is prefixed with a visible warning that it is unverified (the same
+// no-fabrication rule as the TOOL_FAILED banner above). Returns executeStepOpenAI's
+// shape; done is false, so the remaining plan steps and the final synthesis still run.
+async function executeStepLuna(
+  goal: string,
+  stepDesc: string,
+  stepContext: string,
+): Promise<{
+  result: string; toolCalls: any[]; done: boolean;
+  inputTokens: number; outputTokens: number; toolAttempts: number; toolFailures: number;
+}> {
+  const r = await completeWithLuna({
+    apiKey: OPENAI_API_KEY!,
+    system: "You are Aethyro's research agent. Carry out the step you are given.",
+    user: stepPrompt(goal, stepDesc, stepContext) +
+      "\n\nNOTE: no tools are available for this step (no web search, no page fetching). Do not call any tool and do not claim to have searched or read anything. Answer from your own knowledge, and say plainly which parts you could not verify.",
+    maxTokens: STEP_MAX_TOK,
+  });
+  const result = `> ⚠️ **This step ran on a backup model without web tools** — treat its content as unverified.\n\n${r.text}`;
+  return { result, toolCalls: [], done: false, inputTokens: r.inputTokens, outputTokens: r.outputTokens, toolAttempts: 0, toolFailures: 0 };
 }
 
 // ── Credits helper ──────────────────────────────────────────────────────────────────────────────
@@ -549,10 +581,22 @@ serve(async (req) => {
           tools: [],
           executeTool: async () => "",
           maxTokens: 1500, // includes hidden reasoning tokens
+          ...(freeTier ? { firstResponseTimeoutMs: FREE_TIER_FIRST_RESPONSE_MS } : {}),
           onTextDelta: () => {},
         });
+        // Free-tier chain: an empty plan is a failed attempt (next: Luna), not a silent default plan.
+        if (freeTier && !r.fullText.trim()) throw new Error("OpenAI returned an empty plan");
         return { text: r.fullText, input: r.inputTokens, output: r.outputTokens };
       },
+      luna: freeTier ? async () => {
+        const r = await completeWithLuna({
+          apiKey: OPENAI_API_KEY!,
+          system: "You are a planning assistant. Follow the format instructions exactly.",
+          user: planPrompt,
+          maxTokens: 400,
+        });
+        return { text: r.text, input: r.inputTokens, output: r.outputTokens };
+      } : undefined,
     });
     servedBy.add(planBy);
     totalInput  += planCall.input;
@@ -589,7 +633,11 @@ serve(async (req) => {
         openaiApiKey: OPENAI_API_KEY,
         label: "run-agent-task/step",
         anthropic: () => executeStep(anthropic, goal, plan[i], stepContext, modelKey),
-        openai: () => executeStepOpenAI(goal, plan[i], stepContext, modelKey),
+        openai: () => executeStepOpenAI(
+          goal, plan[i], stepContext, modelKey,
+          freeTier ? { firstResponseTimeoutMs: FREE_TIER_FIRST_RESPONSE_MS } : undefined,
+        ),
+        luna: freeTier ? () => executeStepLuna(goal, plan[i], stepContext) : undefined,
       });
       servedBy.add(stepBy);
       const { result, toolCalls, done, inputTokens: si, outputTokens: so, toolAttempts, toolFailures } = stepRes;
@@ -667,10 +715,22 @@ serve(async (req) => {
             tools: [],
             executeTool: async () => "",
             maxTokens: 4000, // includes hidden reasoning tokens
+            ...(freeTier ? { firstResponseTimeoutMs: FREE_TIER_FIRST_RESPONSE_MS } : {}),
             onTextDelta: () => {},
           });
+          // Free-tier chain: an empty report is a failed attempt (next: Luna), not "Task complete.".
+          if (freeTier && !r.fullText.trim()) throw new Error("OpenAI returned an empty report");
           return { text: r.fullText, input: r.inputTokens, output: r.outputTokens };
         },
+        luna: freeTier ? async () => {
+          const r = await completeWithLuna({
+            apiKey: OPENAI_API_KEY!,
+            system: "You are Aethyro's research agent. Write the final report the user asked for.",
+            user: synthPrompt,
+            maxTokens: 2000,
+          });
+          return { text: r.text, input: r.inputTokens, output: r.outputTokens };
+        } : undefined,
       });
       servedBy.add(synthBy);
       totalInput  += synth.input;
