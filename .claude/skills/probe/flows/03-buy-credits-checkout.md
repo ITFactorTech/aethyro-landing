@@ -62,3 +62,16 @@ checkout host was stubbed with `page.route()` so the browser could "land" withou
 loading Stripe). Modal: starter $4/200, value $10/600, power $30/2,000, pro_7k
 $90/7,000 (matches `pack-config.js`). `buy.stripe.com` count in the rendered DOM and
 in the raw `chat.html` source: 0.
+
+**2026-11-09 sweep — PASSED (production, Playwright; one pass, 6 unpaid live Stripe
+sessions created).** Topbar "Buy more" -> starter / value / power / pro_7k each:
+`buy-credits` 200 and the browser landed on `https://checkout.stripe.com/g/pay/cs_live_…`
+(checkout host stubbed with `page.route()`; note the path is `/g/pay/` now, `/c/pay/`
+before — match on host only). The free-tier "Unlock Sonnet with any pack →" upsell (new
+surface `tier_locked`) opens the same modal (no pack pre-highlighted) and a `power` click
+landed on a real checkout session; `chat.html?buy=value` also landed on one.
+`buy.stripe.com` count in the rendered DOM and in the raw source of `/`, `/pricing.html`,
+`/app/chat.html`, `/app/dashboard.html`, `/app/signup.html`, `/developers.html`,
+`/claude-without-subscription.html`: 0. Modal $4/200, $10/600, $30/2,000, $90/7,000.
+Tip: `response.json()` on `buy-credits` races the navigation (the body is gone once the page
+leaves) — assert on the landed URL instead.

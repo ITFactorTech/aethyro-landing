@@ -40,3 +40,15 @@ sat on top of the Receipt link (copy box x 658-687 vs link x 646-690;
 nothing — a Playwright `.click()` on `.mc-receipt-link` times out with
 "`.msg-copy-btn` subtree intercepts pointer events". Until #216 merges, click
 the link's left edge (`click({position:{x:3,y:7}})`) to reach it.
+
+**2026-11-09 sweep — PASSED (production, in-browser).** Generation receipt on a free
+account: "Receipt" opened the modal (a plain hover + click works: `elementFromPoint` at the
+link centre is the link; the 11-05 overlap with the hover Copy button, fixed in #216, did not
+reproduce — checked on a separate send) with
+payload `{model: haiku, credits: 1, sources: {provider: openai, actual_model:
+gpt-6.1-terra, tools_used: [], …}, input_tokens, output_tokens, requested_model: haiku}`,
+Verify -> `✓ Signature valid — recomputed server-side…`, Download ->
+`aethyro-generation-receipt-<id>.json`. Deletion receipt: deleting the 6-message
+conversation opened the modal (`message_count: 6`, `memory_count: 6`), Verify -> valid,
+Download -> `aethyro-deletion-receipt-<id>.json`. DB: 3 `generation_receipts`, 1
+`deletion_receipts` row, 0 conversations left.

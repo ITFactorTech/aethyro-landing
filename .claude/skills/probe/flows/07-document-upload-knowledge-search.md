@@ -54,3 +54,15 @@ parallel and swallows failures as `{results:[]}`, so a throttled search is
 indistinguishable from "nothing found". **To run this flow reliably:** idle ≥ 60-90
 s before each memory-producing send and before each search, or the result is
 noise.
+
+**2026-11-09 sweep — PASSED with the idle-quota procedure (production, in-browser, free
+account).** 90 s idle, then Knowledge upload of a 317 B txt -> "zeph.txt added to knowledge
+base", `embed-content` 200 `{chunks:1,has_embeddings:true}`, listed "TXT zeph.txt · 1
+chunks". 70 s later the Search tab: "tidal anomalies the harbormaster must log" -> `doc` 74%.
+One chat message after a further 65 s idle, then 75 s later: "what is my dog called…" ->
+`chat user` 62% + `chat assistant` 21% + `doc` 16% (both source types, distinct); clicking the `doc`
+result -> Knowledge tab + toast "Opened in Knowledge tab — see "zeph.txt""; clicking the `chat`
+result -> `?c=<id>`, 2 rows, panel closed. A mixed query ("tidal anomalies harbormaster dog
+Bartholomew") returned only the doc, so use one topic per query. The embedding-NULL finding
+stands: `memory_embeddings` created today were 53/90 NULL (11-07: 60/160, 11-08: 14/52), and
+this sweep's own bursty sends left 8/12 and 2/2 NULL on two accounts.

@@ -8,7 +8,9 @@ and the monthly spend cap (2026-10-10).
 1. Signed-in throwaway account, force balance to ~25 credits → confirm the
    low-balance warning banner appears with a correct worst-case Opus-cost
    estimate.
-2. New throwaway account, 0 real messages sent yet, force an explicit
+2. **PAID** throwaway account (a no-purchase account never sees this modal — it is
+   served Haiku/Terra whatever is picked, `shouldWarnBeforeOpusSend()` returns false for
+   `isFreeTier`; give it one synthetic purchase row, see flow 04), 0 real messages sent yet, force an explicit
    `model: "opus"` pick while balance is still above the low-balance
    threshold but the account is brand-new → confirm the one-time Opus
    cost-confirmation modal appears (not the low-balance banner — these are
@@ -72,3 +74,18 @@ zero messages (the contextual line is suppressed at 0 messages, as designed).
 (8 -> 8). Observation: `monthly_spend` counted the forced negative
 `admin_adjustment` rows (-170, -25) as spend, i.e. it sums every negative delta, not
 just usage.
+
+**2026-11-09 sweep — all four gates PASSED (production, Playwright, paid synthetic-purchase
+account; the free-account exception verified too).** (1) Balance 25: banner for Opus and Auto
+("Low balance ( 25 credits) — an Opus reply can cost up to ~80 credits and may not complete"),
+hidden for Haiku and Sonnet. (2) Paid, 300 credits, 0 messages, explicit Opus: modal fired
+("300" shown, banner not shown); Cancel kept the typed text, sent nothing, set the flag;
+fresh browser "Switch to Sonnet & send" flipped the active button to Sonnet and billed 1 cr
+(`gpt-6.1-sol`). **Free account (no purchase), explicit Opus: NO modal** (3 sends, none
+showed it) — the intended change. (3) Page loaded at 25, drained to 0 elsewhere, send ->
+`402 {"error":"No credits","balance":0}`, inline "You're out of credits. Buy credits", depleted
+bar + disabled input, modal with Starter highlighted (session line empty — zero messages that
+session, by design). (4) Cap 1 (300 spent incl. forced adjustments): `402 {"error":"Monthly cap
+reached","monthly_spend":300,"monthly_cap":1,"estimated_cost":2}`, inline "…(300/1 credits this
+month). Raise or remove your cap →" -> `./dashboard.html#spendCapPanel`, no depleted bar/modal,
+ledger row count unchanged (12 -> 12).

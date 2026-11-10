@@ -98,3 +98,26 @@ seconds after a billed run; correct after reload).
 and flip it to `false` so the "Run now" never attempts a (bouncing) email. To verify a
 frontend fix before it is deployed, `ctx.route('https://aethyro.com/app/chat.html*', ...)`
 with the patched file as the body — real origin, so CORS and the edge functions work.
+
+**2026-11-09 sweep — steps 1-5 PASSED (production, UI-driven, free account), plus the
+date-in-prompt fix and the PR #220 gallery regression check.** A free account's routines run
+on OpenAI `gpt-6.1-terra` at the Haiku rate: three runs = three `routine` -1 ledger rows,
+`metadata.provider: openai`, `metadata.model: gpt-6.1-terra`. With **zero** own routines the
+Community Gallery loaded (12 template cards; PR #220 holds). Quick-start "Try it: daily AI
+briefing" (visible only in the empty state right after a page load — `startNewChat()`
+rebuilds `#emptyState` without it; intercept the insert to set `email_on_result:false`
+for an `@example.com` account): exactly ONE "Daily Briefing" card (no duplicate), "Run now"
+-> `run-routines` 200 `{"ran":1,…"status":"completed"}`; the result now opens with
+"Daily briefing · November 9" and says "I couldn't verify a significant development from the
+last 24 hours, so I'll skip the headline rather than guess" (the 11-06 stale-news problem is
+gone; `run-routines` v10 puts today's date in the prompt). Chain: Probe A (ALPHA) -> Probe B
+("The previous step produced **ALPHA**."); self-chain -> `A routine cannot chain to itself`,
+B->A cycle -> `Chaining this routine here would create a cycle`, links untouched. Balance
+forced to 0: "Run now" -> `routine_run_log` `skipped_no_credits` ("No credits remaining"), no
+ledger row; restored + `monthly_spend_cap_credits = 1`: -> `skipped_monthly_cap`, History shows
+both ⚠ rows ("Skipped — no credits", "Skipped — monthly cap reached (100 of 1 credits this
+month)", the second counted the forced `admin_adjustment`). Still open: the "Run now" toast says
+"Routine complete" for a skipped run and the balance pill is not refreshed (read 99 right after
+three billed runs). Script gotcha: after the first toast the text stays "Routine complete", so
+`waitForFunction` on the toast text matches a stale toast — clear it or wait on the new
+`routine_run_log` row / response instead.

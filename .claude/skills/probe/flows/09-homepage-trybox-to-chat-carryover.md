@@ -12,8 +12,8 @@ tour via `window.aethyroCarriedPrompt`). Shipped in PRs #207-#211.
    3 chips ("Rewrite an email" / "Explain something simply" / "Write some
    code") each with a `data-prompt`, and that `#tryInput` exists.
 2. Click one chip → a real `trial-chat` request (200) streams a reply into
-   `#tryOutput`; afterwards `#tryCtaLink` ("Like that? Sign up free for 200
-   credits →") appears with `href="/app/signup.html"` and
+   `#tryOutput`; afterwards `#tryCtaLink` ("Like that? Sign up free for 100
+   credits →"; 200 until 2026-11-08) appears with `href="/app/signup.html"` and
    `localStorage.aethyro_pending_prompt` equals the chip's prompt (it is set
    when the CTA is shown, i.e. after every reply **or** a 429 — both paths call
    `showCta()`). This spends one of the sandbox IP's 3 free anonymous
@@ -46,3 +46,10 @@ after landing on signup. Signed in: `#input` prefilled with exactly that prompt,
 `#onboardBackdrop.show`), control (no pending prompt) showed it (1). Note: an
 earlier selector (`#onboardModal`) matched nothing — assert on
 `#onboardBackdrop.show`.
+
+**2026-11-09 sweep — PASSED.** H1 "Claude Opus 5.5. Without the $20/month."; 3 chips each
+with `data-prompt`; chip #2 -> `trial-chat` 200 with a real reply ("The main difference is **when
+you pay taxes**…"), CTA "Like that? Sign up free for 100 credits →" -> `/app/signup.html`,
+`aethyro_pending_prompt` = the chip prompt, still set on the signup page. Signed in (free account):
+`#input` prefilled with the stored prompt, 0 message rows, balance 100 -> 100, key cleared, tour NOT
+shown; control account with no pending prompt and no onboarded flag: `#onboardBackdrop.show` = 1.
