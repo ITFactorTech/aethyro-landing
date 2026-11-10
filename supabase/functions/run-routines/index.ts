@@ -61,7 +61,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3?target=deno";
-import { OPENAI_MODEL_MAP, runWithOpenAIFailover, type ModelKey } from "../_shared/failover.ts";
+import {
+  OPENAI_MODEL_MAP, runWithOpenAIFailover, completeWithLuna,
+  FREE_TIER_LUNA_MODEL, FREE_TIER_FIRST_RESPONSE_MS, FREE_CHAIN_KEYS,
+  type ModelKey,
+} from "../_shared/failover.ts";
 import { hasPurchased } from "../_shared/freetier.ts";
 import { runOpenAIToolLoop } from "../_shared/openai_tools.ts";
 
@@ -264,6 +268,9 @@ async function runRoutineCompletionOpenAI(
   modelKey: ModelKey,
   promptText: string,
   usage: { inputTokens: number; outputTokens: number },
+  // Free-tier chain only: a first-response timeout, and "an empty reply is a
+  // failed step, not the 'Routine completed.' fallback" so the chain moves on.
+  chain?: { firstResponseTimeoutMs: number },
 ): Promise<{ resultText: string; inputTokens: number; outputTokens: number }> {
   const r = await runOpenAIToolLoop({
     apiKey: OPENAI_API_KEY!,
@@ -275,11 +282,32 @@ async function runRoutineCompletionOpenAI(
       name === "web_search" ? await executeWebSearch(String(input.query ?? "")) : "Tool execution failed or not supported.",
     maxTokens: 3000, // includes hidden reasoning tokens, hence above the Claude path's 1500
     maxRounds: MAX_TOOL_ROUNDS,
+    ...(chain ? { firstResponseTimeoutMs: chain.firstResponseTimeoutMs } : {}),
     onTextDelta: () => {},
   });
+  if (chain && !r.fullText.trim()) throw new Error("OpenAI returned an empty routine result");
   usage.inputTokens += r.inputTokens;
   usage.outputTokens += r.outputTokens;
   return { resultText: r.fullText.trim() || "Routine completed.", inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
+}
+
+// Free-tier chain step 2: gpt-6-luna as a plain completion (no web_search). A
+// routine that needed live data will say so rather than pretend, because the
+// system prompt below tells it the tool is unavailable.
+async function runRoutineCompletionLuna(
+  promptText: string,
+  usage: { inputTokens: number; outputTokens: number },
+): Promise<{ resultText: string; inputTokens: number; outputTokens: number }> {
+  const r = await completeWithLuna({
+    apiKey: OPENAI_API_KEY!,
+    system: routineSystem() +
+      " The web_search tool is NOT available for this run. If the task needs current or live information, say plainly that you could not look it up instead of answering from memory as if it were current.",
+    user: promptText,
+    maxTokens: 1500,
+  });
+  usage.inputTokens += r.inputTokens;
+  usage.outputTokens += r.outputTokens;
+  return { resultText: r.text, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
 }
 
 // Chained routines re-invoke this function internally after each successful
@@ -542,19 +570,26 @@ serve(async (req) => {
         ? `Context from the previous step in this routine chain:\n${chainContext}\n\n---\n\nYour task:\n${routine.prompt}`
         : routine.prompt;
 
-      const { value: completion, provider: servedBy } = await runWithOpenAIFailover({
+      // Every closure restarts from scratch: whatever a half-finished earlier attempt
+      // consumed is absorbed, not billed (the user is billed only for the attempt that
+      // delivered). A free account runs the failsafe chain (failover.ts): Terra -> Luna
+      // (plain, no web_search) -> Claude Haiku as the last resort; everyone else keeps
+      // the Anthropic-first / OpenAI-fallback pair exactly as before.
+      const resetUsage = () => { usage.inputTokens = 0; usage.outputTokens = 0; };
+      const { value: completion, provider: servedBy, stepKey } = await runWithOpenAIFailover({
         supaAdmin,
         openaiApiKey: OPENAI_API_KEY,
         label: "run-routines",
         forceOpenAI: freeTier,
-        anthropic: () => runRoutineCompletion(anthropic, model, promptText, usage),
+        anthropic: () => { resetUsage(); return runRoutineCompletion(anthropic, model, promptText, usage); },
         openai: () => {
-          // Restart from scratch: whatever a half-finished Anthropic attempt consumed is
-          // absorbed, not billed (the user is billed only for the attempt that delivered).
-          usage.inputTokens = 0;
-          usage.outputTokens = 0;
-          return runRoutineCompletionOpenAI(modelKey as ModelKey, promptText, usage);
+          resetUsage();
+          return runRoutineCompletionOpenAI(
+            modelKey as ModelKey, promptText, usage,
+            freeTier ? { firstResponseTimeoutMs: FREE_TIER_FIRST_RESPONSE_MS } : undefined,
+          );
         },
+        luna: freeTier ? () => { resetUsage(); return runRoutineCompletionLuna(promptText, usage); } : undefined,
       });
       const { resultText, inputTokens, outputTokens } = completion;
 
@@ -576,7 +611,8 @@ serve(async (req) => {
         team_id: routineProfile?.team_id ?? null,
         metadata: {
           provider: servedBy,
-          model: servedBy === "openai" ? OPENAI_MODEL_MAP[modelKey as ModelKey] : model,
+          model: stepKey === FREE_CHAIN_KEYS.luna ? FREE_TIER_LUNA_MODEL
+            : servedBy === "openai" ? OPENAI_MODEL_MAP[modelKey as ModelKey] : model,
           input_tokens: inputTokens,
           output_tokens: outputTokens,
         },
