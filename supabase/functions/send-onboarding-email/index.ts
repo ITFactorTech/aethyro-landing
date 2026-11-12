@@ -135,16 +135,33 @@ const jsonHeaders = (CORS: Record<string, string>) => ({ ...CORS, "Content-Type"
 const reply = (CORS: Record<string, string>, status: number, body: Json) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders(CORS) });
 
+// Every "this request is not an email to send" outcome returns the SAME body.
+// This function is public (verify_jwt false: the cron calls it with the anon
+// key), so a distinguishable answer would tell any caller whether an address
+// has an account, whether it has a mail due, or whether its balance is zero.
+// The reason is logged server-side instead (never the address).
+const skip = (CORS: Record<string, string>, reason: string) => {
+  console.log(`send-onboarding-email: skipped (${reason})`);
+  return reply(CORS, 200, { sent: false });
+};
+
 serve(async (req) => {
   const CORS = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
-    const { email, email_num } = await req.json();
-    if (!email || !email_num) return reply(CORS, 400, { error: "email and email_num required" });
+    const { email, email_num: rawNum } = await req.json();
+    if (!email || !rawNum) return reply(CORS, 400, { error: "email and email_num required" });
 
-    const template = emails[email_num as number];
-    if (!template) return reply(CORS, 400, { error: `unknown email_num: ${email_num}` });
+    // email_num must be a whole number that names a template. `emails` is a
+    // plain object, so a bare `emails[x]` also "finds" __proto__, constructor,
+    // toString ... -- own-property check plus an integer check keeps those out
+    // before any database access.
+    const email_num = typeof rawNum === "number" || typeof rawNum === "string" ? Number(rawNum) : NaN;
+    if (!Number.isInteger(email_num) || !Object.hasOwn(emails, String(email_num))) {
+      return reply(CORS, 400, { error: "unknown email_num" });
+    }
+    const template = emails[email_num];
 
     const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -156,7 +173,7 @@ serve(async (req) => {
       console.error("send-onboarding-email: profile lookup failed", profErr.message);
       return reply(CORS, 503, { error: "lookup failed" });
     }
-    if (!profile) return reply(CORS, 200, { sent: false, skipped: "no_profile" });
+    if (!profile) return skip(CORS, "no_profile");
     const uid = profile.id as string;
     const to = profile.email as string;
 
@@ -174,7 +191,7 @@ serve(async (req) => {
       console.error("send-onboarding-email: schedule lookup failed", rowErr.message);
       return reply(CORS, 503, { error: "lookup failed" });
     }
-    if (!row) return reply(CORS, 200, { sent: false, skipped: "not_scheduled" });
+    if (!row) return skip(CORS, "not_scheduled");
 
     // 3. Balance (team-pool aware). get_credit_balance coalesces to 0, so a
     //    non-number can only mean the RPC itself failed: fail closed.
@@ -184,7 +201,7 @@ serve(async (req) => {
       return reply(CORS, 503, { error: "lookup failed" });
     }
     const verdict = decide(balance);
-    if (!verdict.send) return reply(CORS, 200, { sent: false, skipped: verdict.reason });
+    if (!verdict.send) return skip(CORS, verdict.reason ?? "skipped");
 
     // 4. Activity + purchase state, for the copy only.
     const { data: convs, error: convErr } = await supa
