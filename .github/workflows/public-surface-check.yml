@@ -1,0 +1,22 @@
+name: Public surface check
+
+# The Worker serves the whole repo root as static assets; .assetsignore is the
+# only thing keeping internal files (project memory, Supabase source and
+# migrations, CI config, helper scripts) out of what is published. This check
+# fails a PR that adds or moves a file such that something internal would be
+# served. See .github/scripts/check-public-surface.mjs for the exact rules.
+on:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify no internal file is publicly served
+        run: node .github/scripts/check-public-surface.mjs
