@@ -1,12 +1,15 @@
 {
   "name": "aethyro-landing",
+  "main": "worker.js",
   "compatibility_date": "2026-09-19",
   "assets": {
-    // html_handling: "none" was tried to stop /pricing.html -> /pricing
-    // redirects, but it also disables Wrangler's implicit directory-index
-    // resolution: "/" and "/marketplace/" 404'd, only the literal
-    // "/index.html" path worked. That's worse than the redirect it fixed,
-    // so this stays on the default (auto-trailing-slash).
-    "directory": "."
+    "directory": ".",
+    "binding": "ASSETS",
+    // html_handling must be "none". The default (auto-trailing-slash) 307s every
+    // /page.html to /page, contradicting sitemap.xml and every canonical tag.
+    // "none" alone also disables directory-index resolution ("/" would 404), so
+    // worker.js supplies the index and extensionless resolution and the 404 page.
+    "html_handling": "none",
+    "not_found_handling": "none"
   }
 }
