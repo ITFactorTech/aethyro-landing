@@ -1,7 +1,7 @@
 // Usage: NODE_PATH=$(npm root -g) node run-code-test.cjs <base-url>
 // Anonymous chat.html with the trial-chat reply mocked to contain js / jsx / python code blocks; clicks Run on each
 // and then loads pdf.js and extracts text from a generated one-page PDF, exactly as chat.html does. Clean output:
-// js:true jsx:true jsx_click:true py:"PY_OK 30" pdf:"text=PDF_HELLO" and "CSP refusals: 0".
+// js:true jsx:true jsx_click:true py:"PY_OK 30" pdf:"text=PDF_HELLO" pwned:200 and "CSP refusals: 0".
 const { chromium } = require('playwright');
 const B = process.argv[2];
 const reply = [
@@ -66,6 +66,9 @@ function makePdf(){
       return 'text=' + tc.items.map(i=>i.str).join(' ');
     } catch(e){ return 'FAILED: ' + String(e).slice(0,160); }
   }, pdfB64);
+  // Hosts that only a form submit reaches: signup.html / login.html fetch the HaveIBeenPwned range API (fails OPEN on any error,
+  // so a connect-src gap silently disables the breached-password check). Same CSP applies page-wide, so test it from this page.
+  res.pwned = await page.evaluate(async () => { try { const r = await fetch('https://api.pwnedpasswords.com/range/ABCDE'); return r.status; } catch (e) { return 'FAILED: ' + String(e).slice(0, 80); } });
   console.log(JSON.stringify(res, null, 1));
   console.log('CSP refusals:', refused.size); [...refused].forEach(x=>console.log('  R', x));
   await browser.close();

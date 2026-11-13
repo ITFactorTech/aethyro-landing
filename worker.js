@@ -22,18 +22,20 @@
 
 const NOT_FOUND = "/404.html";
 
-async function fromAssets(env, request, pathname) {
+async function fromAssets(env, request, pathname, forwardHeaders = true, method = request.method) {
   const target = new URL(request.url);
   target.pathname = pathname;
-  // A fresh GET so a conditional/range header on the client request cannot
-  // confuse the lookup; the platform handles caching of the asset itself.
-  return env.ASSETS.fetch(new Request(target.toString(), { method: request.method, headers: request.headers }));
+  // Conditional headers (If-None-Match ...) are forwarded when serving a real
+  // page so a rewritten path ("/", "/pricing") still gets its 304. They are NOT
+  // forwarded for the 404 page: a client revalidating a missing path with the
+  // ETag of a different file would otherwise get an empty 404 body.
+  return env.ASSETS.fetch(new Request(target.toString(), { method, headers: forwardHeaders ? request.headers : new Headers() }));
 }
 
 export default {
   async fetch(request, env) {
     if (request.method !== "GET" && request.method !== "HEAD") {
-      return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+      return withSecurityHeaders(env, request, new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, HEAD" } }));
     }
 
     const url = new URL(request.url);
@@ -56,7 +58,7 @@ export default {
       const dirIndex = await fromAssets(env, request, path + "/index.html");
       if (dirIndex.status !== 404) {
         url.pathname = path + "/";
-        return Response.redirect(url.toString(), 301);
+        return withSecurityHeaders(env, request, Response.redirect(url.toString(), 301));
       }
     }
 
@@ -64,8 +66,30 @@ export default {
   },
 };
 
+// Responses built by this Worker (the 301 and the 405) are not asset responses,
+// so ./_headers does not reach them. Copy the security headers from the 404 page
+// (the rule is "/*", so it carries the full set) instead of duplicating the list.
+const SECURITY_HEADERS = [
+  "strict-transport-security", "content-security-policy", "x-frame-options",
+  "x-content-type-options", "referrer-policy", "permissions-policy",
+];
+async function withSecurityHeaders(env, request, res) {
+  try {
+    const base = await fromAssets(env, request, NOT_FOUND, false, "GET");
+    const headers = new Headers(res.headers);
+    for (const name of SECURITY_HEADERS) {
+      const value = base.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    await base.body?.cancel();
+    return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+  } catch {
+    return res; // never let header decoration break the response itself
+  }
+}
+
 async function notFound(env, request) {
-  const res = await fromAssets(env, request, NOT_FOUND);
+  const res = await fromAssets(env, request, NOT_FOUND, false);
   // Keep the 404 page's headers; only the status differs.
   return new Response(request.method === "HEAD" ? null : res.body, {
     status: 404,
