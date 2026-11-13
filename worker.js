@@ -22,12 +22,14 @@
 
 const NOT_FOUND = "/404.html";
 
-async function fromAssets(env, request, pathname) {
+async function fromAssets(env, request, pathname, forwardHeaders = true) {
   const target = new URL(request.url);
   target.pathname = pathname;
-  // A fresh GET so a conditional/range header on the client request cannot
-  // confuse the lookup; the platform handles caching of the asset itself.
-  return env.ASSETS.fetch(new Request(target.toString(), { method: request.method, headers: request.headers }));
+  // Conditional headers (If-None-Match ...) are forwarded when serving a real
+  // page so a rewritten path ("/", "/pricing") still gets its 304. They are NOT
+  // forwarded for the 404 page: a client revalidating a missing path with the
+  // ETag of a different file would otherwise get an empty 404 body.
+  return env.ASSETS.fetch(new Request(target.toString(), { method: request.method, headers: forwardHeaders ? request.headers : new Headers() }));
 }
 
 export default {
@@ -65,7 +67,7 @@ export default {
 };
 
 async function notFound(env, request) {
-  const res = await fromAssets(env, request, NOT_FOUND);
+  const res = await fromAssets(env, request, NOT_FOUND, false);
   // Keep the 404 page's headers; only the status differs.
   return new Response(request.method === "HEAD" ? null : res.body, {
     status: 404,
