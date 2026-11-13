@@ -35,7 +35,7 @@ those files in its window.
    ```
    NODE_PATH=$(npm root -g) node .claude/skills/site-guardian/checks/11-csp-scan/run-code-test.cjs $BASE
    ```
-   Clean: `js:true, jsx:true, jsx_click:true, py:"PY_OK 30", pdf:"text=PDF_HELLO"` and `CSP refusals: 0`. It uses the
+   Clean: `js:true, jsx:true, jsx_click:true, py:"PY_OK 30", pdf:"text=PDF_HELLO", pwned:200` and `CSP refusals: 0`. It uses the
    anonymous chat mode with the `trial-chat` reply mocked, so it needs no account.
 
 ## What a mismatch looks like
@@ -44,7 +44,19 @@ A line `R load the script 'https://…' because it violates … Content Security
 keyword to the matching directive in `_headers` in the same PR as the feature, re-run both steps, record the host in
 CLAUDE.md's "Worker serving rules" convention.
 
+4. Two things a page-load scan cannot see (added 2026-11-13, found by the first logged-in probe of the Worker):
+   - a host reached **only by a form submit**. `app/signup.html` and `app/login.html` fetch `api.pwnedpasswords.com` and
+     treat any error as "not breached", so a CSP refusal fails open and a breached password is accepted. The run-code
+     test fetches that host and reports `pwned:200` (from #252 on; before that merge a `FAILED:` value there is the bug, not the test). Any new `fetch`/`sendBeacon`/`WebSocket` host needs the same
+     treatment: grep `fetch(` and friends for external hosts and make sure each is in `connect-src` AND reached by a test.
+   - a browser feature gated by `Permissions-Policy`. The chat Voice button needs the microphone, so `_headers` must say
+     `microphone=(self)`, not `()`. Compare `document.featurePolicy.allowsFeature('microphone')` (and camera,
+     geolocation) on the Worker with the same call on the hostname that is live today.
+
 ## Not covered (say so in the sweep report, do not claim it)
-Flows behind a login (connectors, billing modal, dashboard panels, OAuth redirects), Stripe checkout navigation under
-`form-action 'self'`, and the production hostname while it is served by another host that sends no CSP. Cover the
-logged-in ones with `probe` flows run against the preview URL.
+Stripe checkout navigation under `form-action 'self'`, OAuth and magic-link sign-in (they cannot be tested on a
+`workers.dev` host), real function calls from the bare `workers.dev` host (its origin is not on the edge functions' CORS
+allowlist; a probe has to re-serve the responses), speech recognition in a real Chrome (headless has none), and the
+production hostname while it is served by another host that sends no CSP. Cover logged-in flows with `probe` flows run
+against the preview URL (2026-11-13: flows 01, 03, 05, 06, 07, 11, Run-code, dashboard, share link all ran clean apart
+from the two defects above).
