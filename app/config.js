@@ -3,7 +3,7 @@
   // Cloudflare Turnstile SITE key (public). Empty = no human check on the email signup
   // form. Fill it in only together with the TURNSTILE_SECRET_KEY secret and the
   // "Before User Created" auth hook (see supabase/functions/signup-gate/index.ts).
-  window.AETHYRO_TURNSTILE_SITEKEY = "";
+  window.AETHYRO_TURNSTILE_SITEKEY = "0x4AAAAAAE-DbNg5b5LjP-2J";
   var SUPABASE_URL  = "https://uzmdqbtflcpikjdrggqc.supabase.co";
   var SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6bWRxYnRmbGNwaWtqZHJnZ3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2ODQxOTgsImV4cCI6MjA5MTI2MDE5OH0.BwNVBJCbw9SG-ge7PfmoIW8q_33k-ZQlqpDHa2HrvHI";
   if (!window.supabase || !window.supabase.createClient) {
