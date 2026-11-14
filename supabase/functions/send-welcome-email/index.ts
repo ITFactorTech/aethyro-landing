@@ -31,6 +31,22 @@
 // for the 429 case specifically, honoring Resend's own Retry-After header
 // when present. This doesn't touch the cron dispatch itself -- it makes
 // each individual edge-function invocation resilient to the burst instead.
+// v6 — 2026-11-14: farm-account guard. The welcome / day-2 / day-5 / day-6 mails
+// were sent to every address the trigger or cron handed us, including the
+// scripted-signup clusters (`fldubai.com` and friends): 55 mails in ~46h to
+// zero-balance blocked-domain accounts by the 11-12 count, and the copy told them
+// they had free credits they never received. They also cost sender reputation
+// (the 7.2% bounce rate in the 11-05 Resend numbers). `skipReason()` now skips
+// welcome / engagement / reengagement / winback when the address's domain is on
+// `bonus_blocked_domains`, when the account never received a `signup_bonus`
+// ledger row (the bonus rule and this rule then agree by construction), and, for
+// engagement / reengagement, when the pooled balance is <= 0 (the copy says
+// credits are waiting). A skipped engagement / reengagement / winback is STAMPED
+// in `email_drip_state` so the daily cron never re-selects that account (the
+// 2026-10-27 unbounded-requery lesson); a skipped welcome is not stamped (it is
+// fired once per signup). A skip answers exactly like a send (`{ok:true,type}`),
+// so the function is not a blocklist oracle; the reason goes to the log, never
+// the address. A lookup failure answers 503 and sends nothing.
 // Called by a Postgres trigger (via pg_net) when a new row appears in auth.users.
 // Sends a 3-step drip:
 //   day 0 — welcome + starter prompts
@@ -286,6 +302,43 @@ function winbackHtml(ctx: { title?: string | null; conversationId?: string | nul
 </html>`;
 }
 
+
+// ── Farm-account guard ───────────────────────────────────────────────────────
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export type SkipReason = "blocked_domain" | "no_signup_bonus" | "unknown_user" | "out_of_credits";
+
+// Returns why this mail must not go out, or null to send. THROWS on any lookup
+// failure (the caller answers 503 and sends nothing): a mail lost to a database
+// blip is cheaper than a mail to a farm address or to an account with no credits.
+export async function skipReason(
+  supabase: any,
+  userId: string,
+  email: string,
+  needsBalance: boolean,
+): Promise<SkipReason | null> {
+  if (!UUID_RE.test(String(userId || ""))) return "unknown_user";
+  const domain = String(email || "").trim().toLowerCase().split("@").pop() || "";
+  const { data: blocked, error: domErr } = await supabase
+    .from("bonus_blocked_domains").select("domain").eq("domain", domain).maybeSingle();
+  if (domErr) throw new Error("domain lookup failed: " + domErr.message);
+  if (blocked) return "blocked_domain";
+  const { count, error: bonusErr } = await supabase
+    .from("credit_ledger").select("id", { count: "exact", head: true })
+    .eq("user_id", userId).eq("reason", "signup_bonus");
+  if (bonusErr) throw new Error("bonus lookup failed: " + bonusErr.message);
+  if ((count || 0) === 0) return "no_signup_bonus";
+  if (needsBalance) {
+    // Team-pool aware; get_credit_balance coalesces to 0, so a non-number can
+    // only mean the RPC itself failed.
+    const { data: balance, error: balErr } = await supabase.rpc("get_credit_balance", { p_user_id: userId });
+    if (balErr || typeof balance !== "number") {
+      throw new Error("balance lookup failed: " + (balErr?.message ?? "non-numeric result"));
+    }
+    if (balance <= 0) return "out_of_credits";
+  }
+  return null;
+}
+
 serve(async (req) => {
   const CORS = corsHeadersFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -313,6 +366,31 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // Farm-account guard (see v6 note). winback derives its own address below and
+    // runs the same check there.
+    if (emailType === "welcome" || emailType === "engagement" || emailType === "reengagement") {
+      let why: SkipReason | null;
+      try {
+        why = await skipReason(supabase, userId, email, emailType !== "welcome");
+      } catch (guardErr) {
+        console.error("send-welcome-email: guard lookup failed, sending nothing:", guardErr instanceof Error ? guardErr.message : String(guardErr));
+        return new Response(JSON.stringify({ error: "temporarily unavailable" }), { status: 503, headers: { ...CORS, "Content-Type": "application/json" } });
+      }
+      if (why) {
+        console.log(`send-welcome-email: skipped ${emailType} for ${userId} (${why})`);
+        const stampCol = emailType === "engagement" ? "engagement_sent_at" : emailType === "reengagement" ? "reengagement_sent_at" : null;
+        if (stampCol && UUID_RE.test(String(userId))) {
+          const { error: stampErr } = await supabase.from("email_drip_state").upsert({
+            user_id: userId,
+            [stampCol]: new Date().toISOString(),
+          }, { onConflict: "user_id" });
+          if (stampErr) console.error("send-welcome-email: skip stamp failed", stampErr.message);
+        }
+        // Same body as a real send: a skip must not be distinguishable from outside.
+        return new Response(JSON.stringify({ ok: true, type: emailType }), { headers: { ...CORS, "Content-Type": "application/json" } });
+      }
+    }
 
     if (emailType === "welcome") {
       await sendEmail(email, "Welcome to Aethyro — you have 100 free credits", welcomeHtml(email));
@@ -403,6 +481,22 @@ serve(async (req) => {
         return new Response(JSON.stringify({ ok: false, skipped: "unknown user" }), { headers: { ...CORS, "Content-Type": "application/json" } });
       }
       const user = userRes.user;
+      let wbWhy: SkipReason | null;
+      try {
+        wbWhy = await skipReason(supabase, userId, user.email!, false);
+      } catch (guardErr) {
+        console.error("send-welcome-email: winback guard lookup failed, sending nothing:", guardErr instanceof Error ? guardErr.message : String(guardErr));
+        return new Response(JSON.stringify({ error: "temporarily unavailable" }), { status: 503, headers: { ...CORS, "Content-Type": "application/json" } });
+      }
+      if (wbWhy) {
+        console.log(`send-welcome-email: skipped winback for ${userId} (${wbWhy})`);
+        const { error: wbStampErr } = await supabase.from("email_drip_state").upsert({
+          user_id: userId,
+          winback_sent_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+        if (wbStampErr) console.error("send-welcome-email: winback skip stamp failed", wbStampErr.message);
+        return new Response(JSON.stringify({ ok: true, type: emailType, sent: false }), { headers: { ...CORS, "Content-Type": "application/json" } });
+      }
       const signupMs = new Date(user.created_at).getTime();
       const ageDays = (Date.now() - signupMs) / 86400000;
 
