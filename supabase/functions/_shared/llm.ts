@@ -38,7 +38,7 @@ import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32?target=deno";
 import OpenAI from "https://esm.sh/openai@4?target=deno";
 import { runOpenAIToolLoop, type ToolDef } from "./openai_tools.ts";
 import {
-  OPENAI_MODEL_MAP, isCircuitOpen, recordFailure, recordSuccess, runChain,
+  OPENAI_MODEL_MAP, isCircuitOpen, isClientDisconnect, recordFailure, recordSuccess, runChain,
   FREE_TIER_LUNA_MODEL, FREE_TIER_ANTHROPIC_LAST_RESORT, FREE_TIER_FIRST_RESPONSE_MS, FREE_CHAIN_KEYS,
   type ModelKey, type Provider, type ChainStep,
 } from "./failover.ts";
@@ -270,6 +270,10 @@ export async function completeWithFailover(
         await recordSuccess(supaAdmin, "anthropic");
         return result;
       } catch (err) {
+        if (isClientDisconnect(err)) {
+          console.error("llm: client went away during the anthropic stream; not counted against its breaker");
+          throw err;
+        }
         console.error("llm: anthropic call failed, attempting openai fallback:", err instanceof Error ? err.message : String(err));
         await recordFailure(supaAdmin, "anthropic");
         if (anthropicEmittedOutput) {
@@ -293,7 +297,7 @@ export async function completeWithFailover(
     await recordSuccess(supaAdmin, "openai");
     return result;
   } catch (err) {
-    await recordFailure(supaAdmin, "openai");
+    if (!isClientDisconnect(err)) await recordFailure(supaAdmin, "openai");
     throw err;
   }
 }
