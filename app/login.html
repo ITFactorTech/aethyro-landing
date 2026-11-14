@@ -92,8 +92,10 @@
     if(!email){ document.getElementById('email').focus(); show('Enter your email address above first.','err'); return; }
     var magicBtn=document.getElementById('magicBtn');
     magicBtn.disabled=true; magicBtn.textContent='Sending…'; msg.className='msg';
-    var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:nextAbs } });
-    if(r.error){ show(r.error.message,'err'); magicBtn.disabled=false; magicBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg> Email me a magic link'; return; }
+    // shouldCreateUser:false -- logging in must not create accounts (new accounts go through sign-up, which
+    // carries the human check).
+    var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:nextAbs, shouldCreateUser:false } });
+    if(r.error){ show(/signups? not allowed|user not found/i.test(r.error.message) ? 'No account found for that email. Create one on the sign-up page.' : r.error.message,'err'); magicBtn.disabled=false; magicBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg> Email me a magic link'; return; }
     if(typeof gtag!=='undefined'){ gtag('event','login',{method:'magic_link'}); }
     show('Magic link sent — check your inbox and click the link to log in.','ok');
     magicBtn.textContent='Link sent ✓';

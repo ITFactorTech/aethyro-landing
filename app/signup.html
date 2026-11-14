@@ -42,6 +42,7 @@
       <input id="email" type="email" required placeholder="you@example.com" autocomplete="email"/>
       <label for="password">Password</label>
       <input id="password" type="password" required minlength="8" placeholder="at least 8 characters" autocomplete="new-password"/>
+      <div id="humanCheck" hidden style="margin:.9rem 0 .1rem"></div>
       <button class="btn" id="submit" type="submit">Create account →</button>
     </form>
     <div class="divider">or</div>
@@ -106,6 +107,40 @@
   }
   var signupAttribution = getSignupAttribution();
 
+  // ── Human check (Cloudflare Turnstile), email signups only ───────────────────
+  // Inert unless window.AETHYRO_TURNSTILE_SITEKEY is set in config.js. The token is sent
+  // as user_metadata.cf_turnstile_token and verified server-side by the signup-gate
+  // auth hook; Google / GitHub sign-up never reaches this code.
+  var tsSiteKey = window.AETHYRO_TURNSTILE_SITEKEY || '';
+  var humanToken = '', tsWidget = null, tsFailed = false;
+  if(tsSiteKey){
+    document.getElementById('humanCheck').hidden = false;
+    window.__aethyroTsLoaded = function(){
+      try{
+        tsWidget = turnstile.render('#humanCheck', {
+          sitekey: tsSiteKey,
+          callback: function(t){ humanToken = t; },
+          'expired-callback': function(){ humanToken = ''; },
+          'error-callback': function(){ humanToken = ''; tsFailed = true; }
+        });
+      }catch(e){ tsFailed = true; }
+    };
+    var tsScript = document.createElement('script');
+    tsScript.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__aethyroTsLoaded';
+    tsScript.async = true; tsScript.defer = true;
+    tsScript.onerror = function(){ tsFailed = true; };
+    document.head.appendChild(tsScript);
+  }
+  function humanOk(){
+    if(!tsSiteKey || humanToken) return true;
+    show(tsFailed
+      ? "The human check couldn't load. Turn off blockers for this page and reload, or sign up with Google or GitHub."
+      : 'Please complete the human check above, then try again.', 'err');
+    return false;
+  }
+  function humanData(d){ if(tsSiteKey && humanToken) d.cf_turnstile_token = humanToken; return d; }
+  function humanReset(){ humanToken = ''; try{ if(tsWidget !== null) turnstile.reset(tsWidget); }catch(e){} }
+
   document.getElementById('githubBtn').addEventListener('click', async function(){
     if(typeof gtag!=='undefined') gtag('event','sign_up_start',{method:'github', source: nextParam==='chat' ? 'chat_trial' : 'direct'});
     var r=await supabase.auth.signInWithOAuth({provider:'github',options:{redirectTo:nextAbs}});
@@ -121,9 +156,11 @@
   document.getElementById('magicBtn').addEventListener('click', async function(){
     var email=document.getElementById('email').value.trim();
     if(!email){ document.getElementById('email').focus(); show('Enter your email address above first.','err'); return; }
+    if(!humanOk()) return;
     var magicBtn=document.getElementById('magicBtn');
     magicBtn.disabled=true; magicBtn.textContent='Sending…'; msg.className='msg';
-    var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:nextAbs, data:{ signup_referrer:signupAttribution.referrer, signup_utm:signupAttribution.utm } } });
+    var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:nextAbs, data:humanData({ signup_referrer:signupAttribution.referrer, signup_utm:signupAttribution.utm }) } });
+    humanReset();
     if(r.error){ show(r.error.message,'err'); magicBtn.disabled=false; magicBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg> Sign up with magic link'; return; }
     if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'magic_link', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); }
     show('Magic link sent — check your inbox. Clicking it creates your account and grants 100 free credits.','ok');
@@ -150,7 +187,9 @@
   }
 
   form.addEventListener('submit', async function(e){
-    e.preventDefault(); btn.disabled=true; btn.textContent='Checking password…'; msg.className='msg';
+    e.preventDefault();
+    if(!humanOk()) return;
+    btn.disabled=true; btn.textContent='Checking password…'; msg.className='msg';
     var email=document.getElementById('email').value.trim();
     var password=document.getElementById('password').value;
     try{
@@ -158,7 +197,8 @@
       if(leaked){ show('This password has appeared in a data breach. Please choose a different password.','err'); btn.disabled=false; btn.textContent='Create account →'; return; }
       btn.textContent='Creating…';
       var confirmUrl=window.location.origin+'/app/confirm.html'+nextQs;
-      var r=await supabase.auth.signUp({ email:email, password:password, options:{ emailRedirectTo:confirmUrl, data:{ signup_referrer:signupAttribution.referrer, signup_utm:signupAttribution.utm } } });
+      var r=await supabase.auth.signUp({ email:email, password:password, options:{ emailRedirectTo:confirmUrl, data:humanData({ signup_referrer:signupAttribution.referrer, signup_utm:signupAttribution.utm }) } });
+      humanReset();
       if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Create account →'; return; }
       if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'email', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); gtag('event','begin_checkout',{currency:'USD',value:0}); }
       if(r.data && r.data.session){ location.href=nextUrl; return; }

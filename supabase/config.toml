@@ -74,6 +74,9 @@ verify_jwt = false
 [functions.setup-auto-topup]
 verify_jwt = false
 
+[functions.signup-gate]
+verify_jwt = false
+
 [functions.stripe-webhook]
 verify_jwt = false
 
