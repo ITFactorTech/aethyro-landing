@@ -47,7 +47,7 @@ CLAUDE.md's "Worker serving rules" convention.
 4. Two things a page-load scan cannot see (added 2026-11-13, found by the first logged-in probe of the Worker):
    - a host reached **only by a form submit**. `app/signup.html` and `app/login.html` fetch `api.pwnedpasswords.com` and
      treat any error as "not breached", so a CSP refusal fails open and a breached password is accepted. The run-code
-     test fetches that host and reports `pwned:200` (from #252 on; before that merge a `FAILED:` value there is the bug, not the test). Any new `fetch`/`sendBeacon`/`WebSocket` host needs the same
+     test fetches that host and reports `pwned:200` (added by #252; a `FAILED:` value there means the CSP is blocking the host). Any new `fetch`/`sendBeacon`/`WebSocket` host needs the same
      treatment: grep `fetch(` and friends for external hosts and make sure each is in `connect-src` AND reached by a test.
    - a browser feature gated by `Permissions-Policy`. The chat Voice button needs the microphone, so `_headers` must say
      `microphone=(self)`, not `()`. Compare `document.featurePolicy.allowsFeature('microphone')` (and camera,
