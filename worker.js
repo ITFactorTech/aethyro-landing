@@ -57,8 +57,10 @@ export default {
       // A directory that has an index: "/blog" -> 301 "/blog/"
       const dirIndex = await fromAssets(env, request, path + "/index.html");
       if (dirIndex.status !== 404) {
-        url.pathname = path + "/";
-        return withSecurityHeaders(env, request, Response.redirect(url.toString(), 301));
+        // Relative Location on purpose: an absolute one is built from the request's
+        // Host header, and this 301 is edge-cached by path, so a Host carrying a port
+        // could otherwise be written into a cached redirect for everyone.
+        return withSecurityHeaders(env, request, new Response(null, { status: 301, headers: { Location: path + "/" + url.search } }));
       }
     }
 
@@ -82,8 +84,12 @@ async function withSecurityHeaders(env, request, res) {
       if (value) headers.set(name, value);
     }
     await base.body?.cancel();
+    if (!SECURITY_HEADERS.some((name) => base.headers.get(name))) {
+      console.warn("worker: " + NOT_FOUND + " carried no security headers (renamed, or the _headers /* rule changed); the 301/405 go out bare");
+    }
     return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
-  } catch {
+  } catch (e) {
+    console.warn("worker: security-header decoration failed: " + (e && e.message));
     return res; // never let header decoration break the response itself
   }
 }
