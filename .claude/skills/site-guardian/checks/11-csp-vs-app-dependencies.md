@@ -38,6 +38,13 @@ those files in its window.
    Clean: `js:true, jsx:true, jsx_click:true, py:"PY_OK 30", pdf:"text=PDF_HELLO", pwned:200` and `CSP refusals: 0`. It uses the
    anonymous chat mode with the `trial-chat` reply mocked, so it needs no account.
 
+4b. Responses the Worker builds itself (added 2026-11-14): `/blog` -> 301 and any non-GET -> 405 are not asset responses, so
+   `_headers` does not reach them; `worker.js` copies the six security headers from `/404.html`. Assert on every Worker
+   change: `curl -sI $BASE/blog` is a 301 with a RELATIVE `Location: /blog/` (an absolute one is built from the Host header
+   and the 301 is edge-cached) and all six headers; `curl -sI -X POST $BASE/` is a 405 with `Allow: GET, HEAD` and all six;
+   the `wrangler dev` log has no `worker:` warning (that warning means `/404.html` lost its headers, e.g. renamed, or the
+   `_headers` `/*` rule changed).
+
 ## What a mismatch looks like
 A line `R load the script 'https://…' because it violates … Content Security Policy directive: "script-src …"`
 (or `style-src`, `connect-src`, `worker-src`), or a `FAILED` value in the dynamic test. Fix = add the exact host or
