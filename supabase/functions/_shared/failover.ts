@@ -95,6 +95,21 @@ export const FREE_TIER_ANTHROPIC_LAST_RESORT = true;
 export const FREE_TIER_FIRST_RESPONSE_MS = 25_000;
 export const FREE_CHAIN_KEYS = { terra: "openai:terra", luna: "openai:luna", haiku: "anthropic" } as const;
 
+// The client closed the connection (tab closed, navigated away, request aborted)
+// while the reply was streaming. The Response stream's controller then throws on
+// the next enqueue ("The stream controller cannot close or enqueue" on Deno), and
+// that throw travels up through the provider call. It says nothing about the
+// provider's health: counting it let three abandoned requests inside two minutes
+// open a step's breaker and push every free account onto the fallback model
+// (found 2026-11-14 in the production logs, and anyone with an account could
+// trigger it on purpose). Match narrowly: the 25s first-response AbortError and
+// every provider HTTP error must still count.
+export function isClientDisconnect(err: unknown): boolean {
+  if ((err as { code?: string } | null)?.code === "ERR_INVALID_STATE") return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /cannot close or enqueue|controller is already closed|invalid state: controller/i.test(msg);
+}
+
 export interface ChainStep<R> {
   key: string;                 // provider_health row for this step's circuit breaker
   label: string;               // for logs
@@ -114,6 +129,8 @@ export interface ChainStep<R> {
 //  - Once `emittedOutput()` is true a failing step is re-thrown instead: bytes
 //    already reached the caller, and a later step would stream a second,
 //    complete reply on top of the truncated first.
+//  - A client disconnect (isClientDisconnect) is re-thrown at once and recorded
+//    nowhere: it is not the provider's fault.
 export async function runChain<R>(o: {
   supaAdmin: SupabaseClient;
   label: string;
@@ -146,6 +163,12 @@ export async function runChain<R>(o: {
       return { value, stepKey: step.key, attempts };
     } catch (err) {
       lastErr = err;
+      if (isClientDisconnect(err)) {
+        // Not a provider failure: no breaker write, and no next step -- nobody is
+        // listening, so a fallback model would only burn money.
+        console.error(`${o.label}: client went away during ${step.label}; not counted against its breaker`);
+        throw err;
+      }
       attempts.push(`${step.label}:error`);
       console.error(`${o.label}: ${step.label} failed:`, err instanceof Error ? err.message : String(err));
       await recordFailure(o.supaAdmin, step.key);
