@@ -90,7 +90,9 @@ before concluding a real bug:
   production) — a failure that only reproduces on preview isn't
   necessarily a real production bug.
 - **Block non-essential third-party requests** (`page.route()` on Google
-  Fonts, GA/`gtag`, Cloudflare `challenge-platform`/RUM) before navigating.
+  Fonts, GA/`gtag`, Cloudflare RUM) before navigating. Scope a Cloudflare
+  block to `aethyro.com/cdn-cgi/challenge-platform`: a bare `challenge-platform`
+  pattern also blocks Turnstile's own widget assets on the sign-up page.
   Chromium's naturally high-parallel page loads have previously exhausted
   what looks like a low concurrent-connection ceiling on this sandbox's
   proxy, producing `ERR_TOO_MANY_RETRIES` that looks like a site outage but
