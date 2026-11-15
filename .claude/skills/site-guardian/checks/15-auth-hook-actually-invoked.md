@@ -62,6 +62,20 @@ NOT try to settle it by creating an account: a tokenless direct sign-up leaves a
 the hook is off, and `@example.com` addresses are rejected by Auth *before* the hook runs,
 so they prove nothing either way.
 
+## A safe live test, once the dashboard shows the hook enabled
+
+Unattended sweeps still must not do this (they cannot see the dashboard). In an interactive
+session, after the owner (or a screenshot) shows Before User Created = HTTPS, enabled, with the
+right URL: create a throwaway inbox you control, send ONE tokenless `POST /auth/v1/signup` with the
+public anon key to that address, then read `auth_logs` and `function_logs`. Expected for a working
+refuse path: HTTP 500 `Invalid payload sent to hook` (Supabase treats an HTTP hook's 400/403 as an
+internal error), a `run_hook` line with `success:false` for the intended URL, the function's
+`refused (...)` line, and no row in `auth.users` for that address. If an account IS created the
+hook is off or points elsewhere: delete the account and escalate. Never use `@example.com`
+(rejected before the hook) and never an address that already has an account (Auth only re-sends
+the confirmation and the hook is not called, since it fires on user creation only). The allow path
+needs a real person passing the widget on a never-used address; nothing here can stand in for it.
+
 ## Related lessons
 
 * A control whose success path logs nothing cannot be verified from its logs: add an
@@ -77,3 +91,8 @@ so they prove nothing either way.
 5 lines, all for the older `check-leaked-password` hook). The intended hook had no line for
 either real sign-up in the window: MISMATCH, escalated to the owner (dashboard check). Details
 are in the private mission row above.
+
+2026-11-15 16:48Z (interactive, after the owner created the hook; it had been missing entirely):
+tokenless direct sign-up from a throwaway inbox: CLEAN for the refuse path (`run_hook`
+`success:false`, `500: Invalid payload sent to hook`, function `refused (no usable token)`, zero
+accounts). Allow path not yet verified.
