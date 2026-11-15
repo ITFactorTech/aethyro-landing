@@ -129,4 +129,17 @@ await t("signature header with several entries (key rotation): accepted when one
   const body = JSON.stringify(payload()); const h = signed(body); h["webhook-signature"] = "v1,AAAA " + h["webhook-signature"];
   const r = await call(null, { rawBody: body, headers: h, e: E }); assert.equal(r.status, 200);
 });
+await t("every ALLOW is logged (verified email, OAuth) and the log lines carry no email or token", async () => {
+  const lines = []; const keep = [console.log, console.error, console.warn];
+  console.log = (...a) => lines.push(a.join(" ")); console.error = console.warn = () => {};
+  try {
+    env = { TURNSTILE_SECRET_KEY: "ts_secret" }; cf = {}; calls = [];
+    const ok = await handler(new Request("http://f/", { method: "POST", body: JSON.stringify(payload()) }));
+    const oauth = await handler(new Request("http://f/", { method: "POST", body: JSON.stringify(payload({ app_metadata: { provider: "google" }, user_metadata: {} })) }));
+    assert.equal(ok.status, 200); assert.equal(oauth.status, 200);
+  } finally { [console.log, console.error, console.warn] = keep; }
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /allowed \(turnstile verified\)/); assert.match(lines[1], /allowed \(provider=google, not email\)/);
+  assert.ok(!lines.join("\n").includes("a@b.test") && !lines.join("\n").includes("tok-ok"));
+});
 console.log(`all ${n} ok`);

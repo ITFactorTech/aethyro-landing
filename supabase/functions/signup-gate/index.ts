@@ -1,4 +1,5 @@
-// signup-gate v1 -- Supabase Auth "Before User Created" HTTP hook (2026-11-14).
+// signup-gate v2 -- Supabase Auth "Before User Created" HTTP hook (2026-11-14; v2 2026-11-15:
+// every ALLOW is logged too, so "hook ran and passed it" is distinguishable from "hook never called").
 //
 // Why: the scripted signup farms (fldubai.com, maxxspace.com, the Gmail
 // dot-variant cluster ...) call the Auth API directly, so no check in the signup
@@ -121,7 +122,13 @@ serve(async (req) => {
   const meta = payload?.metadata ?? {};
 
   const provider = String(user?.app_metadata?.provider ?? "");
-  if (provider !== "email") return allow();             // OAuth: not our concern
+  if (provider !== "email") {                           // OAuth: not our concern
+    // Log every ALLOW too (no email, no token): a hook that works and a hook that is
+    // never called by Auth both leave the log empty otherwise, and a sweep cannot tell
+    // them apart (found 2026-11-15: two real signups, no way to prove the hook ran).
+    console.log("signup-gate: allowed (provider=" + provider.slice(0, 20) + ", not email)");
+    return allow();
+  }
 
   const secret = Deno.env.get("TURNSTILE_SECRET_KEY");
   if (!secret) {                                        // not configured yet: inert
@@ -136,7 +143,10 @@ serve(async (req) => {
   }
 
   const v = await verifyWithCloudflare(secret, token, typeof meta.ip_address === "string" ? meta.ip_address : undefined);
-  if (v.ok === true) return allow();
+  if (v.ok === true) {
+    console.log("signup-gate: allowed (turnstile verified)");
+    return allow();
+  }
   if (v.ok === "unavailable") {
     console.error("signup-gate: Cloudflare unavailable, allowing:", v.reason);
     return allow();
