@@ -140,6 +140,15 @@
   }
   function humanData(d){ if(tsSiteKey && humanToken) d.cf_turnstile_token = humanToken; return d; }
   function humanReset(){ humanToken = ''; try{ if(tsWidget !== null) turnstile.reset(tsWidget); }catch(e){} }
+  // When the signup-gate hook refuses a sign-up, Supabase Auth does not pass the hook's message
+  // on: its docs treat an HTTP hook's 400/403 as an internal error, and the client gets a 500
+  // "Invalid payload sent to hook" (seen live 2026-11-15). Show a useful message instead.
+  function authMsg(err){
+    var m = (err && err.message) || String(err || '');
+    return /hook/i.test(m)
+      ? "We couldn't confirm you're human. Complete the human check, turn off blockers for this page, and try again, or sign up with Google or GitHub."
+      : m;
+  }
 
   document.getElementById('githubBtn').addEventListener('click', async function(){
     if(typeof gtag!=='undefined') gtag('event','sign_up_start',{method:'github', source: nextParam==='chat' ? 'chat_trial' : 'direct'});
@@ -161,7 +170,7 @@
     magicBtn.disabled=true; magicBtn.textContent='Sending…'; msg.className='msg';
     var r=await supabase.auth.signInWithOtp({ email:email, options:{ emailRedirectTo:nextAbs, data:humanData({ signup_referrer:signupAttribution.referrer, signup_utm:signupAttribution.utm }) } });
     humanReset();
-    if(r.error){ show(r.error.message,'err'); magicBtn.disabled=false; magicBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg> Sign up with magic link'; return; }
+    if(r.error){ show(authMsg(r.error),'err'); magicBtn.disabled=false; magicBtn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg> Sign up with magic link'; return; }
     if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'magic_link', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); }
     show('Magic link sent — check your inbox. Clicking it creates your account and grants 100 free credits.','ok');
     magicBtn.textContent='Link sent ✓';
@@ -199,11 +208,11 @@
       var confirmUrl=window.location.origin+'/app/confirm.html'+nextQs;
       var r=await supabase.auth.signUp({ email:email, password:password, options:{ emailRedirectTo:confirmUrl, data:humanData({ signup_referrer:signupAttribution.referrer, signup_utm:signupAttribution.utm }) } });
       humanReset();
-      if(r.error){ show(r.error.message,'err'); btn.disabled=false; btn.textContent='Create account →'; return; }
+      if(r.error){ show(authMsg(r.error),'err'); btn.disabled=false; btn.textContent='Create account →'; return; }
       if(typeof gtag!=='undefined'){ gtag('event','sign_up',{method:'email', source: nextParam==='chat' ? 'chat_trial' : 'direct'}); gtag('event','begin_checkout',{currency:'USD',value:0}); }
       if(r.data && r.data.session){ location.href=nextUrl; return; }
       show('Account created — check your email to confirm, then log in to claim your 100 free credits.','ok'); btn.textContent='Check your email ✓';
-    }catch(err){ show((err&&err.message)||String(err),'err'); btn.disabled=false; btn.textContent='Create account →'; }
+    }catch(err){ show(authMsg(err),'err'); btn.disabled=false; btn.textContent='Create account →'; }
   });
 })();
 </script>
