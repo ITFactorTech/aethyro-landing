@@ -507,7 +507,7 @@
       <button class="top-link" id="buyBtn" style="background:none;border:1px solid var(--b2);cursor:pointer;display:none">Buy more</button>
       <a href="./signup.html?next=chat" class="top-link signup-link" id="signupLink" style="display:none">Sign up free →</a>
     </div>
-    <div class="cloud-note" id="cloudNote">// Aethyro Cloud — Claude Opus 5.5 · credits billed per token</div>
+    <div class="cloud-note" id="cloudNote">// Aethyro Cloud — credits billed per token</div>
 
     <div class="msgs" id="msgs">
       <div class="empty-state" id="emptyState">
@@ -908,7 +908,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     </div>
     <div class="onboard-icon" id="onboardIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 13.5 9 20 10.5 13.5 12 12 18 10.5 12 4 10.5 10.5 9 12 3Z"/></svg></div>
     <h3 id="onboardTitle">Welcome to Aethyro</h3>
-    <p id="onboardBody">You're powered by Claude Opus 5.5 — Anthropic's most capable AI. Start by typing any question below.</p>
+    <p id="onboardBody">Ask anything: code, research, writing, planning. Start by typing any question below.</p>
     <button class="onboard-btn" id="onboardNext">Next →</button>
     <button class="onboard-skip" id="onboardSkip">Skip intro</button>
   </div>
@@ -1059,12 +1059,12 @@ I often need help with: client quotes, contract review, business Instagram posts
   function setCloudNote(){
     var names={auto:'Auto', haiku:'Haiku', sonnet:'Sonnet', opus:'Opus'};
     $('cloudNote').textContent = isFreeTier
-      ? '// Aethyro Cloud — free credits run on OpenAI GPT-6.1 Terra: your messages are sent to OpenAI, not Anthropic · any credit pack unlocks Claude Sonnet and Opus'
+      ? '// Aethyro Cloud — free credits run on OpenAI GPT-6.1 Terra: your messages are sent to OpenAI, not Anthropic · any credit pack unlocks the premium Sonnet and Opus tiers'
       : currentModel==='auto'
       ? '// Aethyro Cloud — Auto routing (Haiku/Sonnet/Opus by message) · credits billed per token'
       : currentModel==='gpt'
       ? '// Aethyro Cloud — GPT (OpenAI): your messages and any tool results (web, GitHub, Notion) are sent to OpenAI, not Anthropic · credits billed per token'
-      : '// Aethyro Cloud — Claude '+names[currentModel]+' · credits billed per token';
+      : '// Aethyro Cloud — '+names[currentModel]+' tier · credits billed per token';
   }
 
   (async function init(){
@@ -2519,7 +2519,7 @@ I often need help with: client quotes, contract review, business Instagram posts
     var ONBOARD_KEY='aethyro_onboarded_v1';
     var ICON_SVG='<svg viewBox="0 0 24 24" aria-hidden="true">';
     var steps=[
-      {icon:ICON_SVG+'<path fill="currentColor" d="M12 3 13.5 9 20 10.5 13.5 12 12 18 10.5 12 4 10.5 10.5 9 12 3Z"/></svg>',title:'Welcome to Aethyro',body:'You\'re powered by Claude Opus 5.5 — Anthropic\'s most capable AI. Start by typing any question below.'},
+      {icon:ICON_SVG+'<path fill="currentColor" d="M12 3 13.5 9 20 10.5 13.5 12 12 18 10.5 12 4 10.5 10.5 9 12 3Z"/></svg>',title:'Welcome to Aethyro',body:'Ask anything: code, research, writing, planning. Start by typing any question below.'},
       {icon:ICON_SVG+'<path fill="currentColor" d="M13 2 4.5 13.5H11L10 22l9-12h-6.5L13 2z"/></svg>',title:'Intelligence Panel',body:'Tap "Intelligence" in the sidebar to run agentic tasks, upload documents to your knowledge base, set up scheduled routines, and connect GitHub or Notion.'},
       {icon:ICON_SVG+'<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8A3.5 3.5 0 0 0 7 19a3 3 0 0 0 5-2V6a3 3 0 0 0-3-2Z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5.8A3.5 3.5 0 0 1 17 19a3 3 0 0 1-5-2"/></svg>',title:'Semantic Memory',body:'Aethyro remembers context across conversations using vector embeddings — no need to re-explain yourself each time you open a chat.'},
     ];
