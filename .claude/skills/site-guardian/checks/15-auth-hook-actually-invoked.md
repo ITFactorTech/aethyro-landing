@@ -96,3 +96,7 @@ are in the private mission row above.
 tokenless direct sign-up from a throwaway inbox: CLEAN for the refuse path (`run_hook`
 `success:false`, `500: Invalid payload sent to hook`, function `refused (no usable token)`, zero
 accounts). Allow path not yet verified.
+
+2026-11-15 17:04Z (allow path, a real owner sign-up on a Gmail +alias after the hook existed): CLEAN. `run_hook`
+`success:true` at 17:04:09Z for the `signup-gate` URL, function `allowed (turnstile verified)`, the
+`auth.users` row 5 ms later, no `cf_turnstile_token` in its metadata. Both paths now verified.
