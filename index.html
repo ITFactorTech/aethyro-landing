@@ -1759,6 +1759,13 @@ patterns are well established.</div>
             if (meta.error) {
               output.textContent = "That one hit an error — try a shorter question, or sign up to keep going.";
             }
+            else if (!gotFirstChunk) {
+              // The stream ended with no visible reply and no reported error.
+              // Never leave a dead, empty box: say so (seen live 2026-11-09
+              // and 2026-11-15 — the widget silently reset with no reply
+              // and no error).
+              output.textContent = 'Something went wrong — try again in a moment.';
+            }
             if (meta.remaining === 0) track('trial_limit_reached', { surface: 'homepage' });
             showCta(meta.remaining === 0
               ? "That was your last free preview today — sign up for 100 free credits →"
