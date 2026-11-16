@@ -8,7 +8,7 @@
 --   domain_burst      3+ signups on the same non-major mail domain in the window
 --   gmail_mailbox     2+ signups on one normalized Gmail mailbox in the window
 --   same_minute       3+ signups inside one calendar minute
---   self_labelled     signup metadata says utm_source = 'autoreg' (wave 2 of fldubai labelled itself)
+--   self_labelled     signup metadata says source (or utm_source) = 'autoreg' (wave 2 of fldubai labelled itself)
 --   keys_no_chat      accounts that minted an API key but never opened a conversation, by domain, 3+
 with w as (
   select id, email, created_at, raw_user_meta_data,
@@ -32,7 +32,7 @@ select 'same_minute', to_char(date_trunc('minute', created_at),'YYYY-MM-DD HH24:
 from w group by date_trunc('minute', created_at) having count(*) >= 3
 union all
 select 'self_labelled', 'autoreg', count(*), min(created_at), max(created_at)
-from w where raw_user_meta_data #>> '{signup_utm,utm_source}' = 'autoreg'
+from w where coalesce(raw_user_meta_data #>> '{signup_utm,source}', raw_user_meta_data #>> '{signup_utm,utm_source}') = 'autoreg'
 having count(*) > 0
 union all
 select 'keys_no_chat', dom, count(*), min(created_at), max(created_at)
@@ -43,3 +43,11 @@ order by 1, 3 desc;
 -- CLEAN: zero rows. A row is a LEAD, not proof: read the surrounding signups (domain history, bonus rows,
 -- usage) before adding a domain to bonus_blocked_domains or telling the owner. Never act on a major-provider
 -- domain; for gmail_mailbox the new bonus rule (one per mailbox) already withholds the second bonus.
+-- REGRESSION NOTE (2026-11-16): `self_labelled` originally read signup_utm.utm_source, but the farm writes
+-- signup_utm.source, so the rule could never fire (found by the oracle sweep; 0 rows on all history). To prove
+-- the rule still works, run its predicate over ALL users instead of the 48h window:
+--   select count(*) from auth.users
+--   where coalesce(raw_user_meta_data #>> '{signup_utm,source}', raw_user_meta_data #>> '{signup_utm,utm_source}') = 'autoreg';
+-- Expected as of 2026-11-16: 75 (all on fldubai.com). A drop to 0 means the metadata key moved again.
+-- Known benign lead: the owner's own Gmail + alias test accounts trip `gmail_mailbox` (one mailbox, 2 signups) and
+-- inflate checks/13's Gmail-duplicate rule; identify them by the mailbox, do not treat them as a cluster.
