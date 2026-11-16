@@ -624,7 +624,7 @@
 <div class="workspace-modal-backdrop" id="workspaceModal">
   <div class="workspace-modal">
     <h3>Your Workspace Context</h3>
-    <p class="wm-sub">Tell Claude who you are. This loads automatically with every conversation — no re-explaining yourself each time you open a chat.</p>
+    <p class="wm-sub">Tell Aethyro who you are. This loads automatically with every conversation — no re-explaining yourself each time you open a chat.</p>
     <textarea id="workspaceInput" placeholder="Example: I'm a self-employed plumber in Phoenix with a 3-person crew. My biggest time drain is writing client proposals and follow-up emails. I prefer concise, plain-English responses — no jargon.
 
 I often need help with: client quotes, contract review, business Instagram posts, and understanding invoices. When I ask for writing help, match a professional-but-approachable tone."></textarea>
@@ -752,12 +752,12 @@ I often need help with: client quotes, contract review, business Instagram posts
     <!-- Knowledge pane -->
     <div class="intel-pane" id="pane-knowledge" style="display:none">
       <p class="intel-section-title">Upload Document</p>
-      <p style="font-size:.8rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">Files are chunked and embedded — Claude will automatically retrieve relevant sections in your conversations.</p>
+      <p style="font-size:.8rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">Files are chunked and embedded — Aethyro will automatically retrieve relevant sections in your conversations.</p>
       <input type="file" id="docFileInput" accept=".txt,.md,.csv,.pdf" multiple style="display:none"/>
       <button class="intel-btn" id="docUploadBtn" style="display:inline-flex;align-items:center;gap:.4rem"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6M9 8h2"/></svg> Choose files…</button>
       <hr class="intel-divider">
       <p class="intel-section-title">Your Knowledge Base</p>
-      <div id="docList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">No documents yet.<br/>Upload files above — Claude will reference them automatically in every conversation.</p></div>
+      <div id="docList"><p style="font-size:.75rem;color:var(--t3);text-align:center;padding:1.5rem .5rem;line-height:1.6">No documents yet.<br/>Upload files above — Aethyro will reference them automatically in every conversation.</p></div>
     </div>
 
     <!-- Routines pane -->
@@ -879,7 +879,7 @@ I often need help with: client quotes, contract review, business Instagram posts
         <p class="intel-section-title" style="margin:0">Recent Conversation Memory</p>
         <button class="intel-clear-all" id="clearMemsBtn">Clear all</button>
       </div>
-      <p style="font-size:.78rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">The last few turns embedded into semantic memory — retrieved to give Claude longer context.</p>
+      <p style="font-size:.78rem;color:var(--t2);margin-bottom:.75rem;line-height:1.55">The last few turns embedded into semantic memory — retrieved to give Aethyro longer context.</p>
       <input id="memorySearch" type="search" placeholder="Search memories…" style="width:100%;box-sizing:border-box;padding:.4rem .6rem;background:rgba(255,255,255,.05);border:1px solid var(--b2);border-radius:6px;color:var(--text);font-size:.78rem;margin-bottom:.6rem;outline:none"/>
       <div id="memoryList"><p class="intel-loading">Loading…</p></div>
     </div>
@@ -2051,7 +2051,7 @@ I often need help with: client quotes, contract review, business Instagram posts
   function appendContextNudge(container){
     var nudge = document.createElement('div');
     nudge.className = 'context-nudge';
-    nudge.innerHTML = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--cyan);flex-shrink:0"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8.9.9 1.6h5.2c.1-.7.4-1.2.9-1.6A6 6 0 0 0 12 3Z"/></svg><span><strong>Personalize your AI</strong>&nbsp;— tell Claude who you are so every response fits your context.</span>';
+    nudge.innerHTML = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:var(--cyan);flex-shrink:0"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8.9.9 1.6h5.2c.1-.7.4-1.2.9-1.6A6 6 0 0 0 12 3Z"/></svg><span><strong>Personalize your AI</strong>&nbsp;— tell Aethyro who you are so every response fits your context.</span>';
     nudge.addEventListener('click', openWorkspaceModal);
     container.appendChild(nudge);
   }
@@ -2104,7 +2104,7 @@ I often need help with: client quotes, contract review, business Instagram posts
       workspaceContext = text || null;
       setWorkspaceActive(!!workspaceContext);
       closeWorkspaceModal();
-      showToast(text ? 'Workspace context saved — Claude now knows you' : 'Workspace context cleared', 'ok');
+      showToast(text ? 'Workspace context saved — Aethyro now knows you' : 'Workspace context cleared', 'ok');
       /* Remove nudge from empty state if context is now set */
       if(workspaceContext){
         var nudge = document.querySelector('.context-nudge');

@@ -48,9 +48,12 @@ order by timestamp
 ## What "clean" looks like
 
 Every real user creation since the hook was enabled has a `run_hook` line for the intended
-URL within about a second of `created_at`, `success` true. Once `signup-gate` v2 is
-deployed it also writes `signup-gate: allowed (...)` to `function_logs`, a second
-independent trace.
+URL within about a second of `created_at`, `success` true. `signup-gate` v2 also writes
+`signup-gate: allowed (...)` / `refused (...)` lines to `function_logs`, but treat those as
+colour only, never as proof: a function log line shows the function ran, not that Auth called
+it (anything that can reach the function URL can produce one). Only the Auth-side `run_hook`
+line in `auth_logs` proves Auth invoked the hook. A sweep's own probes against the function
+URL leave allow/refuse lines too; do not count them as sign-ups.
 
 ## What a mismatch looks like
 
