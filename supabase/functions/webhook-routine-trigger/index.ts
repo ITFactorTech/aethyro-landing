@@ -7,6 +7,15 @@
 // internal-caller path pg_cron itself uses (Authorization: Bearer
 // <service-role-key>, body {routine_id}), which run-routines already
 // recognizes and skips the per-user JWT lookup for.
+//
+// v2 (2026-11-16): the cooldown is now CLAIMED atomically. v1 read
+// last_triggered_at, compared it in code, then wrote it with an unconditional
+// UPDATE whose error was ignored -- so N requests arriving together all read
+// the old value, all passed the check, and all ran (and billed) the routine.
+// The claim is now one conditional UPDATE whose WHERE re-checks the cooldown
+// (same pattern as auto-topup-charge and run-routines' scheduled claim):
+// exactly one concurrent caller gets a row back and runs the routine, the
+// rest get 429. Fail closed: a claim error is 503 and nothing runs.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
 
@@ -56,27 +65,49 @@ serve(async (req) => {
       status: 404, headers: { ...CORS, "Content-Type": "application/json" },
     });
 
-  if (
-    hook.last_triggered_at &&
-    new Date(hook.last_triggered_at).getTime() > Date.now() - COOLDOWN_MS
-  )
+  // Cheap early exit for the common case (a token being hit repeatedly). This
+  // read is NOT the guard -- concurrent requests all see the same old value --
+  // the conditional UPDATE below is.
+  const nowMs = Date.now();
+  const cutoffMs = nowMs - COOLDOWN_MS;
+  if (hook.last_triggered_at && new Date(hook.last_triggered_at).getTime() > cutoffMs)
     return new Response(JSON.stringify({ skipped: "cooldown" }), {
       status: 429, headers: { ...CORS, "Content-Type": "application/json" },
     });
 
-  // Mark the attempt before firing, same concurrency-guard pattern as
-  // auto-topup-charge, so two near-simultaneous hits can't both slip past
-  // the cooldown check above.
-  await supaAdmin.from("routine_webhooks").update({
-    last_triggered_at: new Date().toISOString(),
-    trigger_count: hook.trigger_count + 1,
-  }).eq("id", hook.id);
+  // Atomically claim this trigger BEFORE running anything: the WHERE re-checks
+  // the cooldown inside the database, so of any number of simultaneous hits
+  // only the first UPDATE matches the row (the others wait on its row lock,
+  // re-evaluate the WHERE against the new last_triggered_at, and match
+  // nothing). No claimed row -> no run.
+  const { data: claimed, error: claimErr } = await supaAdmin
+    .from("routine_webhooks")
+    .update({
+      last_triggered_at: new Date(nowMs).toISOString(),
+      trigger_count: hook.trigger_count + 1,
+    })
+    .eq("id", hook.id)
+    .or(`last_triggered_at.is.null,last_triggered_at.lte.${new Date(cutoffMs).toISOString()}`)
+    .select("id");
+  if (claimErr) {
+    console.error("webhook-routine-trigger: cooldown claim failed, not running", claimErr.message);
+    return new Response(JSON.stringify({ error: "temporarily unavailable" }), {
+      status: 503, headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
+  if (!claimed || claimed.length === 0)
+    return new Response(JSON.stringify({ skipped: "cooldown" }), {
+      status: 429, headers: { ...CORS, "Content-Type": "application/json" },
+    });
 
   try {
-    await supaAdmin.functions.invoke("run-routines", {
+    // invoke() reports a non-2xx from run-routines as a returned error, not a
+    // throw -- log it, or a failed run leaves no trace on this side.
+    const { error: runErr } = await supaAdmin.functions.invoke("run-routines", {
       headers: { Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
       body: { routine_id: hook.routine_id },
     });
+    if (runErr) console.error("webhook-routine-trigger: run-routines returned an error", runErr.message);
   } catch (e) {
     // Don't leak internal failure detail to an external caller; the
     // routine's own last_result (visible in-app to its owner) carries the
