@@ -1,19 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
-import { completeWithFailover } from "../_shared/llm.ts";
+import { completeFreeTier } from "../_shared/llm.ts";
 
 // Public, unauthenticated preview endpoint for the homepage inline try-box
 // and chat.html's anonymous trial mode. Gated solely by a per-IP daily
 // counter (3 messages/day) — no Turnstile token required.
 //
-// v17 — now goes through the shared multi-provider module
-// (_shared/llm.ts): if Claude is down, automatically fails over to
-// OpenAI (gpt-5.4-pro, matching this endpoint's existing opus-tier
-// model) rather than erroring outright. No explicit model choice here
-// (this endpoint has never had a model picker) — pure availability
-// improvement, same preview behavior either way.
-// Note (2026-10-30): the OpenAI side of that fallback is now gpt-5.4, not
-// gpt-5.4-pro — see _shared/llm.ts's own header comment for why.
+// v18 (2026-11-15) — the preview now runs the free-tier failsafe chain
+// (completeFreeTier: OpenAI Terra -> Luna -> Anthropic Haiku) instead of
+// the Opus-tier failover (completeWithFailover: Claude Opus -> OpenAI Sol).
+// Why: Anthropic has been out of credits since 2026-11-07 and the trial
+// box failed silently on every live check since 2026-11-09 (Nov 9 and
+// Nov 15), while signed-in free chat — which already runs this chain —
+// answers fine. Same short-preview behavior, same per-IP 3/day gate;
+// the preview is free, so it is served at the free (Haiku) rate like
+// every other free reply. No explicit model choice here (this endpoint
+// has never had a model picker).
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY"); // optional -- undefined just means no fallback available
@@ -22,7 +24,10 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-const ANTHROPIC_MODEL = "claude-opus-5";
+// Haiku model id — the last-resort step of the free-tier chain. Must match
+// chat/index.ts MODEL_MAP.haiku; the Opus id this endpoint used before v18
+// ("claude-opus-5") was also stale against MODEL_MAP.opus ("claude-opus-5-5").
+const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 400;
 const DAILY_LIMIT_PER_IP = 3;
 const MAX_MESSAGE_LEN = 600;
@@ -97,8 +102,8 @@ serve(async (req) => {
 
       try {
         let streamedText = "";
-        const result = await completeWithFailover(supabase, ANTHROPIC_API_KEY, OPENAI_API_KEY, {
-          modelKey: "opus",
+        const result = await completeFreeTier(supabase, ANTHROPIC_API_KEY, OPENAI_API_KEY, {
+          modelKey: "haiku",
           anthropicModel: ANTHROPIC_MODEL,
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: message }],
